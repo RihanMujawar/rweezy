@@ -1,0 +1,10 @@
+{
+  "name": "zoomly-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.mjs",
+    "start": "node server.mjs",
+    "build": "node --check server.mjs"
+  }
+}
