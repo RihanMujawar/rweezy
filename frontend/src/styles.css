@@ -1,7 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
-@import "leaflet/dist/leaflet.css";
+@import "mapbox-gl/dist/mapbox-gl.css";
 
 @custom-variant dark (&:is(.dark *));
 

@@ -12,17 +12,26 @@ type Restaurant = {
   name: string;
   description: string | null;
   address: string | null;
+  town_name: string | null;
+  pincode: string | null;
   image_url: string | null;
   is_open: boolean;
 };
 
+type Location = {
+  town_name?: string | null;
+  pincode?: string | null;
+};
+
 function FoodList() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [location, setLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.catalog.getRestaurants().then(({ restaurants: data }) => {
+    api.catalog.getRestaurants().then(({ restaurants: data, location }) => {
       setRestaurants((data as Restaurant[]) ?? []);
+      setLocation((location as Location | null) ?? null);
       setLoading(false);
     });
   }, []);
@@ -30,14 +39,22 @@ function FoodList() {
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold">Restaurants</h1>
-      <p className="text-muted-foreground">Pick a place to order from.</p>
+      <p className="text-muted-foreground">
+        {location?.town_name && location?.pincode
+          ? `Showing restaurants in ${location.town_name} ${location.pincode}.`
+          : "Pick a place to order from."}
+      </p>
 
       {loading ? (
         <div className="mt-8 text-muted-foreground">Loading...</div>
       ) : restaurants.length === 0 ? (
         <div className="mt-12 rounded-2xl border bg-card p-12 text-center text-muted-foreground">
           <Store className="mx-auto h-10 w-10" />
-          <p className="mt-2">No restaurants yet. An admin needs to add some.</p>
+          <p className="mt-2">
+            {location?.town_name && location?.pincode
+              ? "No restaurants are available in your town and pincode yet."
+              : "No restaurants yet. An admin needs to add some."}
+          </p>
         </div>
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -59,6 +76,9 @@ function FoodList() {
                   </span>
                 </div>
                 {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
+                {(r.town_name || r.pincode) && (
+                  <p className="mt-1 text-xs text-muted-foreground">{[r.town_name, r.pincode].filter(Boolean).join(" ")}</p>
+                )}
               </div>
             </Link>
           ))}

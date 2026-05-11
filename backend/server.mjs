@@ -60,6 +60,73 @@ function firstRow(rows) {
   return Array.isArray(rows) ? rows[0] ?? null : rows ?? null;
 }
 
+function normalizeDeliveryOrder(row) {
+  if (!row) return row;
+
+  return {
+    ...row,
+    rider_id: row.rider_id ?? row.delivery_boy_id ?? null,
+  };
+}
+
+function cleanText(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeChatKind(kind) {
+  return ["ride", "package", "food", "grocery"].includes(kind) ? kind : null;
+}
+
+function chatTarget(kind) {
+  return {
+    ride: { table: "rides", partnerColumn: "rider_id" },
+    package: { table: "package_deliveries", partnerColumn: "rider_id" },
+    food: { table: "food_orders", partnerColumn: "delivery_boy_id" },
+    grocery: { table: "grocery_orders", partnerColumn: "delivery_boy_id" },
+  }[kind];
+}
+
+function isChatParticipant(userId, row, partnerColumn) {
+  return row?.customer_id === userId || row?.[partnerColumn] === userId;
+}
+
+async function getChatContext(token, user, kind, serviceId) {
+  const normalizedKind = normalizeChatKind(kind);
+  if (!normalizedKind) {
+    throw new HttpError(400, "Invalid chat type");
+  }
+
+  const target = chatTarget(normalizedKind);
+  const rows = await restRequest(
+    token,
+    buildPath(`/${target.table}`, {
+      select: `id,customer_id,${target.partnerColumn}`,
+      id: `eq.${serviceId}`,
+      limit: "1",
+    }),
+  );
+  const row = firstRow(rows);
+
+  if (!row) {
+    throw new HttpError(404, "Chat target not found");
+  }
+
+  if (isChatParticipant(user.id, row, target.partnerColumn)) {
+    return { kind: normalizedKind, row, partnerColumn: target.partnerColumn };
+  }
+
+  const roles = await getRoles(token, user.id);
+  if (!roles.includes("admin")) {
+    throw new HttpError(403, "You do not have access to this chat");
+  }
+
+  return { kind: normalizedKind, row, partnerColumn: target.partnerColumn };
+}
+
+function normalizeSignupRole(role) {
+  return ["customer", "hotel_manager", "delivery_boy"].includes(role) ? role : "customer";
+}
+
 function isPublicApiRoute(method, pathname) {
   return (
     pathname === "/api/health" ||
@@ -241,7 +308,11 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/register$/, async ({ body }) => {
-    const result = await signUpWithPassword(body.email, body.password, body.full_name);
+    const role = normalizeSignupRole(body.role);
+
+    const result = await signUpWithPassword(body.email, body.password, body.full_name, {
+      role,
+    });
     const normalized = normalizeAuthSession(result);
     const roles = normalized.accessToken && normalized.user
       ? await getRoles(normalized.accessToken, normalized.user.id)
@@ -364,7 +435,7 @@ const routes = [
       }),
     );
 
-    return { restaurants: restaurants ?? [] };
+    return { restaurants: restaurants ?? [], location: null };
   }),
   route("GET", /^\/api\/catalog\/restaurants\/([^/]+)$/, async ({ token, match }) => {
     const restaurantId = decodeURIComponent(match[1]);
@@ -401,7 +472,7 @@ const routes = [
       }),
     );
 
-    return { stores: stores ?? [] };
+    return { stores: stores ?? [], location: null };
   }),
   route("GET", /^\/api\/catalog\/stores\/([^/]+)$/, async ({ token, match }) => {
     const storeId = decodeURIComponent(match[1]);
@@ -440,6 +511,8 @@ const routes = [
           customer_id: user.id,
           restaurant_id: body.restaurant_id,
           delivery_address: body.delivery_address,
+          delivery_lat: body.delivery_lat ?? null,
+          delivery_lng: body.delivery_lng ?? null,
           notes: body.notes || null,
           total: body.total,
         },
@@ -479,6 +552,8 @@ const routes = [
           customer_id: user.id,
           store_id: body.store_id,
           delivery_address: body.delivery_address,
+          delivery_lat: body.delivery_lat ?? null,
+          delivery_lng: body.delivery_lng ?? null,
           notes: body.notes || null,
           total: body.total,
         },
@@ -512,7 +587,7 @@ const routes = [
       restRequest(
         token,
         buildPath("/food_orders", {
-          select: "id,status,total,delivery_address,created_at,rider_id,restaurants(name)",
+          select: "id,status,total,delivery_address,created_at,rider_id:delivery_boy_id,restaurants(name)",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -520,7 +595,7 @@ const routes = [
       restRequest(
         token,
         buildPath("/grocery_orders", {
-          select: "id,status,total,delivery_address,created_at,rider_id,grocery_stores(name)",
+          select: "id,status,total,delivery_address,created_at,rider_id:delivery_boy_id,grocery_stores(name)",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -568,7 +643,66 @@ const routes = [
       }),
     );
 
-    return { row: firstRow(rows) };
+    const row = firstRow(rows);
+
+    return {
+      row: kind === "food" || kind === "grocery" ? normalizeDeliveryOrder(row) : row,
+    };
+  }),
+  route("GET", /^\/api\/chat\/(ride|package|food|grocery)\/([^/]+)$/, async ({ token, user, match }) => {
+    const kind = match[1];
+    const serviceId = decodeURIComponent(match[2]);
+    const context = await getChatContext(token, user, kind, serviceId);
+
+    const messages = await restRequest(
+      token,
+      buildPath("/chat_messages", {
+        select: "id,service_kind,service_id,sender_id,body,created_at",
+        service_kind: `eq.${context.kind}`,
+        service_id: `eq.${serviceId}`,
+        order: "created_at.asc",
+        limit: "100",
+      }),
+    );
+
+    return {
+      messages: messages ?? [],
+      participant: {
+        customer_id: context.row.customer_id,
+        partner_id: context.row[context.partnerColumn] ?? null,
+      },
+    };
+  }),
+  route("POST", /^\/api\/chat\/(ride|package|food|grocery)\/([^/]+)$/, async ({ token, user, match, body }) => {
+    const kind = match[1];
+    const serviceId = decodeURIComponent(match[2]);
+    await getChatContext(token, user, kind, serviceId);
+
+    const messageBody = cleanText(body.message);
+    if (!messageBody) {
+      throw new HttpError(400, "Message is required");
+    }
+
+    if (messageBody.length > 1000) {
+      throw new HttpError(400, "Message is too long");
+    }
+
+    const rows = await restRequest(
+      token,
+      buildPath("/chat_messages", { select: "*" }),
+      {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: {
+          service_kind: kind,
+          service_id: serviceId,
+          sender_id: user.id,
+          body: messageBody,
+        },
+      },
+    );
+
+    return { message: firstRow(rows) };
   }),
   route("POST", /^\/api\/rides$/, async ({ token, user, body }) => {
     const rows = await restRequest(
@@ -1243,7 +1377,7 @@ const routes = [
       restRequest(
         token,
         buildPath("/food_orders", {
-          select: "id,status,total,delivery_address,restaurants(name)",
+          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,rider_lat,rider_lng,restaurants(name)",
           delivery_boy_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -1251,7 +1385,7 @@ const routes = [
       restRequest(
         token,
         buildPath("/grocery_orders", {
-          select: "id,status,total,delivery_address,grocery_stores(name)",
+          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,rider_lat,rider_lng,grocery_stores(name)",
           delivery_boy_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -1274,7 +1408,12 @@ const routes = [
       },
     );
 
-    return { order: firstRow(rows) };
+    const order = firstRow(rows);
+    if (!order) {
+      throw new HttpError(404, "Delivery not found or already assigned");
+    }
+
+    return { order: normalizeDeliveryOrder(order) };
   }),
   route("POST", /^\/api\/delivery\/(food|grocery)\/([^/]+)\/advance$/, async ({ token, match, body }) => {
     const kind = match[1];
@@ -1296,7 +1435,12 @@ const routes = [
       },
     );
 
-    return { order: firstRow(rows) };
+    const order = firstRow(rows);
+    if (!order) {
+      throw new HttpError(404, "Delivery not found or you are not assigned to it");
+    }
+
+    return { order: normalizeDeliveryOrder(order) };
   }),
   route("GET", /^\/api\/rider\/jobs$/, async ({ token, user }) => {
     const [rides, packages] = await Promise.all([

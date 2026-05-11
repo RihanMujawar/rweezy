@@ -5,6 +5,13 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/register")({
@@ -17,6 +24,7 @@ function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"customer" | "hotel_manager" | "delivery_boy">("customer");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -27,6 +35,7 @@ function RegisterPage() {
         full_name: fullName,
         email,
         password,
+        role,
       });
       if (result.authenticated) {
         await refreshAuth();
@@ -46,9 +55,22 @@ function RegisterPage() {
       <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
         <Link to="/" className="text-xl font-bold">Zoomly</Link>
         <h1 className="mt-6 text-2xl font-semibold">Create your account</h1>
-        <p className="text-sm text-muted-foreground">Sign up as a customer to get started.</p>
+        <p className="text-sm text-muted-foreground">Choose your role and create your account.</p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <div className="space-y-2">
+            <Label>Register as</Label>
+            <Select value={role} onValueChange={(value) => setRole(value as typeof role)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="customer">User</SelectItem>
+                <SelectItem value="hotel_manager">Restaurant</SelectItem>
+                <SelectItem value="delivery_boy">Delivery boy</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="fullName">Full name</Label>
             <Input id="fullName" required value={fullName} onChange={(e) => setFullName(e.target.value)} />

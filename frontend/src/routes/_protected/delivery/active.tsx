@@ -7,6 +7,8 @@ import { RoleGate } from "@/components/coming-soon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRiderBroadcast } from "@/lib/use-rider-broadcast";
 import { api } from "@/lib/api";
+import { RouteMap, StaticPointMap, type LatLng } from "@/components/route-map";
+import { ChatPanel } from "@/components/chat-panel";
 
 export const Route = createFileRoute("/_protected/delivery/active")({
   component: DeliveryActive,
@@ -17,6 +19,10 @@ type FoodOrder = {
   status: string;
   total: number;
   delivery_address: string;
+  delivery_lat: number | null;
+  delivery_lng: number | null;
+  rider_lat: number | null;
+  rider_lng: number | null;
   restaurants: { name: string } | null;
 };
 
@@ -25,6 +31,10 @@ type GroceryOrder = {
   status: string;
   total: number;
   delivery_address: string;
+  delivery_lat: number | null;
+  delivery_lng: number | null;
+  rider_lat: number | null;
+  rider_lng: number | null;
   grocery_stores: { name: string } | null;
 };
 
@@ -83,9 +93,36 @@ function DeliveryActive() {
               <span className="text-xs rounded-full bg-secondary px-2 py-1">{o.status}</span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">📍 {o.delivery_address}</p>
+            {(() => {
+              const delivery = "delivery_lat" in o && o.delivery_lat != null && o.delivery_lng != null
+                ? ({ lat: o.delivery_lat, lng: o.delivery_lng } as LatLng)
+                : null;
+              const rider = "rider_lat" in o && o.rider_lat != null && o.rider_lng != null
+                ? ({ lat: o.rider_lat, lng: o.rider_lng } as LatLng)
+                : null;
+
+              if (!delivery) return null;
+
+              return (
+                <div className="mt-3">
+                  {rider ? (
+                    <RouteMap pickup={rider} drop={delivery} rider={rider} height={220} />
+                  ) : (
+                    <StaticPointMap point={delivery} height={220} />
+                  )}
+                </div>
+              );
+            })()}
             <div className="mt-2 flex items-center justify-between">
               <span className="font-medium">${Number(o.total).toFixed(2)}</span>
               {NEXT[o.status] && <Button size="sm" onClick={() => advance(table, o)}>Mark {NEXT[o.status]}</Button>}
+            </div>
+            <div className="mt-3">
+              <ChatPanel
+                kind={table === "food_orders" ? "food" : "grocery"}
+                serviceId={o.id}
+                title="Chat with customer"
+              />
             </div>
           </div>
         ))}

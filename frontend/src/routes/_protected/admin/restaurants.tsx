@@ -22,6 +22,8 @@ type Restaurant = {
   name: string;
   description: string | null;
   address: string | null;
+  town_name: string | null;
+  pincode: string | null;
   image_url: string | null;
   manager_id: string | null;
   is_open: boolean;
@@ -62,6 +64,8 @@ function AdminRestaurants() {
       name: editing.name,
       description: editing.description ?? null,
       address: editing.address ?? null,
+      town_name: editing.town_name ?? null,
+      pincode: editing.pincode ?? null,
       image_url: editing.image_url ?? null,
       manager_id: editing.manager_id || null,
       is_open: editing.is_open ?? true,
@@ -140,6 +144,10 @@ function AdminRestaurants() {
                 <div><Label>Name</Label><Input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
                 <div><Label>Description</Label><Textarea value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
                 <div><Label>Address</Label><Input value={editing.address ?? ""} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div><Label>Town name</Label><Input value={editing.town_name ?? ""} onChange={(e) => setEditing({ ...editing, town_name: e.target.value })} /></div>
+                  <div><Label>Pincode</Label><Input inputMode="numeric" value={editing.pincode ?? ""} onChange={(e) => setEditing({ ...editing, pincode: e.target.value })} /></div>
+                </div>
                 <div><Label>Image URL</Label><Input value={editing.image_url ?? ""} onChange={(e) => setEditing({ ...editing, image_url: e.target.value })} /></div>
                 <div><Label>Manager user ID (paste from Users page)</Label><Input value={editing.manager_id ?? ""} onChange={(e) => setEditing({ ...editing, manager_id: e.target.value })} placeholder="uuid" /></div>
                 <div className="flex items-center gap-2">
@@ -176,6 +184,9 @@ function AdminRestaurants() {
                       <Badge variant="outline">{orderCounts[r.id] ?? 0} orders</Badge>
                     </div>
                     {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
+                    {(r.town_name || r.pincode) && (
+                      <p className="mt-1 text-xs text-muted-foreground">{[r.town_name, r.pincode].filter(Boolean).join(" ")}</p>
+                    )}
                     {r.description && <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>}
                     <div className="mt-2 text-xs text-muted-foreground">
                       Manager:{" "}

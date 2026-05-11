@@ -167,6 +167,25 @@ npm run dev  # Parallel backend:3000 + frontend dev
 
 Open http://localhost:3000.
 
+### Docker
+
+Build and run the production container with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+The app will be available at http://localhost:4000.
+
+Or build and run the image directly:
+
+```bash
+docker build -t zoomly-fullstack:latest .
+docker run --env-file .env -p 4000:4000 zoomly-fullstack:latest
+```
+
+Make sure `.env` contains the Supabase variables from `.env.example`. The Docker runtime binds the backend to `0.0.0.0:4000` so it works with published container ports.
+
 ## 📊 Enhanced Workflow Diagram
 
 ```mermaid
@@ -203,4 +222,3 @@ graph TD
 
 ---
 *Updated with full technical deep-dive!*
-

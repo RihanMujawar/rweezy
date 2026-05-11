@@ -46,18 +46,27 @@ function MyOrders() {
   const [rides, setRides] = useState<Ride[]>([]);
   const [pkgs, setPkgs] = useState<Pkg[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     let alive = true;
-    const load = () => api.orders.getMine().then(({ food, grocery, rides, packages }) => {
-      if (!alive) return;
-      setFood((food as FoodOrder[]) ?? []);
-      setGrocery((grocery as GroceryOrder[]) ?? []);
-      setRides((rides as Ride[]) ?? []);
-      setPkgs((packages as Pkg[]) ?? []);
-      setLoading(false);
-    });
+    const load = async () => {
+      try {
+        const { food, grocery, rides, packages } = await api.orders.getMine();
+        if (!alive) return;
+        setFood((food as FoodOrder[]) ?? []);
+        setGrocery((grocery as GroceryOrder[]) ?? []);
+        setRides((rides as Ride[]) ?? []);
+        setPkgs((packages as Pkg[]) ?? []);
+        setError(null);
+      } catch (error) {
+        if (!alive) return;
+        setError(error instanceof Error ? error.message : "Failed to refresh orders");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
     load();
     const timer = window.setInterval(load, 5000);
     return () => {
@@ -99,6 +108,7 @@ function MyOrders() {
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold">My orders</h1>
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       {loading ? <p className="mt-4 text-muted-foreground">Loading...</p> : (
         <Tabs defaultValue="food" className="mt-6">
           <TabsList>
