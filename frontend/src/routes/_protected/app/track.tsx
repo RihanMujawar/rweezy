@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { RouteMap, distanceKm, type LatLng } from "@/components/route-map";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChatPanel } from "@/components/chat-panel";
 import { api } from "@/lib/api";
 
 const KIND_TO_TABLE = {
@@ -74,6 +75,7 @@ function TrackOrder() {
   const [mounted, setMounted] = useState(false);
   const [row, setRow] = useState<TrackRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -81,10 +83,20 @@ function TrackOrder() {
     if (!user) return;
     let alive = true;
     const load = async () => {
-      const { row } = await api.track.get(kind, id);
-      if (alive) {
-        setRow((row as TrackRow | null) ?? null);
-        setLoading(false);
+      try {
+        const { row } = await api.track.get(kind, id);
+        if (alive) {
+          setRow((row as TrackRow | null) ?? null);
+          setError(null);
+        }
+      } catch (error) {
+        if (alive) {
+          setError(error instanceof Error ? error.message : "Failed to refresh tracking");
+        }
+      } finally {
+        if (alive) {
+          setLoading(false);
+        }
       }
     };
     load();
@@ -96,6 +108,7 @@ function TrackOrder() {
   }, [user, table, id]);
 
   if (loading) return <div className="container mx-auto px-4 py-8 text-muted-foreground">Loading...</div>;
+  if (error) return <div className="container mx-auto px-4 py-8 text-red-600">{error}</div>;
   if (!row) return <div className="container mx-auto px-4 py-8">Not found.</div>;
 
   // Coordinates depend on kind: rides/packages have pickup+drop; food/grocery have store location is unknown here, use delivery + rider
@@ -163,6 +176,15 @@ function TrackOrder() {
         {row.drop_address && <p><span className="text-red-600">●</span> Drop: {row.drop_address}</p>}
         {row.delivery_address && <p><span className="text-red-600">●</span> Delivery: {row.delivery_address}</p>}
         {fare > 0 && <p className="mt-2 font-semibold">Total: ₹{Number(fare).toFixed(0)}</p>}
+      </div>
+
+      <div className="mt-4">
+        <ChatPanel
+          kind={kind}
+          serviceId={row.id}
+          title={kind === "food" || kind === "grocery" ? "Chat with delivery partner" : "Chat with rider"}
+          disabled={!row.rider_id}
+        />
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { DeliveryPinMap, type LatLng } from "@/components/route-map";
 
 export const Route = createFileRoute("/_protected/app/grocery/checkout")({
   component: GroceryCheckout,
@@ -18,6 +19,7 @@ function GroceryCheckout() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [address, setAddress] = useState("");
+  const [deliveryLocation, setDeliveryLocation] = useState<LatLng | null>(null);
   const [notes, setNotes] = useState("");
   const [placing, setPlacing] = useState(false);
 
@@ -36,12 +38,18 @@ function GroceryCheckout() {
       toast.error("Please enter a delivery address");
       return;
     }
+    if (!deliveryLocation) {
+      toast.error("Please pin your delivery location on the map");
+      return;
+    }
     setPlacing(true);
     const total = cart.total();
     try {
       await api.orders.placeGrocery({
         store_id: cart.storeId,
         delivery_address: address,
+        delivery_lat: deliveryLocation.lat,
+        delivery_lng: deliveryLocation.lng,
         notes,
         total,
         items: cart.items.map((i) => ({
@@ -84,6 +92,10 @@ function GroceryCheckout() {
         <div className="space-y-2">
           <Label>Delivery address</Label>
           <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street, building, apt..." />
+        </div>
+        <div className="space-y-2">
+          <Label>Pin delivery location</Label>
+          <DeliveryPinMap value={deliveryLocation} onChange={setDeliveryLocation} />
         </div>
         <div className="space-y-2">
           <Label>Notes (optional)</Label>

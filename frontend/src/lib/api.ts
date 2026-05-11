@@ -45,7 +45,12 @@ export const api = {
         method: "POST",
         body: payload,
       }),
-    register: (payload: { full_name: string; email: string; password: string }) =>
+    register: (payload: {
+      full_name: string;
+      email: string;
+      password: string;
+      role: "customer" | "hotel_manager" | "delivery_boy";
+    }) =>
       apiRequest<{
         user: { id: string; email?: string | null } | null;
         roles: string[];
@@ -84,10 +89,12 @@ export const api = {
   },
 
   catalog: {
-    getRestaurants: () => apiRequest<{ restaurants: unknown[] }>("/api/catalog/restaurants"),
+    getRestaurants: () =>
+      apiRequest<{ restaurants: unknown[]; location: null }>("/api/catalog/restaurants"),
     getRestaurant: (restaurantId: string) =>
       apiRequest<{ restaurant: unknown | null; items: unknown[] }>(`/api/catalog/restaurants/${restaurantId}`),
-    getStores: () => apiRequest<{ stores: unknown[] }>("/api/catalog/stores"),
+    getStores: () =>
+      apiRequest<{ stores: unknown[]; location: null }>("/api/catalog/stores"),
     getStore: (storeId: string) =>
       apiRequest<{ store: unknown | null; items: unknown[] }>(`/api/catalog/stores/${storeId}`),
   },
@@ -96,6 +103,8 @@ export const api = {
     placeFood: (payload: {
       restaurant_id: string;
       delivery_address: string;
+      delivery_lat: number;
+      delivery_lng: number;
       notes: string;
       total: number;
       items: { id: string; name: string; price: number; quantity: number }[];
@@ -103,6 +112,8 @@ export const api = {
     placeGrocery: (payload: {
       store_id: string;
       delivery_address: string;
+      delivery_lat: number;
+      delivery_lng: number;
       notes: string;
       total: number;
       items: { id: string; name: string; price: number; quantity: number }[];
@@ -114,6 +125,19 @@ export const api = {
   track: {
     get: (kind: "ride" | "package" | "food" | "grocery", id: string) =>
       apiRequest<{ row: unknown | null }>(`/api/track/${kind}/${id}`),
+  },
+
+  chat: {
+    get: (kind: "ride" | "package" | "food" | "grocery", id: string) =>
+      apiRequest<{
+        messages: unknown[];
+        participant: { customer_id: string; partner_id: string | null };
+      }>(`/api/chat/${kind}/${id}`),
+    send: (kind: "ride" | "package" | "food" | "grocery", id: string, message: string) =>
+      apiRequest<{ message: unknown }>(`/api/chat/${kind}/${id}`, {
+        method: "POST",
+        body: { message },
+      }),
   },
 
   rides: {

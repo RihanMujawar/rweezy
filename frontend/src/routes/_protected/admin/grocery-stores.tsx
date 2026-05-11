@@ -20,6 +20,8 @@ type Store = {
   name: string;
   description: string | null;
   address: string | null;
+  town_name: string | null;
+  pincode: string | null;
   image_url: string | null;
   manager_id: string | null;
   is_open: boolean;
@@ -44,6 +46,8 @@ function AdminStores() {
       name: editing.name,
       description: editing.description ?? null,
       address: editing.address ?? null,
+      town_name: editing.town_name ?? null,
+      pincode: editing.pincode ?? null,
       image_url: editing.image_url ?? null,
       manager_id: editing.manager_id || null,
       is_open: editing.is_open ?? true,
@@ -85,6 +89,10 @@ function AdminStores() {
                 <div><Label>Name</Label><Input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
                 <div><Label>Description</Label><Textarea value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
                 <div><Label>Address</Label><Input value={editing.address ?? ""} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div><Label>Town name</Label><Input value={editing.town_name ?? ""} onChange={(e) => setEditing({ ...editing, town_name: e.target.value })} /></div>
+                  <div><Label>Pincode</Label><Input inputMode="numeric" value={editing.pincode ?? ""} onChange={(e) => setEditing({ ...editing, pincode: e.target.value })} /></div>
+                </div>
                 <div><Label>Image URL</Label><Input value={editing.image_url ?? ""} onChange={(e) => setEditing({ ...editing, image_url: e.target.value })} /></div>
                 <div><Label>Manager user ID</Label><Input value={editing.manager_id ?? ""} onChange={(e) => setEditing({ ...editing, manager_id: e.target.value })} placeholder="uuid" /></div>
                 <Button onClick={save} className="w-full">Save</Button>
@@ -102,6 +110,9 @@ function AdminStores() {
               <div className="flex-1">
                 <h3 className="font-semibold">{r.name}</h3>
                 <p className="text-xs text-muted-foreground">{r.address}</p>
+                {(r.town_name || r.pincode) && (
+                  <p className="text-xs text-muted-foreground">{[r.town_name, r.pincode].filter(Boolean).join(" ")}</p>
+                )}
                 <p className="text-xs text-muted-foreground">Manager: {r.manager_id ?? "unassigned"}</p>
               </div>
               <Button variant="outline" size="sm" onClick={() => { setEditing(r); setOpen(true); }}>Edit</Button>

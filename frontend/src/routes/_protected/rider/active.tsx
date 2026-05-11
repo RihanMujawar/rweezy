@@ -9,6 +9,7 @@ import { RouteMap } from "@/components/route-map";
 import { useRiderBroadcast } from "@/lib/use-rider-broadcast";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { ChatPanel } from "@/components/chat-panel";
 
 const searchSchema = z.object({
   id: z.string().optional(),
@@ -140,6 +141,14 @@ function ActiveRide() {
                   <Button variant="outline" onClick={cancel}>Cancel</Button>
                 )}
               </div>
+            </div>
+
+            <div className="mt-4">
+              <ChatPanel
+                kind={table === "package_deliveries" ? "package" : "ride"}
+                serviceId={job.id}
+                title="Chat with customer"
+              />
             </div>
           </>
         )}

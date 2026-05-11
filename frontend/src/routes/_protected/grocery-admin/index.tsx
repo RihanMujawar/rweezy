@@ -19,6 +19,8 @@ type Store = {
   name: string;
   description: string | null;
   address: string | null;
+  town_name: string | null;
+  pincode: string | null;
   image_url: string | null;
   is_open: boolean;
 };
@@ -50,6 +52,8 @@ function GroceryDashboard() {
       name: form.name,
       description: form.description ?? null,
       address: form.address ?? null,
+      town_name: form.town_name ?? null,
+      pincode: form.pincode ?? null,
       image_url: form.image_url ?? null,
       is_open: form.is_open ?? true,
       manager_id: user.id,
@@ -96,6 +100,10 @@ function GroceryDashboard() {
                 <div><Label>Name</Label><Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
                 <div><Label>Description</Label><Textarea value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
                 <div><Label>Address</Label><Input value={form.address ?? ""} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div><Label>Town name</Label><Input value={form.town_name ?? ""} onChange={(e) => setForm({ ...form, town_name: e.target.value })} /></div>
+                  <div><Label>Pincode</Label><Input inputMode="numeric" value={form.pincode ?? ""} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
+                </div>
                 <div><Label>Image URL</Label><Input value={form.image_url ?? ""} onChange={(e) => setForm({ ...form, image_url: e.target.value })} /></div>
                 <div className="flex items-center gap-2">
                   <Switch checked={form.is_open ?? true} onCheckedChange={(v) => setForm({ ...form, is_open: v })} />

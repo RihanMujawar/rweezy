@@ -32,6 +32,38 @@ function errorMessage(payload, fallback) {
   return fallback;
 }
 
+function isNetworkError(error) {
+  return error instanceof TypeError || error?.name === "AbortError" || error?.name === "TimeoutError";
+}
+
+async function supabaseFetch(url, options = {}) {
+  const method = options.method ?? "GET";
+  const maxAttempts = method === "GET" || method === "HEAD" ? 2 : 1;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(20000),
+      });
+    } catch (error) {
+      lastError = error;
+      if (!isNetworkError(error) || attempt === maxAttempts) break;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  }
+
+  const causeCode = lastError?.cause?.code;
+  const timedOut = lastError?.name === "TimeoutError" || causeCode === "UND_ERR_CONNECT_TIMEOUT";
+  throw new HttpError(
+    504,
+    timedOut
+      ? "Supabase connection timed out. Check your internet connection or Supabase project availability."
+      : "Unable to connect to Supabase. Check your internet connection or Supabase project URL.",
+  );
+}
+
 async function authRequest(path, options = {}) {
   const {
     method = "GET",
@@ -39,7 +71,7 @@ async function authRequest(path, options = {}) {
     token,
   } = options;
 
-  const response = await fetch(`${env.supabaseUrl}/auth/v1${path}`, {
+  const response = await supabaseFetch(`${env.supabaseUrl}/auth/v1${path}`, {
     method,
     headers: buildHeaders(
       {
@@ -66,7 +98,7 @@ export async function signInWithPassword(email, password) {
   });
 }
 
-export async function signUpWithPassword(email, password, fullName) {
+export async function signUpWithPassword(email, password, fullName, metadata = {}) {
   return authRequest("/signup", {
     method: "POST",
     body: {
@@ -74,6 +106,7 @@ export async function signUpWithPassword(email, password, fullName) {
       password,
       data: {
         full_name: fullName,
+        ...metadata,
       },
     },
   });
@@ -98,7 +131,7 @@ export async function revokeSession(accessToken) {
 }
 
 export async function getUserFromToken(token) {
-  const response = await fetch(`${env.supabaseUrl}/auth/v1/user`, {
+  const response = await supabaseFetch(`${env.supabaseUrl}/auth/v1/user`, {
     headers: buildHeaders({}, token),
   });
 
@@ -118,7 +151,7 @@ export async function restRequest(token, path, options = {}) {
     headers = {},
   } = options;
 
-  const response = await fetch(`${env.supabaseUrl}/rest/v1${path}`, {
+  const response = await supabaseFetch(`${env.supabaseUrl}/rest/v1${path}`, {
     method,
     headers: buildHeaders({
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
