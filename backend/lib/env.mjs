@@ -64,4 +64,5 @@ export const env = {
   frontendDevUrl: process.env.FRONTEND_DEV_URL || "http://127.0.0.1:3000",
   supabaseUrl: required("SUPABASE_URL"),
   supabasePublishableKey: required("SUPABASE_PUBLISHABLE_KEY"),
+  mapboxAccessToken: process.env.MAPBOX_ACCESS_TOKEN || process.env.VITE_MAPBOX_ACCESS_TOKEN || "",
 };

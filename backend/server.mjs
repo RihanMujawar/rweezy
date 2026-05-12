@@ -288,7 +288,31 @@ function route(method, pattern, handler) {
 const routes = [
   route("GET", /^\/api\/health$/, async () => ({ ok: true })),
   route("POST", /^\/api\/auth\/login$/, async ({ body }) => {
-    const session = await signInWithPassword(body.email, body.password);
+    const email = cleanText(body.email);
+    const phone = cleanText(body.phone);
+    let identifier = { email };
+
+    if (phone) {
+      const rows = await restRequest(
+        null,
+        "/rpc/email_for_phone_login",
+        {
+          method: "POST",
+          body: { lookup_phone: phone },
+        },
+      );
+      const foundEmail = typeof rows === "string" ? rows : null;
+      if (!foundEmail) {
+        throw new HttpError(401, "No account found for this phone number");
+      }
+      identifier = { email: foundEmail };
+    }
+
+    if (!identifier.email) {
+      throw new HttpError(400, "Email or phone is required");
+    }
+
+    const session = await signInWithPassword(identifier, body.password);
     const normalized = normalizeAuthSession(session);
 
     if (!normalized.user) {
@@ -308,10 +332,12 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/register$/, async ({ body }) => {
-    const role = normalizeSignupRole(body.role);
+    const phone = cleanText(body.phone);
+    const role = "customer";
 
     const result = await signUpWithPassword(body.email, body.password, body.full_name, {
       role,
+      phone,
     });
     const normalized = normalizeAuthSession(result);
     const roles = normalized.accessToken && normalized.user
@@ -357,8 +383,18 @@ const routes = [
       throw new HttpError(400, "Missing route coordinates");
     }
 
-    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
-    const response = await fetch(osrmUrl);
+    if (!env.mapboxAccessToken) {
+      throw new HttpError(500, "Missing MAPBOX_ACCESS_TOKEN");
+    }
+
+    const mapboxUrl = new URL(
+      `https://api.mapbox.com/directions/v5/mapbox/driving/${fromLng},${fromLat};${toLng},${toLat}`,
+    );
+    mapboxUrl.searchParams.set("geometries", "geojson");
+    mapboxUrl.searchParams.set("overview", "full");
+    mapboxUrl.searchParams.set("access_token", env.mapboxAccessToken);
+
+    const response = await fetch(mapboxUrl);
     const payload = await response.json();
 
     if (!response.ok) {

@@ -11,5 +11,8 @@
     "build:frontend": "npm --prefix frontend run build",
     "build:backend": "npm --prefix backend run build",
     "lint": "npm --prefix frontend run lint"
+  },
+  "devDependencies": {
+    "supabase": "^2.98.2"
   }
 }

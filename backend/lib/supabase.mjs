@@ -85,16 +85,23 @@ async function authRequest(path, options = {}) {
   const payload = await parseResponse(response);
 
   if (!response.ok) {
-    throw new HttpError(response.status, errorMessage(payload, `Supabase auth request failed: ${method} ${path}`));
+    const fallback = response.status === 429
+      ? "Too many signup attempts. Please wait a few minutes and try again."
+      : `Supabase auth request failed: ${method} ${path}`;
+    throw new HttpError(response.status, errorMessage(payload, fallback));
   }
 
   return payload;
 }
 
-export async function signInWithPassword(email, password) {
+export async function signInWithPassword(identifier, password) {
+  const value = typeof identifier === "string" ? { email: identifier } : identifier;
   return authRequest("/token?grant_type=password", {
     method: "POST",
-    body: { email, password },
+    body: {
+      ...value,
+      password,
+    },
   });
 }
 

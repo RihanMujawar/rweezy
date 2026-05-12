@@ -5,13 +5,6 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/register")({
@@ -23,8 +16,8 @@ function RegisterPage() {
   const { refreshAuth } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"customer" | "hotel_manager" | "delivery_boy">("customer");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -34,8 +27,8 @@ function RegisterPage() {
       const result = await api.auth.register({
         full_name: fullName,
         email,
+        phone,
         password,
-        role,
       });
       if (result.authenticated) {
         await refreshAuth();
@@ -55,22 +48,9 @@ function RegisterPage() {
       <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
         <Link to="/" className="text-xl font-bold">Zoomly</Link>
         <h1 className="mt-6 text-2xl font-semibold">Create your account</h1>
-        <p className="text-sm text-muted-foreground">Choose your role and create your account.</p>
+        <p className="text-sm text-muted-foreground">Create your account to continue.</p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div className="space-y-2">
-            <Label>Register as</Label>
-            <Select value={role} onValueChange={(value) => setRole(value as typeof role)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="customer">User</SelectItem>
-                <SelectItem value="hotel_manager">Restaurant</SelectItem>
-                <SelectItem value="delivery_boy">Delivery boy</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="space-y-2">
             <Label htmlFor="fullName">Full name</Label>
             <Input id="fullName" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
@@ -78,6 +58,17 @@ function RegisterPage() {
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone number</Label>
+            <Input
+              id="phone"
+              type="tel"
+              required
+              placeholder="+919876543210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password (min 6 characters)</Label>

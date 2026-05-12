@@ -40,7 +40,7 @@ async function apiRequest<T>(
 
 export const api = {
   auth: {
-    login: (payload: { email: string; password: string }) =>
+    login: (payload: { email?: string; phone?: string; password: string }) =>
       apiRequest<{ user: { id: string; email?: string | null }; roles: string[] }>("/api/auth/login", {
         method: "POST",
         body: payload,
@@ -48,8 +48,8 @@ export const api = {
     register: (payload: {
       full_name: string;
       email: string;
+      phone: string;
       password: string;
-      role: "customer" | "hotel_manager" | "delivery_boy";
     }) =>
       apiRequest<{
         user: { id: string; email?: string | null } | null;

@@ -14,7 +14,9 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const { refreshAuth } = useAuth();
+  const [mode, setMode] = useState<"email" | "phone">("email");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,7 +24,7 @@ function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.auth.login({ email, password });
+      await api.auth.login(mode === "phone" ? { phone, password } : { email, password });
       await refreshAuth();
     } catch (error) {
       setLoading(false);
@@ -42,9 +44,41 @@ function LoginPage() {
         <p className="text-sm text-muted-foreground">Sign in to continue.</p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
+            <Button
+              type="button"
+              variant={mode === "email" ? "default" : "ghost"}
+              onClick={() => setMode("email")}
+            >
+              Email
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "phone" ? "default" : "ghost"}
+              onClick={() => setMode("phone")}
+            >
+              Phone
+            </Button>
+          </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            {mode === "phone" ? (
+              <>
+                <Label htmlFor="phone">Phone number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  required
+                  placeholder="+919876543210"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </>
+            ) : (
+              <>
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              </>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
