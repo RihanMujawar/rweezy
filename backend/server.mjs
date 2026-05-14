@@ -14,12 +14,14 @@ import {
   serializeCookie,
 } from "./lib/http.mjs";
 import {
+  createConfirmedUserWithPassword,
+  findUserEmailByPhone,
   getUserFromToken,
   refreshAuthSession,
   restRequest,
   revokeSession,
+  serviceRoleRestRequest,
   signInWithPassword,
-  signUpWithPassword,
 } from "./lib/supabase.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -73,8 +75,61 @@ function cleanText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeIndianPhone(value) {
+  const raw = cleanText(value);
+  const digits = raw.replace(/\D/g, "");
+
+  if (digits.length === 10) {
+    return `+91${digits}`;
+  }
+
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+${digits}`;
+  }
+
+  return raw;
+}
+
 function normalizeChatKind(kind) {
   return ["ride", "package", "food", "grocery"].includes(kind) ? kind : null;
+}
+
+function money(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function startOfLocalDay(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function startOfLocalMonth(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function isOnOrAfter(dateValue, boundary) {
+  const time = new Date(dateValue).getTime();
+  return Number.isFinite(time) && time >= boundary.getTime();
+}
+
+function distanceKm(from, to) {
+  if (!from || !to) return 0;
+  const lat1 = Number(from.lat);
+  const lng1 = Number(from.lng);
+  const lat2 = Number(to.lat);
+  const lng2 = Number(to.lng);
+
+  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return 0;
+
+  const toRad = (value) => (value * Math.PI) / 180;
+  const earthKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+
+  return earthKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function chatTarget(kind) {
@@ -124,7 +179,9 @@ async function getChatContext(token, user, kind, serviceId) {
 }
 
 function normalizeSignupRole(role) {
-  return ["customer", "hotel_manager", "delivery_boy"].includes(role) ? role : "customer";
+  return ["customer", "hotel_manager", "grocery_manager", "delivery_boy", "rider"].includes(role)
+    ? role
+    : "customer";
 }
 
 function isPublicApiRoute(method, pathname) {
@@ -289,19 +346,28 @@ const routes = [
   route("GET", /^\/api\/health$/, async () => ({ ok: true })),
   route("POST", /^\/api\/auth\/login$/, async ({ body }) => {
     const email = cleanText(body.email);
-    const phone = cleanText(body.phone);
+    const phone = normalizeIndianPhone(body.phone);
     let identifier = { email };
 
     if (phone) {
-      const rows = await restRequest(
-        null,
-        "/rpc/email_for_phone_login",
-        {
+      let foundEmail = null;
+
+      try {
+        const rows = await serviceRoleRestRequest("/rpc/email_for_phone_login", {
           method: "POST",
           body: { lookup_phone: phone },
-        },
-      );
-      const foundEmail = typeof rows === "string" ? rows : null;
+        });
+        foundEmail = typeof rows === "string" ? rows : null;
+      } catch (error) {
+        if (!(error instanceof HttpError) || error.status !== 404) {
+          throw error;
+        }
+      }
+
+      if (!foundEmail) {
+        foundEmail = await findUserEmailByPhone(phone);
+      }
+
       if (!foundEmail) {
         throw new HttpError(401, "No account found for this phone number");
       }
@@ -332,14 +398,42 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/register$/, async ({ body }) => {
-    const phone = cleanText(body.phone);
-    const role = "customer";
+    const phone = normalizeIndianPhone(body.phone);
+    const role = normalizeSignupRole(body.role);
+    const email = cleanText(body.email).toLowerCase();
+    const fullName = cleanText(body.full_name);
 
-    const result = await signUpWithPassword(body.email, body.password, body.full_name, {
+    const createdUser = await createConfirmedUserWithPassword(email, body.password, fullName, {
       role,
       phone,
     });
-    const normalized = normalizeAuthSession(result);
+    const createdUserId = createdUser?.id ?? createdUser?.user?.id;
+
+    if (!createdUserId) {
+      throw new HttpError(500, "Account was created but no user id was returned");
+    }
+
+    await serviceRoleRestRequest(buildPath("/profiles", { on_conflict: "id" }), {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates" },
+      body: {
+        id: createdUserId,
+        full_name: fullName,
+        phone,
+      },
+    });
+
+    await serviceRoleRestRequest(buildPath("/user_roles", { on_conflict: "user_id,role" }), {
+      method: "POST",
+      headers: { Prefer: "resolution=ignore-duplicates" },
+      body: {
+        user_id: createdUserId,
+        role,
+      },
+    });
+
+    const session = await signInWithPassword({ email }, body.password);
+    const normalized = normalizeAuthSession(session);
     const roles = normalized.accessToken && normalized.user
       ? await getRoles(normalized.accessToken, normalized.user.id)
       : [];
@@ -349,7 +443,7 @@ const routes = [
       roles,
       authenticated: Boolean(normalized.accessToken),
       __responseHeaders: {
-        "Set-Cookie": buildSessionCookies(result),
+        "Set-Cookie": buildSessionCookies(session),
       },
     };
   }),
@@ -807,6 +901,143 @@ const routes = [
       rides: rides?.length ?? 0,
       packages: packages?.length ?? 0,
       stores: stores?.length ?? 0,
+    };
+  }),
+  route("GET", /^\/api\/admin\/analytics$/, async ({ token }) => {
+    const [
+      profiles,
+      deliveryRoles,
+      restaurants,
+      stores,
+      foodOrders,
+      groceryOrders,
+    ] = await Promise.all([
+      restRequest(token, buildPath("/profiles", { select: "id,full_name,phone" })),
+      restRequest(token, buildPath("/user_roles", { select: "user_id,role", role: "eq.delivery_boy" })),
+      restRequest(token, buildPath("/restaurants", { select: "id,name,is_open", order: "name.asc" })),
+      restRequest(token, buildPath("/grocery_stores", { select: "id,name,is_open", order: "name.asc" })),
+      restRequest(
+        token,
+        buildPath("/food_orders", {
+          select: "id,restaurant_id,total,status,created_at,delivery_boy_id,delivery_lat,delivery_lng,rider_lat,rider_lng",
+        }),
+      ),
+      restRequest(
+        token,
+        buildPath("/grocery_orders", {
+          select: "id,store_id,total,status,created_at,delivery_boy_id,delivery_lat,delivery_lng,rider_lat,rider_lng",
+        }),
+      ),
+    ]);
+
+    const todayStart = startOfLocalDay();
+    const monthStart = startOfLocalMonth();
+    const deliveredStatuses = new Set(["delivered"]);
+    const deliveryBoyIds = new Set((deliveryRoles ?? []).map((role) => role.user_id));
+    const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+
+    const summarizePartner = (partners, orders, idKey) =>
+      (partners ?? []).map((partner) => {
+        const partnerOrders = (orders ?? []).filter((order) => order[idKey] === partner.id);
+        const delivered = partnerOrders.filter((order) => deliveredStatuses.has(order.status));
+        const todayOrders = delivered.filter((order) => isOnOrAfter(order.created_at, todayStart));
+        const monthOrders = delivered.filter((order) => isOnOrAfter(order.created_at, monthStart));
+
+        return {
+          id: partner.id,
+          name: partner.name,
+          is_open: partner.is_open,
+          todayOrders: todayOrders.length,
+          todayIncome: todayOrders.reduce((sum, order) => sum + money(order.total), 0),
+          monthOrders: monthOrders.length,
+          monthIncome: monthOrders.reduce((sum, order) => sum + money(order.total), 0),
+          totalOrders: partnerOrders.length,
+        };
+      });
+
+    const deliverySummary = new Map();
+    const ensureDeliveryBoy = (userId) => {
+      if (!userId) return null;
+      if (!deliverySummary.has(userId)) {
+        const profile = profileById.get(userId);
+        deliverySummary.set(userId, {
+          id: userId,
+          name: profile?.full_name || "Unnamed delivery boy",
+          phone: profile?.phone ?? null,
+          foodDeliveries: 0,
+          groceryDeliveries: 0,
+          todayDeliveries: 0,
+          monthDeliveries: 0,
+          trackedKm: 0,
+          foodIncomeHandled: 0,
+          groceryIncomeHandled: 0,
+        });
+      }
+      return deliverySummary.get(userId);
+    };
+
+    for (const userId of deliveryBoyIds) {
+      ensureDeliveryBoy(userId);
+    }
+
+    const addDeliveryOrder = (order, kind) => {
+      const summary = ensureDeliveryBoy(order.delivery_boy_id);
+      if (!summary) return;
+
+      const delivered = deliveredStatuses.has(order.status);
+      if (kind === "food" && delivered) {
+        summary.foodDeliveries += 1;
+        summary.foodIncomeHandled += money(order.total);
+      }
+      if (kind === "grocery" && delivered) {
+        summary.groceryDeliveries += 1;
+        summary.groceryIncomeHandled += money(order.total);
+      }
+      if (delivered && isOnOrAfter(order.created_at, todayStart)) summary.todayDeliveries += 1;
+      if (delivered && isOnOrAfter(order.created_at, monthStart)) summary.monthDeliveries += 1;
+
+      summary.trackedKm += distanceKm(
+        order.rider_lat != null && order.rider_lng != null
+          ? { lat: order.rider_lat, lng: order.rider_lng }
+          : null,
+        order.delivery_lat != null && order.delivery_lng != null
+          ? { lat: order.delivery_lat, lng: order.delivery_lng }
+          : null,
+      );
+    };
+
+    for (const order of foodOrders ?? []) addDeliveryOrder(order, "food");
+    for (const order of groceryOrders ?? []) addDeliveryOrder(order, "grocery");
+
+    const restaurantIncome = summarizePartner(restaurants, foodOrders, "restaurant_id")
+      .sort((a, b) => b.monthIncome - a.monthIncome);
+    const groceryStoreIncome = summarizePartner(stores, groceryOrders, "store_id")
+      .sort((a, b) => b.monthIncome - a.monthIncome);
+    const deliveryBoys = [...deliverySummary.values()]
+      .map((summary) => ({
+        ...summary,
+        totalDeliveries: summary.foodDeliveries + summary.groceryDeliveries,
+        trackedKm: Number(summary.trackedKm.toFixed(2)),
+      }))
+      .sort((a, b) => b.monthDeliveries - a.monthDeliveries);
+
+    const totalRestaurantMonthIncome = restaurantIncome.reduce((sum, item) => sum + item.monthIncome, 0);
+    const totalGroceryMonthIncome = groceryStoreIncome.reduce((sum, item) => sum + item.monthIncome, 0);
+
+    return {
+      restaurantIncome,
+      groceryStoreIncome,
+      deliveryBoys,
+      totals: {
+        restaurantTodayIncome: restaurantIncome.reduce((sum, item) => sum + item.todayIncome, 0),
+        restaurantMonthIncome: totalRestaurantMonthIncome,
+        groceryTodayIncome: groceryStoreIncome.reduce((sum, item) => sum + item.todayIncome, 0),
+        groceryMonthIncome: totalGroceryMonthIncome,
+        deliveryBoys: deliveryBoys.length,
+        deliveriesToday: deliveryBoys.reduce((sum, item) => sum + item.todayDeliveries, 0),
+        deliveriesMonth: deliveryBoys.reduce((sum, item) => sum + item.monthDeliveries, 0),
+        trackedKm: Number(deliveryBoys.reduce((sum, item) => sum + item.trackedKm, 0).toFixed(2)),
+      },
     };
   }),
   route("GET", /^\/api\/admin\/restaurants$/, async ({ token }) => {
@@ -1759,6 +1990,7 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
     const message = error instanceof Error ? error.message : "Unexpected server error";
+    console.error(`[${status}] ${req.method} ${url.pathname}: ${message}`);
     if (!(error instanceof HttpError)) {
       console.error(error);
     }

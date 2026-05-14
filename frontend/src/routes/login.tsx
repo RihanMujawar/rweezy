@@ -24,7 +24,8 @@ function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.auth.login(mode === "phone" ? { phone, password } : { email, password });
+      const finalIdentifier = mode === "phone" ? { phone: `+91${phone}`, password } : { email, password };
+      await api.auth.login(finalIdentifier);
       await refreshAuth();
     } catch (error) {
       setLoading(false);
@@ -64,14 +65,25 @@ function LoginPage() {
             {mode === "phone" ? (
               <>
                 <Label htmlFor="phone">Phone number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  required
-                  placeholder="+919876543210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <div className="flex items-center justify-center rounded-md border bg-muted px-3 text-sm font-medium">
+                    +91
+                  </div>
+                  <Input
+                    id="phone"
+                    name="tel"
+                    type="tel"
+                    pattern="[0-9]{10}"
+                    placeholder="9876543210"
+                    required
+                    value={phone}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      setPhone(val);
+                    }}
+                    className="flex-1"
+                  />
+                </div>
               </>
             ) : (
               <>

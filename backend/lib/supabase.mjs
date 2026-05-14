@@ -9,6 +9,14 @@ function buildHeaders(extraHeaders = {}, token) {
   };
 }
 
+function buildAdminHeaders(extraHeaders = {}) {
+  return {
+    apikey: env.supabaseServiceRoleKey,
+    Authorization: `Bearer ${env.supabaseServiceRoleKey}`,
+    ...extraHeaders,
+  };
+}
+
 async function parseResponse(response) {
   if (response.status === 204) return null;
 
@@ -26,7 +34,11 @@ async function parseResponse(response) {
 function errorMessage(payload, fallback) {
   if (!payload) return fallback;
   if (typeof payload === "string") return payload;
+  if (payload.error_code === "over_email_send_rate_limit") {
+    return "Email signup is temporarily rate limited. Please wait a few minutes and try again.";
+  }
   if (payload.message) return payload.message;
+  if (payload.msg) return payload.msg;
   if (payload.error_description) return payload.error_description;
   if (payload.error) return payload.error;
   return fallback;
@@ -94,6 +106,36 @@ async function authRequest(path, options = {}) {
   return payload;
 }
 
+async function adminAuthRequest(path, options = {}) {
+  if (!env.supabaseServiceRoleKey) {
+    throw new HttpError(
+      500,
+      "Missing SUPABASE_SERVICE_ROLE_KEY. Add your Supabase service_role key to backend .env and restart the server.",
+    );
+  }
+
+  const {
+    method = "GET",
+    body,
+  } = options;
+
+  const response = await supabaseFetch(`${env.supabaseUrl}/auth/v1/admin${path}`, {
+    method,
+    headers: buildAdminHeaders({
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    }),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  const payload = await parseResponse(response);
+
+  if (!response.ok) {
+    throw new HttpError(response.status, errorMessage(payload, `Supabase admin request failed: ${method} ${path}`));
+  }
+
+  return payload;
+}
+
 export async function signInWithPassword(identifier, password) {
   const value = typeof identifier === "string" ? { email: identifier } : identifier;
   return authRequest("/token?grant_type=password", {
@@ -117,6 +159,44 @@ export async function signUpWithPassword(email, password, fullName, metadata = {
       },
     },
   });
+}
+
+export async function createConfirmedUserWithPassword(email, password, fullName, metadata = {}) {
+  return adminAuthRequest("/users", {
+    method: "POST",
+    body: {
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        ...metadata,
+      },
+    },
+  });
+}
+
+export async function findUserEmailByPhone(phone) {
+  const normalizedPhone = typeof phone === "string" ? phone.trim() : "";
+  if (!normalizedPhone) return null;
+
+  for (let page = 1; page <= 10; page += 1) {
+    const payload = await adminAuthRequest(`/users?page=${page}&per_page=100`);
+    const users = Array.isArray(payload?.users) ? payload.users : [];
+
+    const found = users.find((user) => {
+      const metadataPhone = typeof user?.user_metadata?.phone === "string"
+        ? user.user_metadata.phone.trim()
+        : "";
+      const authPhone = typeof user?.phone === "string" ? user.phone.trim() : "";
+      return metadataPhone === normalizedPhone || authPhone === normalizedPhone;
+    });
+
+    if (found?.email) return found.email;
+    if (users.length < 100) break;
+  }
+
+  return null;
 }
 
 export async function refreshAuthSession(refreshToken) {
@@ -171,6 +251,38 @@ export async function restRequest(token, path, options = {}) {
 
   if (!response.ok) {
     throw new HttpError(response.status, errorMessage(payload, `Supabase request failed: ${method} ${path}`));
+  }
+
+  return payload;
+}
+
+export async function serviceRoleRestRequest(path, options = {}) {
+  if (!env.supabaseServiceRoleKey) {
+    throw new HttpError(
+      500,
+      "Missing SUPABASE_SERVICE_ROLE_KEY. Add your Supabase service_role key to backend .env and restart the server.",
+    );
+  }
+
+  const {
+    method = "GET",
+    body,
+    headers = {},
+  } = options;
+
+  const response = await supabaseFetch(`${env.supabaseUrl}/rest/v1${path}`, {
+    method,
+    headers: buildAdminHeaders({
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...headers,
+    }),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  const payload = await parseResponse(response);
+
+  if (!response.ok) {
+    throw new HttpError(response.status, errorMessage(payload, `Supabase service request failed: ${method} ${path}`));
   }
 
   return payload;

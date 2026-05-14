@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 
 export type LatLng = { lat: number; lng: number };
 
@@ -9,7 +11,7 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefi
 const MAPBOX_STYLE = "mapbox://styles/mapbox/streets-v12";
 const DEFAULT_CENTER: LatLng = { lat: 12.9716, lng: 77.5946 };
 
-type MarkerKind = "pickup" | "drop" | "rider";
+type MarkerKind = "pickup" | "drop" | "rider" | "current";
 
 type MapMarker = {
   id: string;
@@ -24,6 +26,12 @@ type MapLine = {
   dashed?: boolean;
 };
 
+type PlaceSearchResult = {
+  id: string;
+  label: string;
+  point: LatLng;
+};
+
 function coords(point: LatLng): [number, number] {
   return [point.lng, point.lat];
 }
@@ -36,9 +44,13 @@ function markerElement(kind: MarkerKind) {
     el.style.cssText = "width:18px;height:18px;background:#22c55e;box-shadow:0 0 0 2px #22c55e";
   } else if (kind === "drop") {
     el.style.cssText = "width:18px;height:18px;background:#ef4444;box-shadow:0 0 0 2px #ef4444";
-  } else {
-    el.style.cssText = "width:24px;height:24px;background:#2563eb;color:white;font-size:12px;font-weight:700;box-shadow:0 0 0 2px #2563eb";
+  } else if (kind === "rider") {
+    el.style.cssText =
+      "width:24px;height:24px;background:#2563eb;color:white;font-size:12px;font-weight:700;box-shadow:0 0 0 2px #2563eb";
     el.textContent = "D";
+  } else {
+    el.style.cssText =
+      "width:22px;height:22px;background:#2563eb;box-shadow:0 0 0 5px rgba(37,99,235,.22),0 0 0 2px #2563eb";
   }
 
   return el;
@@ -149,7 +161,10 @@ function MapboxShell({
       map.once("load", renderLines);
     }
 
-    const points = [...markers.map((marker) => marker.point), ...lines.flatMap((line) => line.points)];
+    const points = [
+      ...markers.map((marker) => marker.point),
+      ...lines.flatMap((line) => line.points),
+    ];
     if (points.length === 1) {
       map.flyTo({ center: coords(points[0]), zoom: 14, essential: false });
     } else if (points.length > 1) {
@@ -163,13 +178,18 @@ function MapboxShell({
 
   if (!MAPBOX_TOKEN) {
     return (
-      <div className="grid place-items-center rounded-xl border bg-muted p-6 text-center text-sm text-muted-foreground" style={{ height }}>
+      <div
+        className="grid place-items-center rounded-xl border bg-muted p-6 text-center text-sm text-muted-foreground"
+        style={{ height }}
+      >
         Add VITE_MAPBOX_ACCESS_TOKEN to your environment to enable Mapbox maps.
       </div>
     );
   }
 
-  return <div ref={containerRef} className="overflow-hidden rounded-xl border" style={{ height }} />;
+  return (
+    <div ref={containerRef} className="overflow-hidden rounded-xl border" style={{ height }} />
+  );
 }
 
 async function fetchRoute(from: LatLng, to: LatLng): Promise<LatLng[] | null> {
@@ -181,23 +201,213 @@ async function fetchRoute(from: LatLng, to: LatLng): Promise<LatLng[] | null> {
   }
 }
 
+async function searchPlaces(query: string, near: LatLng): Promise<PlaceSearchResult[]> {
+  if (!MAPBOX_TOKEN) return [];
+
+  const url = new URL(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`,
+  );
+  url.searchParams.set("access_token", MAPBOX_TOKEN);
+  url.searchParams.set("autocomplete", "true");
+  url.searchParams.set("limit", "5");
+  url.searchParams.set("language", "en");
+  url.searchParams.set("proximity", `${near.lng},${near.lat}`);
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Location search failed");
+
+  const data = await response.json();
+  return (data.features ?? [])
+    .filter((feature: { center?: unknown }) => Array.isArray(feature.center))
+    .map(
+      (feature: { id: string; place_name?: string; text?: string; center: [number, number] }) => ({
+        id: feature.id,
+        label: feature.place_name ?? feature.text ?? "Selected location",
+        point: { lat: feature.center[1], lng: feature.center[0] },
+      }),
+    );
+}
+
+function LocationSearch({
+  center,
+  onSelect,
+  placeholder,
+}: {
+  center: LatLng;
+  onSelect: (point: LatLng) => void;
+  placeholder: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PlaceSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const runSearch = async () => {
+    const trimmed = query.trim();
+    if (trimmed.length < 3) {
+      setResults([]);
+      setMessage("Type at least 3 characters to search.");
+      return;
+    }
+
+    setSearching(true);
+    setMessage(null);
+
+    try {
+      const nextResults = await searchPlaces(trimmed, center);
+      setResults(nextResults);
+      setMessage(nextResults.length === 0 ? "No matching locations found." : null);
+    } catch {
+      setResults([]);
+      setMessage("Could not search locations. Check internet and try again.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const selectResult = (result: PlaceSearchResult) => {
+    setQuery(result.label);
+    setResults([]);
+    setMessage("Location selected. Adjust the pin on the map if needed.");
+    onSelect(result.point);
+  };
+
+  return (
+    <div className="space-y-2">
+      <form
+        className="flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          runSearch();
+        }}
+      >
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+        <Button type="submit" variant="outline" size="icon" disabled={searching}>
+          <Search className="h-4 w-4" />
+          <span className="sr-only">Search location</span>
+        </Button>
+      </form>
+
+      {results.length > 0 && (
+        <div className="overflow-hidden rounded-lg border bg-card text-sm shadow-sm">
+          {results.map((result) => (
+            <button
+              key={result.id}
+              type="button"
+              className="block w-full border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted"
+              onClick={() => selectResult(result)}
+            >
+              {result.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {message && <p className="text-xs text-muted-foreground">{message}</p>}
+    </div>
+  );
+}
+
 function useBrowserLocation(onPick: (point: LatLng) => void) {
   const [locating, setLocating] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const locate = () => {
-    if (!navigator.geolocation) return;
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocating(false);
-        onPick({ lat: position.coords.latitude, lng: position.coords.longitude });
-      },
-      () => setLocating(false),
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 },
+  const isSecureLocationContext = () => {
+    if (typeof window === "undefined") return false;
+    return (
+      window.isSecureContext ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1"
     );
   };
 
-  return { locate, locating };
+  const finishWithError = (error: GeolocationPositionError) => {
+    setLocating(false);
+
+    if (error.code === error.PERMISSION_DENIED) {
+      setMessage(
+        isSecureLocationContext()
+          ? "Location permission is blocked. Allow location for this site in your browser settings, then try again."
+          : "Location needs HTTPS. Open the app with an https:// URL or localhost, then try again.",
+      );
+      return;
+    }
+
+    if (error.code === error.POSITION_UNAVAILABLE) {
+      setMessage("Your phone could not find a GPS location. Turn on Location/GPS and try again.");
+      return;
+    }
+
+    if (error.code === error.TIMEOUT) {
+      setMessage(
+        "Location timed out. Move near a window or turn on high accuracy/GPS, then try again.",
+      );
+      return;
+    }
+
+    setMessage("Could not read your current location. You can still tap the map to set the pin.");
+  };
+
+  const handleSuccess = (position: GeolocationPosition) => {
+    setLocating(false);
+    setMessage("Phone location pinned. Adjust it on the map if needed.");
+    onPick({ lat: position.coords.latitude, lng: position.coords.longitude });
+  };
+
+  const locate = async () => {
+    if (!isSecureLocationContext()) {
+      setMessage(
+        "Location needs HTTPS. Browser permission prompts do not appear on normal http:// phone or LAN links.",
+      );
+      return;
+    }
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setMessage("This browser does not support current location. Tap the map to set the pin.");
+      return;
+    }
+
+    if ("permissions" in navigator) {
+      try {
+        const permission = await navigator.permissions.query({ name: "geolocation" });
+        if (permission.state === "denied") {
+          setMessage(
+            "Location is blocked for this site. Open browser site settings and allow Location, then tap again.",
+          );
+          return;
+        }
+      } catch {
+        // Some browsers do not allow querying geolocation permission. The actual location call below still works.
+      }
+    }
+
+    setLocating(true);
+    setMessage("Asking your browser for location permission...");
+
+    navigator.geolocation.getCurrentPosition(
+      handleSuccess,
+      (error) => {
+        if (error.code === error.TIMEOUT) {
+          navigator.geolocation.getCurrentPosition(handleSuccess, finishWithError, {
+            enableHighAccuracy: false,
+            maximumAge: 60000,
+            timeout: 15000,
+          });
+          return;
+        }
+
+        finishWithError(error);
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 12000 },
+    );
+  };
+
+  return { locate, locating, message };
 }
 
 export function DeliveryPinMap({
@@ -209,18 +419,42 @@ export function DeliveryPinMap({
   onChange: (point: LatLng) => void;
   height?: number;
 }) {
-  const { locate, locating } = useBrowserLocation(onChange);
+  const [usingPhoneLocation, setUsingPhoneLocation] = useState(false);
+  const { locate, locating, message } = useBrowserLocation((point) => {
+    setUsingPhoneLocation(true);
+    onChange(point);
+  });
   const center = value ?? DEFAULT_CENTER;
   const markers = useMemo<MapMarker[]>(
-    () => (value ? [{ id: "delivery", point: value, kind: "drop" }] : []),
-    [value],
+    () =>
+      value
+        ? [{ id: "delivery", point: value, kind: usingPhoneLocation ? "current" : "drop" }]
+        : [],
+    [value, usingPhoneLocation],
   );
+
+  const handleMapClick = (point: LatLng) => {
+    setUsingPhoneLocation(false);
+    onChange(point);
+  };
 
   return (
     <div className="space-y-2">
-      <MapboxShell center={center} markers={markers} height={height} onClick={onChange} />
-      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span>{value ? `${value.lat.toFixed(5)}, ${value.lng.toFixed(5)}` : "Click the map to pin delivery location."}</span>
+      <LocationSearch
+        center={center}
+        onSelect={handleMapClick}
+        placeholder="Search delivery location"
+      />
+      <MapboxShell center={center} markers={markers} height={height} onClick={handleMapClick} />
+      <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
+        <div className="min-w-0 space-y-1">
+          <p>
+            {value
+              ? `${value.lat.toFixed(5)}, ${value.lng.toFixed(5)}`
+              : "Click the map to pin delivery location."}
+          </p>
+          {message && <p className="text-muted-foreground">{message}</p>}
+        </div>
         <Button type="button" variant="outline" size="sm" onClick={locate} disabled={locating}>
           {locating ? "Locating..." : "Use my location"}
         </Button>
@@ -229,17 +463,8 @@ export function DeliveryPinMap({
   );
 }
 
-export function StaticPointMap({
-  point,
-  height = 240,
-}: {
-  point: LatLng;
-  height?: number;
-}) {
-  const markers = useMemo<MapMarker[]>(
-    () => [{ id: "delivery", point, kind: "drop" }],
-    [point],
-  );
+export function StaticPointMap({ point, height = 240 }: { point: LatLng; height?: number }) {
+  const markers = useMemo<MapMarker[]>(() => [{ id: "delivery", point, kind: "drop" }], [point]);
 
   return <MapboxShell center={point} markers={markers} height={height} />;
 }
@@ -276,7 +501,16 @@ export function PickerMap({
     onChange({ pickup: point, drop: null });
   };
 
-  return <MapboxShell center={center} markers={markers} height={height} onClick={handleClick} />;
+  return (
+    <div className="space-y-2">
+      <LocationSearch
+        center={center}
+        onSelect={handleClick}
+        placeholder={!pickup ? "Search pickup location" : "Search drop location"}
+      />
+      <MapboxShell center={center} markers={markers} height={height} onClick={handleClick} />
+    </div>
+  );
 }
 
 export function RouteMap({

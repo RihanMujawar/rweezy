@@ -50,6 +50,7 @@ export const api = {
       email: string;
       phone: string;
       password: string;
+      role?: string;
     }) =>
       apiRequest<{
         user: { id: string; email?: string | null } | null;
@@ -180,6 +181,22 @@ export const api = {
         packages: number;
         stores: number;
       }>("/api/admin/stats"),
+    getAnalytics: () =>
+      apiRequest<{
+        restaurantIncome: unknown[];
+        groceryStoreIncome: unknown[];
+        deliveryBoys: unknown[];
+        totals: {
+          restaurantTodayIncome: number;
+          restaurantMonthIncome: number;
+          groceryTodayIncome: number;
+          groceryMonthIncome: number;
+          deliveryBoys: number;
+          deliveriesToday: number;
+          deliveriesMonth: number;
+          trackedKm: number;
+        };
+      }>("/api/admin/analytics"),
     getRestaurants: () =>
       apiRequest<{ restaurants: unknown[]; profiles: unknown[]; roles: unknown[]; orders: unknown[] }>(
         "/api/admin/restaurants",
