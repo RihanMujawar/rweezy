@@ -10,9 +10,14 @@
     "build": "npm run build:backend && npm run build:frontend",
     "build:frontend": "npm --prefix frontend run build",
     "build:backend": "npm --prefix backend run build",
-    "lint": "npm --prefix frontend run lint"
+    "lint": "npm --prefix frontend run lint",
+    "test": "node --experimental-strip-types --test tests/run-tests.mjs",
+    "test:e2e": "playwright test",
+    "format": "npm --prefix frontend run format",
+    "seed:demo": "node scripts/seed-demo-users.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "supabase": "^2.98.2"
   }
 }

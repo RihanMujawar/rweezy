@@ -15,11 +15,17 @@ export function getCorsHeaders(origin = "*") {
   };
 }
 
+export function createRequestId() {
+  return crypto.randomUUID();
+}
+
 export function sendJson(res, status, body, extraHeaders = {}) {
   const payload = JSON.stringify(body);
+  const requestId = extraHeaders["X-Request-Id"] ?? createRequestId();
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(payload),
+    "X-Request-Id": requestId,
     ...extraHeaders,
   });
   res.end(payload);

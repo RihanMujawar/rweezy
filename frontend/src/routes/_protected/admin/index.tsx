@@ -15,6 +15,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Bike, Building2, IndianRupee, PackageCheck, Percent, Store } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_protected/admin/")({
   component: AdminDashboard,
@@ -117,13 +119,22 @@ function AdminDashboard() {
   const [restaurantCommissionRate, setRestaurantCommissionRate] = useState(10);
   const [groceryCommissionRate, setGroceryCommissionRate] = useState(8);
   const [deliveryCommissionRate, setDeliveryCommissionRate] = useState(12);
+  const [health, setHealth] = useState<{
+    pendingRoleRequests: number;
+    foodOrdersNeedingAttention: number;
+    groceryOrdersNeedingAttention: number;
+    readyFoodWithoutRider: number;
+  } | null>(null);
 
   useEffect(() => {
     (async () => {
-      const [nextStats, nextAnalytics] = await Promise.all([
+      const [nextStats, nextAnalytics, commissions, platformHealth] = await Promise.all([
         api.admin.getStats(),
         api.admin.getAnalytics(),
+        api.admin.getCommissions().catch(() => null),
+        api.admin.getHealth().catch(() => null),
       ]);
+      setHealth(platformHealth);
       setStats(nextStats);
       setAnalytics({
         restaurantIncome: (nextAnalytics.restaurantIncome as PartnerIncome[]) ?? [],
@@ -131,15 +142,38 @@ function AdminDashboard() {
         deliveryBoys: (nextAnalytics.deliveryBoys as DeliveryBoy[]) ?? [],
         totals: nextAnalytics.totals ?? emptyAnalytics.totals,
       });
+      if (commissions?.commissions) {
+        setRestaurantCommissionRate(commissions.commissions.restaurant);
+        setGroceryCommissionRate(commissions.commissions.grocery);
+        setDeliveryCommissionRate(commissions.commissions.delivery);
+      }
       setLoading(false);
     })();
   }, []);
+
+  const saveCommissions = async () => {
+    try {
+      await api.admin.saveCommissions({
+        restaurant: restaurantCommissionRate,
+        grocery: groceryCommissionRate,
+        delivery: deliveryCommissionRate,
+      });
+      toast.success("Commission rates saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save commissions");
+    }
+  };
 
   const monthlyPartnerCommission = useMemo(
     () =>
       commission(analytics.totals.restaurantMonthIncome, restaurantCommissionRate) +
       commission(analytics.totals.groceryMonthIncome, groceryCommissionRate),
-    [analytics.totals.groceryMonthIncome, analytics.totals.restaurantMonthIncome, groceryCommissionRate, restaurantCommissionRate],
+    [
+      analytics.totals.groceryMonthIncome,
+      analytics.totals.restaurantMonthIncome,
+      groceryCommissionRate,
+      restaurantCommissionRate,
+    ],
   );
 
   const monthlyDeliveryCommission = useMemo(
@@ -217,6 +251,27 @@ function AdminDashboard() {
           ))}
         </div>
 
+        {health && (
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-sm text-muted-foreground">Pending role requests</div>
+              <div className="mt-1 text-2xl font-bold">{health.pendingRoleRequests}</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-sm text-muted-foreground">Food orders need attention</div>
+              <div className="mt-1 text-2xl font-bold">{health.foodOrdersNeedingAttention}</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-sm text-muted-foreground">Grocery orders need attention</div>
+              <div className="mt-1 text-2xl font-bold">{health.groceryOrdersNeedingAttention}</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-sm text-muted-foreground">Ready food, no rider</div>
+              <div className="mt-1 text-2xl font-bold">{health.readyFoodWithoutRider}</div>
+            </div>
+          </div>
+        )}
+
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {moneyTiles.map((tile) => {
             const Icon = tile.icon;
@@ -269,14 +324,23 @@ function AdminDashboard() {
               />
             </div>
           </div>
+          <Button className="mt-4" type="button" onClick={saveCommissions}>
+            Save commission rates
+          </Button>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg bg-muted p-4">
               <div className="text-sm text-muted-foreground">Partner commission this month</div>
-              <div className="mt-1 text-2xl font-semibold">{formatCurrency(monthlyPartnerCommission)}</div>
+              <div className="mt-1 text-2xl font-semibold">
+                {formatCurrency(monthlyPartnerCommission)}
+              </div>
             </div>
             <div className="rounded-lg bg-muted p-4">
-              <div className="text-sm text-muted-foreground">Delivery boy commission this month</div>
-              <div className="mt-1 text-2xl font-semibold">{formatCurrency(monthlyDeliveryCommission)}</div>
+              <div className="text-sm text-muted-foreground">
+                Delivery boy commission this month
+              </div>
+              <div className="mt-1 text-2xl font-semibold">
+                {formatCurrency(monthlyDeliveryCommission)}
+              </div>
             </div>
           </div>
         </section>
@@ -299,7 +363,8 @@ function AdminDashboard() {
             <div>
               <h2 className="text-lg font-semibold">Delivery boy tracking</h2>
               <p className="text-sm text-muted-foreground">
-                Distance uses the saved live rider location and delivery destination when both are available.
+                Distance uses the saved live rider location and delivery destination when both are
+                available.
               </p>
             </div>
             <Badge variant="outline">{analytics.totals.deliveriesMonth} this month</Badge>
@@ -337,7 +402,10 @@ function AdminDashboard() {
                     <TableCell className="text-right">{boy.trackedKm.toFixed(1)}</TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(
-                        commission(boy.foodIncomeHandled + boy.groceryIncomeHandled, deliveryCommissionRate),
+                        commission(
+                          boy.foodIncomeHandled + boy.groceryIncomeHandled,
+                          deliveryCommissionRate,
+                        ),
                       )}
                     </TableCell>
                   </TableRow>
@@ -401,7 +469,9 @@ function PartnerIncomeTable({
                   <div className="text-xs text-muted-foreground">{row.monthOrders} orders</div>
                 </TableCell>
                 <TableCell className="text-right">{row.totalOrders}</TableCell>
-                <TableCell className="text-right">{formatCurrency(commission(row.monthIncome, commissionRate))}</TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(commission(row.monthIncome, commissionRate))}
+                </TableCell>
               </TableRow>
             ))
           )}

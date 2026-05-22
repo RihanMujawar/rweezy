@@ -7,7 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Plus, Trash2, ShieldOff, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/coming-soon";
@@ -43,7 +49,12 @@ function AdminRestaurants() {
   const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
-    const { restaurants: rests, profiles: profs, roles: rRoles, orders } = await api.admin.getRestaurants();
+    const {
+      restaurants: rests,
+      profiles: profs,
+      roles: rRoles,
+      orders,
+    } = await api.admin.getRestaurants();
     setList((rests as Restaurant[]) ?? []);
     const profMap: Record<string, Profile> = {};
     (profs as Profile[] | null)?.forEach((p) => (profMap[p.id] = p));
@@ -56,7 +67,9 @@ function AdminRestaurants() {
     setOrderCounts(counts);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const save = async () => {
     if (!editing.name) return toast.error("Name required");
@@ -132,29 +145,90 @@ function AdminRestaurants() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Restaurants</h1>
-            <p className="text-sm text-muted-foreground">Review listings, activate/deactivate, and manage hotel manager access.</p>
+            <p className="text-sm text-muted-foreground">
+              Review listings, activate/deactivate, and manage hotel manager access.
+            </p>
           </div>
-          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing({}); }}>
+          <Dialog
+            open={open}
+            onOpenChange={(o) => {
+              setOpen(o);
+              if (!o) setEditing({});
+            }}
+          >
             <DialogTrigger asChild>
-              <Button onClick={() => setEditing({ is_open: true })}><Plus className="mr-2 h-4 w-4" /> Add restaurant</Button>
+              <Button onClick={() => setEditing({ is_open: true })}>
+                <Plus className="mr-2 h-4 w-4" /> Add restaurant
+              </Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>{editing.id ? "Edit" : "New"} restaurant</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle>{editing.id ? "Edit" : "New"} restaurant</DialogTitle>
+              </DialogHeader>
               <div className="space-y-3">
-                <div><Label>Name</Label><Input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
-                <div><Label>Description</Label><Textarea value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
-                <div><Label>Address</Label><Input value={editing.address ?? ""} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div><Label>Town name</Label><Input value={editing.town_name ?? ""} onChange={(e) => setEditing({ ...editing, town_name: e.target.value })} /></div>
-                  <div><Label>Pincode</Label><Input inputMode="numeric" value={editing.pincode ?? ""} onChange={(e) => setEditing({ ...editing, pincode: e.target.value })} /></div>
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={editing.name ?? ""}
+                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  />
                 </div>
-                <div><Label>Image URL</Label><Input value={editing.image_url ?? ""} onChange={(e) => setEditing({ ...editing, image_url: e.target.value })} /></div>
-                <div><Label>Manager user ID (paste from Users page)</Label><Input value={editing.manager_id ?? ""} onChange={(e) => setEditing({ ...editing, manager_id: e.target.value })} placeholder="uuid" /></div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={editing.description ?? ""}
+                    onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Address</Label>
+                  <Input
+                    value={editing.address ?? ""}
+                    onChange={(e) => setEditing({ ...editing, address: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>Town name</Label>
+                    <Input
+                      value={editing.town_name ?? ""}
+                      onChange={(e) => setEditing({ ...editing, town_name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Pincode</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={editing.pincode ?? ""}
+                      onChange={(e) => setEditing({ ...editing, pincode: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Image URL</Label>
+                  <Input
+                    value={editing.image_url ?? ""}
+                    onChange={(e) => setEditing({ ...editing, image_url: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Manager user ID (paste from Users page)</Label>
+                  <Input
+                    value={editing.manager_id ?? ""}
+                    onChange={(e) => setEditing({ ...editing, manager_id: e.target.value })}
+                    placeholder="uuid"
+                  />
+                </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={editing.is_open ?? true} onCheckedChange={(v) => setEditing({ ...editing, is_open: v })} />
+                  <Switch
+                    checked={editing.is_open ?? true}
+                    onCheckedChange={(v) => setEditing({ ...editing, is_open: v })}
+                  />
                   <Label>Active (open for orders)</Label>
                 </div>
-                <Button onClick={save} className="w-full">Save</Button>
+                <Button onClick={save} className="w-full">
+                  Save
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -173,7 +247,9 @@ function AdminRestaurants() {
               <div key={r.id} className="rounded-xl border bg-card p-4">
                 <div className="flex items-start gap-4">
                   <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
-                    {r.image_url && <img src={r.image_url} alt={r.name} className="h-full w-full object-cover" />}
+                    {r.image_url && (
+                      <img src={r.image_url} alt={r.name} className="h-full w-full object-cover" />
+                    )}
                   </div>
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -185,14 +261,20 @@ function AdminRestaurants() {
                     </div>
                     {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
                     {(r.town_name || r.pincode) && (
-                      <p className="mt-1 text-xs text-muted-foreground">{[r.town_name, r.pincode].filter(Boolean).join(" ")}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {[r.town_name, r.pincode].filter(Boolean).join(" ")}
+                      </p>
                     )}
-                    {r.description && <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>}
+                    {r.description && (
+                      <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>
+                    )}
                     <div className="mt-2 text-xs text-muted-foreground">
                       Manager:{" "}
                       {manager ? (
                         <>
-                          <span className="font-medium text-foreground">{manager.full_name || "(no name)"}</span>
+                          <span className="font-medium text-foreground">
+                            {manager.full_name || "(no name)"}
+                          </span>
                           {!managerHasRole && (
                             <span className="ml-2 text-amber-600">⚠ no hotel_manager role</span>
                           )}
@@ -210,7 +292,16 @@ function AdminRestaurants() {
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
-                  <Button variant="outline" size="sm" onClick={() => { setEditing(r); setOpen(true); }}>Edit</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditing(r);
+                      setOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
                   {r.manager_id && !managerHasRole && (
                     <Button variant="outline" size="sm" onClick={() => grantManager(r.manager_id!)}>
                       <ShieldCheck className="mr-1 h-4 w-4" /> Grant manager role

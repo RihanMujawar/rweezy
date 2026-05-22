@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RegisterPartnerRouteImport } from './routes/register-partner'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ProtectedRouteImport } from './routes/_protected'
@@ -26,6 +27,7 @@ import { Route as ProtectedGroceryAdminOrdersRouteImport } from './routes/_prote
 import { Route as ProtectedGroceryAdminItemsRouteImport } from './routes/_protected/grocery-admin/items'
 import { Route as ProtectedDeliveryActiveRouteImport } from './routes/_protected/delivery/active'
 import { Route as ProtectedAppTrackRouteImport } from './routes/_protected/app/track'
+import { Route as ProtectedAppSupportRouteImport } from './routes/_protected/app/support'
 import { Route as ProtectedAppRideRouteImport } from './routes/_protected/app/ride'
 import { Route as ProtectedAppProfileRouteImport } from './routes/_protected/app/profile'
 import { Route as ProtectedAppPackageRouteImport } from './routes/_protected/app/package'
@@ -40,6 +42,11 @@ import { Route as ProtectedAppGroceryStoreIdRouteImport } from './routes/_protec
 import { Route as ProtectedAppFoodCheckoutRouteImport } from './routes/_protected/app/food/checkout'
 import { Route as ProtectedAppFoodRestaurantIdRouteImport } from './routes/_protected/app/food/$restaurantId'
 
+const RegisterPartnerRoute = RegisterPartnerRouteImport.update({
+  id: '/register-partner',
+  path: '/register-partner',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -127,6 +134,11 @@ const ProtectedAppTrackRoute = ProtectedAppTrackRouteImport.update({
   path: '/app/track',
   getParentRoute: () => ProtectedRoute,
 } as any)
+const ProtectedAppSupportRoute = ProtectedAppSupportRouteImport.update({
+  id: '/app/support',
+  path: '/app/support',
+  getParentRoute: () => ProtectedRoute,
+} as any)
 const ProtectedAppRideRoute = ProtectedAppRideRouteImport.update({
   id: '/app/ride',
   path: '/app/ride',
@@ -204,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/register-partner': typeof RegisterPartnerRoute
   '/admin/grocery-stores': typeof ProtectedAdminGroceryStoresRoute
   '/admin/restaurants': typeof ProtectedAdminRestaurantsRoute
   '/admin/users': typeof ProtectedAdminUsersRoute
@@ -211,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/app/package': typeof ProtectedAppPackageRoute
   '/app/profile': typeof ProtectedAppProfileRoute
   '/app/ride': typeof ProtectedAppRideRoute
+  '/app/support': typeof ProtectedAppSupportRoute
   '/app/track': typeof ProtectedAppTrackRoute
   '/delivery/active': typeof ProtectedDeliveryActiveRoute
   '/grocery-admin/items': typeof ProtectedGroceryAdminItemsRoute
@@ -235,6 +249,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/register-partner': typeof RegisterPartnerRoute
   '/admin/grocery-stores': typeof ProtectedAdminGroceryStoresRoute
   '/admin/restaurants': typeof ProtectedAdminRestaurantsRoute
   '/admin/users': typeof ProtectedAdminUsersRoute
@@ -242,6 +257,7 @@ export interface FileRoutesByTo {
   '/app/package': typeof ProtectedAppPackageRoute
   '/app/profile': typeof ProtectedAppProfileRoute
   '/app/ride': typeof ProtectedAppRideRoute
+  '/app/support': typeof ProtectedAppSupportRoute
   '/app/track': typeof ProtectedAppTrackRoute
   '/delivery/active': typeof ProtectedDeliveryActiveRoute
   '/grocery-admin/items': typeof ProtectedGroceryAdminItemsRoute
@@ -268,6 +284,7 @@ export interface FileRoutesById {
   '/_protected': typeof ProtectedRouteWithChildren
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/register-partner': typeof RegisterPartnerRoute
   '/_protected/admin/grocery-stores': typeof ProtectedAdminGroceryStoresRoute
   '/_protected/admin/restaurants': typeof ProtectedAdminRestaurantsRoute
   '/_protected/admin/users': typeof ProtectedAdminUsersRoute
@@ -275,6 +292,7 @@ export interface FileRoutesById {
   '/_protected/app/package': typeof ProtectedAppPackageRoute
   '/_protected/app/profile': typeof ProtectedAppProfileRoute
   '/_protected/app/ride': typeof ProtectedAppRideRoute
+  '/_protected/app/support': typeof ProtectedAppSupportRoute
   '/_protected/app/track': typeof ProtectedAppTrackRoute
   '/_protected/delivery/active': typeof ProtectedDeliveryActiveRoute
   '/_protected/grocery-admin/items': typeof ProtectedGroceryAdminItemsRoute
@@ -301,6 +319,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/register'
+    | '/register-partner'
     | '/admin/grocery-stores'
     | '/admin/restaurants'
     | '/admin/users'
@@ -308,6 +327,7 @@ export interface FileRouteTypes {
     | '/app/package'
     | '/app/profile'
     | '/app/ride'
+    | '/app/support'
     | '/app/track'
     | '/delivery/active'
     | '/grocery-admin/items'
@@ -332,6 +352,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/register'
+    | '/register-partner'
     | '/admin/grocery-stores'
     | '/admin/restaurants'
     | '/admin/users'
@@ -339,6 +360,7 @@ export interface FileRouteTypes {
     | '/app/package'
     | '/app/profile'
     | '/app/ride'
+    | '/app/support'
     | '/app/track'
     | '/delivery/active'
     | '/grocery-admin/items'
@@ -364,6 +386,7 @@ export interface FileRouteTypes {
     | '/_protected'
     | '/login'
     | '/register'
+    | '/register-partner'
     | '/_protected/admin/grocery-stores'
     | '/_protected/admin/restaurants'
     | '/_protected/admin/users'
@@ -371,6 +394,7 @@ export interface FileRouteTypes {
     | '/_protected/app/package'
     | '/_protected/app/profile'
     | '/_protected/app/ride'
+    | '/_protected/app/support'
     | '/_protected/app/track'
     | '/_protected/delivery/active'
     | '/_protected/grocery-admin/items'
@@ -397,10 +421,18 @@ export interface RootRouteChildren {
   ProtectedRoute: typeof ProtectedRouteWithChildren
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  RegisterPartnerRoute: typeof RegisterPartnerRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/register-partner': {
+      id: '/register-partner'
+      path: '/register-partner'
+      fullPath: '/register-partner'
+      preLoaderRoute: typeof RegisterPartnerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
@@ -520,6 +552,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedAppTrackRouteImport
       parentRoute: typeof ProtectedRoute
     }
+    '/_protected/app/support': {
+      id: '/_protected/app/support'
+      path: '/app/support'
+      fullPath: '/app/support'
+      preLoaderRoute: typeof ProtectedAppSupportRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
     '/_protected/app/ride': {
       id: '/_protected/app/ride'
       path: '/app/ride'
@@ -622,6 +661,7 @@ interface ProtectedRouteChildren {
   ProtectedAppPackageRoute: typeof ProtectedAppPackageRoute
   ProtectedAppProfileRoute: typeof ProtectedAppProfileRoute
   ProtectedAppRideRoute: typeof ProtectedAppRideRoute
+  ProtectedAppSupportRoute: typeof ProtectedAppSupportRoute
   ProtectedAppTrackRoute: typeof ProtectedAppTrackRoute
   ProtectedDeliveryActiveRoute: typeof ProtectedDeliveryActiveRoute
   ProtectedGroceryAdminItemsRoute: typeof ProtectedGroceryAdminItemsRoute
@@ -651,6 +691,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedAppPackageRoute: ProtectedAppPackageRoute,
   ProtectedAppProfileRoute: ProtectedAppProfileRoute,
   ProtectedAppRideRoute: ProtectedAppRideRoute,
+  ProtectedAppSupportRoute: ProtectedAppSupportRoute,
   ProtectedAppTrackRoute: ProtectedAppTrackRoute,
   ProtectedDeliveryActiveRoute: ProtectedDeliveryActiveRoute,
   ProtectedGroceryAdminItemsRoute: ProtectedGroceryAdminItemsRoute,
@@ -681,6 +722,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProtectedRoute: ProtectedRouteWithChildren,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  RegisterPartnerRoute: RegisterPartnerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import mapboxgl from "mapbox-gl";
+import type mapboxgl from "mapbox-gl";
 import { api } from "@/lib/api";
+import type { LatLng } from "@/lib/geo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { AlertCircle, LocateFixed, Search } from "lucide-react";
 
-export type LatLng = { lat: number; lng: number };
+export type { LatLng };
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 const MAPBOX_STYLE = "mapbox://styles/mapbox/streets-v12";
@@ -71,8 +72,15 @@ function MapboxShell({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const mapboxRef = useRef<typeof mapboxgl | null>(null);
   const markerRefs = useRef<mapboxgl.Marker[]>([]);
   const onClickRef = useRef(onClick);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const centerCoords = useMemo<[number, number]>(
+    () => [center.lng, center.lat],
+    [center.lat, center.lng],
+  );
 
   useEffect(() => {
     onClickRef.current = onClick;
@@ -80,37 +88,59 @@ function MapboxShell({
 
   useEffect(() => {
     if (!MAPBOX_TOKEN || !containerRef.current || mapRef.current) return;
-    mapboxgl.accessToken = MAPBOX_TOKEN;
+    let cancelled = false;
+    setMapReady(false);
 
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      style: MAPBOX_STYLE,
-      center: coords(center),
-      zoom: 13,
-    });
+    import("mapbox-gl")
+      .then((module) => {
+        if (cancelled || !containerRef.current) return;
 
-    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
-    map.on("click", (event) => {
-      onClickRef.current?.({ lat: event.lngLat.lat, lng: event.lngLat.lng });
-    });
+        const mapbox = module.default;
+        mapbox.accessToken = MAPBOX_TOKEN;
+        mapboxRef.current = mapbox;
 
-    mapRef.current = map;
+        const map = new mapbox.Map({
+          container: containerRef.current,
+          style: MAPBOX_STYLE,
+          center: centerCoords,
+          zoom: 13,
+        });
+
+        map.addControl(new mapbox.NavigationControl({ showCompass: false }), "top-right");
+        map.on("error", () => {
+          setMapError("Map could not load. Check your Mapbox token and network connection.");
+        });
+        map.on("click", (event) => {
+          onClickRef.current?.({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+        });
+
+        mapRef.current = map;
+        setMapReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMapError("Map could not load. Check your Mapbox token and network connection.");
+        }
+      });
 
     return () => {
+      cancelled = true;
       markerRefs.current.forEach((marker) => marker.remove());
       markerRefs.current = [];
-      map.remove();
+      mapRef.current?.remove();
       mapRef.current = null;
+      mapboxRef.current = null;
     };
-  }, []);
+  }, [centerCoords]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const mapbox = mapboxRef.current;
+    if (!map || !mapbox || !mapReady) return;
 
     markerRefs.current.forEach((marker) => marker.remove());
     markerRefs.current = markers.map((marker) =>
-      new mapboxgl.Marker({ element: markerElement(marker.kind), anchor: "center" })
+      new mapbox.Marker({ element: markerElement(marker.kind), anchor: "center" })
         .setLngLat(coords(marker.point))
         .addTo(map),
     );
@@ -168,13 +198,13 @@ function MapboxShell({
     if (points.length === 1) {
       map.flyTo({ center: coords(points[0]), zoom: 14, essential: false });
     } else if (points.length > 1) {
-      const bounds = new mapboxgl.LngLatBounds();
+      const bounds = new mapbox.LngLatBounds();
       points.forEach((point) => bounds.extend(coords(point)));
       map.fitBounds(bounds, { padding: 48, maxZoom: 15, duration: 500 });
     } else {
-      map.flyTo({ center: coords(center), zoom: 13, essential: false });
+      map.flyTo({ center: centerCoords, zoom: 13, essential: false });
     }
-  }, [center.lat, center.lng, markers, lines]);
+  }, [centerCoords, markers, lines, mapReady]);
 
   if (!MAPBOX_TOKEN) {
     return (
@@ -182,13 +212,24 @@ function MapboxShell({
         className="grid place-items-center rounded-xl border bg-muted p-6 text-center text-sm text-muted-foreground"
         style={{ height }}
       >
-        Add VITE_MAPBOX_ACCESS_TOKEN to your environment to enable Mapbox maps.
+        Add `VITE_MAPBOX_ACCESS_TOKEN` to your environment to enable Mapbox maps.
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="overflow-hidden rounded-xl border" style={{ height }} />
+    <div className="relative overflow-hidden rounded-xl border" style={{ height }}>
+      <div ref={containerRef} className="h-full w-full" />
+      {mapError && (
+        <div className="absolute inset-0 grid place-items-center bg-background/90 p-6 text-center text-sm">
+          <div className="max-w-sm">
+            <AlertCircle className="mx-auto mb-2 h-5 w-5 text-destructive" />
+            <p className="font-medium">Map unavailable</p>
+            <p className="mt-1 text-muted-foreground">{mapError}</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -228,13 +269,32 @@ async function searchPlaces(query: string, near: LatLng): Promise<PlaceSearchRes
     );
 }
 
+async function reverseGeocode(point: LatLng): Promise<string | null> {
+  if (!MAPBOX_TOKEN) return null;
+
+  try {
+    const url = new URL(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${point.lng},${point.lat}.json`,
+    );
+    url.searchParams.set("access_token", MAPBOX_TOKEN);
+    url.searchParams.set("limit", "1");
+    url.searchParams.set("language", "en");
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.features?.[0]?.place_name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function LocationSearch({
   center,
   onSelect,
   placeholder,
 }: {
   center: LatLng;
-  onSelect: (point: LatLng) => void;
+  onSelect: (point: LatLng, label?: string) => void;
   placeholder: string;
 }) {
   const [query, setQuery] = useState("");
@@ -243,6 +303,11 @@ function LocationSearch({
   const [message, setMessage] = useState<string | null>(null);
 
   const runSearch = async () => {
+    if (!MAPBOX_TOKEN) {
+      setResults([]);
+      setMessage("Location search needs a Mapbox token.");
+      return;
+    }
     const trimmed = query.trim();
     if (trimmed.length < 3) {
       setResults([]);
@@ -269,7 +334,7 @@ function LocationSearch({
     setQuery(result.label);
     setResults([]);
     setMessage("Location selected. Adjust the pin on the map if needed.");
-    onSelect(result.point);
+    onSelect(result.point, result.label);
   };
 
   return (
@@ -287,7 +352,7 @@ function LocationSearch({
           placeholder={placeholder}
           autoComplete="off"
         />
-        <Button type="submit" variant="outline" size="icon" disabled={searching}>
+        <Button type="submit" variant="outline" size="icon" disabled={searching || !MAPBOX_TOKEN}>
           <Search className="h-4 w-4" />
           <span className="sr-only">Search location</span>
         </Button>
@@ -413,16 +478,21 @@ function useBrowserLocation(onPick: (point: LatLng) => void) {
 export function DeliveryPinMap({
   value,
   onChange,
+  onAddressChange,
   height = 320,
 }: {
   value: LatLng | null;
   onChange: (point: LatLng) => void;
+  onAddressChange?: (address: string) => void;
   height?: number;
 }) {
   const [usingPhoneLocation, setUsingPhoneLocation] = useState(false);
   const { locate, locating, message } = useBrowserLocation((point) => {
     setUsingPhoneLocation(true);
     onChange(point);
+    reverseGeocode(point).then((address) => {
+      if (address) onAddressChange?.(address);
+    });
   });
   const center = value ?? DEFAULT_CENTER;
   const markers = useMemo<MapMarker[]>(
@@ -436,13 +506,22 @@ export function DeliveryPinMap({
   const handleMapClick = (point: LatLng) => {
     setUsingPhoneLocation(false);
     onChange(point);
+    reverseGeocode(point).then((address) => {
+      if (address) onAddressChange?.(address);
+    });
+  };
+
+  const handleSearchSelect = (point: LatLng, label?: string) => {
+    setUsingPhoneLocation(false);
+    onChange(point);
+    if (label) onAddressChange?.(label);
   };
 
   return (
     <div className="space-y-2">
       <LocationSearch
         center={center}
-        onSelect={handleMapClick}
+        onSelect={handleSearchSelect}
         placeholder="Search delivery location"
       />
       <MapboxShell center={center} markers={markers} height={height} onClick={handleMapClick} />
@@ -473,13 +552,37 @@ export function PickerMap({
   pickup,
   drop,
   onChange,
+  onAddressChange,
   height = 400,
 }: {
   pickup: LatLng | null;
   drop: LatLng | null;
   onChange: (next: { pickup: LatLng | null; drop: LatLng | null }) => void;
+  onAddressChange?: (kind: "pickup" | "drop", address: string) => void;
   height?: number;
 }) {
+  const [usingPhoneLocation, setUsingPhoneLocation] = useState(false);
+  const { locate, locating, message } = useBrowserLocation((point) => {
+    setUsingPhoneLocation(true);
+    if (!pickup) {
+      onChange({ pickup: point, drop });
+      reverseGeocode(point).then((address) => {
+        if (address) onAddressChange?.("pickup", address);
+      });
+      return;
+    }
+    if (!drop) {
+      onChange({ pickup, drop: point });
+      reverseGeocode(point).then((address) => {
+        if (address) onAddressChange?.("drop", address);
+      });
+      return;
+    }
+    onChange({ pickup: point, drop });
+    reverseGeocode(point).then((address) => {
+      if (address) onAddressChange?.("pickup", address);
+    });
+  });
   const center = pickup ?? drop ?? DEFAULT_CENTER;
   const markers = useMemo<MapMarker[]>(
     () => [
@@ -489,26 +592,52 @@ export function PickerMap({
     [pickup, drop],
   );
 
-  const handleClick = (point: LatLng) => {
+  const assignPoint = (point: LatLng, label?: string) => {
+    setUsingPhoneLocation(false);
     if (!pickup) {
       onChange({ pickup: point, drop });
+      if (label) onAddressChange?.("pickup", label);
+      else reverseGeocode(point).then((address) => address && onAddressChange?.("pickup", address));
       return;
     }
     if (!drop) {
       onChange({ pickup, drop: point });
+      if (label) onAddressChange?.("drop", label);
+      else reverseGeocode(point).then((address) => address && onAddressChange?.("drop", address));
       return;
     }
     onChange({ pickup: point, drop: null });
+    if (label) onAddressChange?.("pickup", label);
+    else reverseGeocode(point).then((address) => address && onAddressChange?.("pickup", address));
   };
 
   return (
     <div className="space-y-2">
       <LocationSearch
         center={center}
-        onSelect={handleClick}
+        onSelect={assignPoint}
         placeholder={!pickup ? "Search pickup location" : "Search drop location"}
       />
-      <MapboxShell center={center} markers={markers} height={height} onClick={handleClick} />
+      <MapboxShell center={center} markers={markers} height={height} onClick={assignPoint} />
+      <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
+        <div className="min-w-0 space-y-1">
+          <p>
+            {pickup && drop
+              ? `Pickup and drop are selected. Tap the map to replace the pickup point.`
+              : !pickup
+                ? "Choose pickup first, then drop."
+                : "Choose your drop point next."}
+          </p>
+          {message && <p>{message}</p>}
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={locate} disabled={locating}>
+          <LocateFixed className="mr-2 h-4 w-4" />
+          {locating ? "Locating..." : "Use my location"}
+        </Button>
+      </div>
+      {usingPhoneLocation && (
+        <p className="text-xs text-muted-foreground">Current location picked from your device.</p>
+      )}
     </div>
   );
 }
@@ -536,7 +665,7 @@ export function RouteMap({
     return () => {
       alive = false;
     };
-  }, [pickup.lat, pickup.lng, drop.lat, drop.lng]);
+  }, [pickup, drop]);
 
   useEffect(() => {
     if (!rider) {
@@ -551,7 +680,7 @@ export function RouteMap({
     return () => {
       alive = false;
     };
-  }, [rider?.lat, rider?.lng, drop.lat, drop.lng]);
+  }, [rider, drop]);
 
   const markers = useMemo<MapMarker[]>(
     () => [
@@ -571,14 +700,4 @@ export function RouteMap({
   );
 
   return <MapboxShell center={pickup} markers={markers} lines={lines} height={height} />;
-}
-
-export function distanceKm(a: LatLng, b: LatLng) {
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }

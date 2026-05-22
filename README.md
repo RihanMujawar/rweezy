@@ -9,11 +9,14 @@ The app uses a React 19 frontend, a Node.js ESM backend, Supabase Auth/Postgres,
 ### Customer app
 
 - Register and login with email/password or Indian phone number plus password.
+- Choose customer access immediately or request rider, delivery partner, restaurant manager, or grocery manager access for admin approval.
+- Save profile addresses and reuse them during checkout.
 - Browse restaurants and grocery stores.
 - Add food and grocery items to carts and checkout.
 - Book rides with pickup/drop pins, vehicle selection, fare estimate, and route distance.
 - Create package delivery requests with pickup/drop, receiver details, and package size.
 - View order history across food, grocery, rides, and packages.
+- Confirm food/grocery orders with receipt details and cancel active customer requests before pickup/start.
 - Track active services with rider location polling, ETA estimate, route map, and chat.
 - Update profile name and phone number.
 
@@ -37,6 +40,7 @@ The app uses a React 19 frontend, a Node.js ESM backend, Supabase Auth/Postgres,
 - Admin dashboard with platform counts.
 - Analytics for restaurant income, grocery income, delivery activity, and tracked distance.
 - User and role management.
+- Admin review flow for pending rider, delivery partner, restaurant manager, and grocery manager requests.
 - Restaurant CRUD, open/closed toggle, and manager assignment.
 - Grocery store CRUD.
 
@@ -186,7 +190,18 @@ http://127.0.0.1:3000
 | `npm run build:backend` | Check `backend/server.mjs` with Node. |
 | `npm run build:frontend` | Build the Vite frontend. |
 | `npm run lint` | Run frontend ESLint. |
+| `npm run seed:demo` | Create demo users for customer, rider, delivery, merchant, grocery, and admin roles. |
 | `npm run start` | Start the backend production server. |
+
+### Demo users
+
+After migrations are applied and `.env` contains `SUPABASE_SERVICE_ROLE_KEY`, seed role-specific demo accounts:
+
+```bash
+npm run seed:demo
+```
+
+The default password is `Demo123456`. Override it with `DEMO_PASSWORD="your-password" npm run seed:demo`.
 
 ## Docker
 
@@ -384,3 +399,5 @@ Production server behavior:
 ## License
 
 No license file is currently included in this repository. Add one before distributing or publishing the project.
+cd backend/supabase
+npx supabase db push

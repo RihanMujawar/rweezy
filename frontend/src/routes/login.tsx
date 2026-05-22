@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { fieldErrors, loginEmailSchema, loginPhoneSchema } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,13 +19,35 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const hasStarted = email || phone || password;
+    if (!hasStarted) return;
+    const parsed =
+      mode === "phone"
+        ? loginPhoneSchema.safeParse({ phone: `+91${phone}`, password })
+        : loginEmailSchema.safeParse({ email, password });
+    setErrors(parsed.success ? {} : fieldErrors(parsed.error));
+  }, [email, mode, password, phone]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const parsed =
+      mode === "phone"
+        ? loginPhoneSchema.safeParse({ phone: `+91${phone}`, password })
+        : loginEmailSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      const nextErrors = fieldErrors(parsed.error);
+      setErrors(nextErrors);
+      toast.error(Object.values(nextErrors)[0] ?? "Please check the form");
+      return;
+    }
     setLoading(true);
     try {
-      const finalIdentifier = mode === "phone" ? { phone: `+91${phone}`, password } : { email, password };
+      const finalIdentifier =
+        mode === "phone" ? { phone: `+91${phone}`, password } : { email, password };
       await api.auth.login(finalIdentifier);
       await refreshAuth();
     } catch (error) {
@@ -40,7 +63,9 @@ function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
-        <Link to="/" className="text-xl font-bold">Zoomly</Link>
+        <Link to="/" className="text-xl font-bold">
+          Zoomly
+        </Link>
         <h1 className="mt-6 text-2xl font-semibold">Welcome back</h1>
         <p className="text-sm text-muted-foreground">Sign in to continue.</p>
 
@@ -82,19 +107,37 @@ function LoginPage() {
                       setPhone(val);
                     }}
                     className="flex-1"
+                    aria-invalid={Boolean(errors.phone)}
                   />
                 </div>
+                {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
               </>
             ) : (
               <>
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  aria-invalid={Boolean(errors.email)}
+                />
+                {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
               </>
             )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+              id="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={Boolean(errors.password)}
+            />
+            {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in..." : "Sign in"}
@@ -103,7 +146,9 @@ function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Don't have an account?{" "}
-          <Link to="/register" className="font-medium text-primary hover:underline">Sign up</Link>
+          <Link to="/register" className="font-medium text-primary hover:underline">
+            Sign up
+          </Link>
         </p>
       </div>
     </div>

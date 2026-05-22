@@ -32,7 +32,11 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Zoomly — Food, Rides, Packages & Grocery" },
-      { name: "description", content: "Your all-in-one super app for food delivery, rides, package transfer, and grocery delivery." },
+      {
+        name: "description",
+        content:
+          "Your all-in-one super app for food delivery, rides, package transfer, and grocery delivery.",
+      },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
