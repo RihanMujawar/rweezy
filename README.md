@@ -190,6 +190,9 @@ http://127.0.0.1:3000
 | `npm run build:backend` | Check `backend/server.mjs` with Node. |
 | `npm run build:frontend` | Build the Vite frontend. |
 | `npm run lint` | Run frontend ESLint. |
+| `npm run format` | Format frontend with Prettier. |
+| `npm test` | Run Node unit tests (helpers, validation, rate limits). |
+| `npm run test:e2e` | Run Playwright E2E tests (requires build + demo seed). |
 | `npm run seed:demo` | Create demo users for customer, rider, delivery, merchant, grocery, and admin roles. |
 | `npm run start` | Start the backend production server. |
 
@@ -202,6 +205,32 @@ npm run seed:demo
 ```
 
 The default password is `Demo123456`. Override it with `DEMO_PASSWORD="your-password" npm run seed:demo`.
+
+## Testing
+
+```bash
+npm test
+npm run format
+npm run lint
+npm run build
+```
+
+Optional API tests against a running backend:
+
+```bash
+npm run dev:backend
+TEST_API_BASE_URL=http://127.0.0.1:4000 npm test
+```
+
+Playwright (after build and demo seed):
+
+```bash
+npm run build
+npm run seed:demo
+npm run test:e2e
+```
+
+See `TEST_REPORT.md` for production readiness notes.
 
 ## Docker
 
@@ -370,10 +399,10 @@ After checking the codebase, these are the highest-impact improvements to make t
 
 ## Current Gaps To Know
 
-- There are no automated tests configured yet.
-- Backend request validation is mostly manual and route-specific.
-- Realtime chat/tracking is implemented with polling.
-- The README documents the intended setup, but actual production readiness depends on correct Supabase RLS policies, environment variables, and seeded data.
+- E2E tests need a running server and `npm run seed:demo` against your Supabase project.
+- Backend request validation is mostly manual and route-specific beyond shared Zod schemas.
+- Realtime chat/tracking uses polling rather than Supabase Realtime subscriptions everywhere.
+- Production readiness depends on correct Supabase RLS policies, environment variables, and seeded data.
 
 ## Build For Production
 
@@ -392,12 +421,17 @@ Production server behavior:
 ## Contributing
 
 1. Keep changes scoped to one feature or fix.
-2. Run `npm run lint` and `npm run build` before opening a pull request.
+2. Run `npm run format`, `npm test`, `npm run lint`, and `npm run build` before opening a pull request.
 3. Update Supabase migrations when schema changes are required.
 4. Update this README when setup, routes, roles, or workflows change.
 
 ## License
 
 No license file is currently included in this repository. Add one before distributing or publishing the project.
+
+Apply database migrations:
+
+```bash
 cd backend/supabase
 npx supabase db push
+```
