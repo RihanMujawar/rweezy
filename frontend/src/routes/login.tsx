@@ -61,20 +61,24 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
-      <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
-        <Link to="/" className="text-xl font-bold">
-          Zoomly
+    <div className="flex min-h-screen items-center justify-center bg-transparent px-4 animate-fade-in-up">
+      <div className="w-full max-w-md rounded-2xl border bg-card/60 p-8 shadow-2xl backdrop-blur-xl">
+        <Link 
+          to="/" 
+          className="text-2xl font-extrabold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent hover:opacity-90 transition-opacity"
+        >
+          Rweezy
         </Link>
-        <h1 className="mt-6 text-2xl font-semibold">Welcome back</h1>
+        <h1 className="mt-6 text-2xl font-bold tracking-tight">Welcome back</h1>
         <p className="text-sm text-muted-foreground">Sign in to continue.</p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
+          <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-1 border border-white/5">
             <Button
               type="button"
               variant={mode === "email" ? "default" : "ghost"}
               onClick={() => setMode("email")}
+              className="btn-interactive text-xs"
             >
               Email
             </Button>
@@ -82,6 +86,7 @@ function LoginPage() {
               type="button"
               variant={mode === "phone" ? "default" : "ghost"}
               onClick={() => setMode("phone")}
+              className="btn-interactive text-xs"
             >
               Phone
             </Button>

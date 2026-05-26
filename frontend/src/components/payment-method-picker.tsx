@@ -5,7 +5,7 @@ export type PaymentMethod = "cash" | "online" | "wallet" | "demo";
 const OPTIONS: { value: PaymentMethod; label: string; hint: string }[] = [
   { value: "cash", label: "Cash", hint: "Pay on delivery or at pickup" },
   { value: "online", label: "Online", hint: "UPI/card (demo — not charged)" },
-  { value: "wallet", label: "Wallet", hint: "Zoomly wallet (demo balance)" },
+  { value: "wallet", label: "Wallet", hint: "Rweezy wallet (demo balance)" },
   { value: "demo", label: "Demo mode", hint: "Skip real payment for testing" },
 ];
 

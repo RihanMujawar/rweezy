@@ -89,12 +89,15 @@ function PartnerRegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-12">
-      <div className="w-full max-w-lg rounded-2xl border bg-card p-8 shadow-sm">
-        <Link to="/" className="text-xl font-bold">
-          Zoomly
+    <div className="flex min-h-screen items-center justify-center bg-transparent px-4 py-12 animate-fade-in-up">
+      <div className="w-full max-w-lg rounded-2xl border bg-card/60 p-8 shadow-2xl backdrop-blur-xl">
+        <Link 
+          to="/" 
+          className="text-2xl font-extrabold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent hover:opacity-90 transition-opacity"
+        >
+          Rweezy
         </Link>
-        <h1 className="mt-6 text-2xl font-semibold">Create a partner account</h1>
+        <h1 className="mt-6 text-2xl font-bold tracking-tight">Create a partner account</h1>
         <p className="text-sm text-muted-foreground">
           Use this page for rider, delivery partner, restaurant manager, or grocery manager access.
         </p>

@@ -172,9 +172,9 @@ function BookRide() {
                 type="button"
                 onClick={() => setVehicle(v.id)}
                 className={cn(
-                  "rounded-2xl border bg-card p-4 text-left transition-all",
+                  "rounded-2xl border bg-card p-4 text-left transition-all btn-interactive",
                   selected
-                    ? "border-primary ring-2 ring-primary"
+                    ? "border-primary ring-2 ring-primary scale-[1.02] shadow-md shadow-primary/10"
                     : "hover:border-muted-foreground/40",
                 )}
               >

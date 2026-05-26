@@ -6,7 +6,7 @@ export function ThemeToggle() {
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("zoomly-theme");
+    const stored = localStorage.getItem("rweezy-theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const next = stored === "dark" || (!stored && prefersDark);
     setDark(next);
@@ -17,7 +17,7 @@ export function ThemeToggle() {
     const next = !dark;
     setDark(next);
     document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem("zoomly-theme", next ? "dark" : "light");
+    localStorage.setItem("rweezy-theme", next ? "dark" : "light");
   };
 
   return (

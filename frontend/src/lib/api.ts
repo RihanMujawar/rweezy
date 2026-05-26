@@ -133,6 +133,10 @@ export const api = {
     getStores: () => apiRequest<{ stores: unknown[]; location: null }>("/api/catalog/stores"),
     getStore: (storeId: string) =>
       apiRequest<{ store: unknown | null; items: unknown[] }>(`/api/catalog/stores/${storeId}`),
+    getPopularFoodItems: () =>
+      apiRequest<{ items: any[] }>("/api/catalog/items/food"),
+    getPopularGroceryItems: () =>
+      apiRequest<{ items: any[] }>("/api/catalog/items/grocery"),
   },
 
   orders: {

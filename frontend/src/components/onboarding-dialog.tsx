@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { phoneSchema } from "@/lib/validation";
 
-const STORAGE_KEY = "zoomly_onboarding_done";
+const STORAGE_KEY = "rweezy_onboarding_done";
 
 type Props = {
   userId: string;
@@ -99,7 +99,7 @@ export function OnboardingDialog({ userId, email }: Props) {
     <Dialog open={open} onOpenChange={(next) => !next && finish()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Welcome to Zoomly</DialogTitle>
+          <DialogTitle>Welcome to Rweezy</DialogTitle>
           <DialogDescription>
             {step === 0 && "Set up your profile so orders and support reach you."}
             {step === 1 && "Add a default delivery address for faster checkout."}
@@ -177,12 +177,12 @@ export function OnboardingDialog({ userId, email }: Props) {
           {step === 2 && (
             <Button
               onClick={() => {
-                localStorage.setItem(`zoomly_preferred_service:${userId}`, preferred);
+                localStorage.setItem(`rweezy_preferred_service:${userId}`, preferred);
                 finish();
                 toast.success("You're all set!");
               }}
             >
-              Start using Zoomly
+              Start using Rweezy
             </Button>
           )}
         </DialogFooter>

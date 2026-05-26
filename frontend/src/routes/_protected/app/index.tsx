@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import {
   ArrowRight,
   Bike,
@@ -68,78 +70,29 @@ const bentoActions = [
   },
 ];
 
-const foodItems = [
-  {
-    name: "Paneer tikka bowl",
-    place: "Spice Kitchen",
-    price: "₹199",
-    image:
-      "https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    name: "Masala dosa",
-    place: "South Corner",
-    price: "₹129",
-    image:
-      "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    name: "Veg burger combo",
-    place: "Grill House",
-    price: "₹179",
-    image:
-      "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    name: "Biryani meal",
-    place: "Royal Biryani",
-    price: "₹249",
-    image:
-      "https://images.unsplash.com/photo-1563379091339-03246963d96a?auto=format&fit=crop&w=700&q=80",
-  },
-];
-
-const groceryItems = [
-  {
-    name: "Fresh vegetables",
-    place: "Green Basket",
-    price: "From ₹49",
-    image:
-      "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    name: "Milk and breakfast",
-    place: "Daily Mart",
-    price: "From ₹35",
-    image:
-      "https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    name: "Fruits basket",
-    place: "Fresh Point",
-    price: "From ₹99",
-    image:
-      "https://images.unsplash.com/photo-1619566636858-adf3ef46400b?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    name: "Home essentials",
-    place: "Quick Store",
-    price: "From ₹79",
-    image:
-      "https://images.unsplash.com/photo-1604719312566-8912e9227c6a?auto=format&fit=crop&w=700&q=80",
-  },
-];
+interface CatalogItem {
+  id: string;
+  name: string;
+  price: number | string;
+  image_url?: string | null;
+  restaurant_id?: string;
+  store_id?: string;
+  restaurants?: { name: string } | null;
+  grocery_stores?: { name: string } | null;
+}
 
 function ItemCarousel({
   title,
   subtitle,
   to,
   items,
+  loading,
 }: {
   title: string;
   subtitle: string;
   to: "/app/food" | "/app/grocery";
-  items: typeof foodItems;
+  items: CatalogItem[];
+  loading: boolean;
 }) {
   return (
     <section className="mt-8 md:mt-10">
@@ -157,32 +110,69 @@ function ItemCarousel({
 
       <Carousel opts={{ align: "start", dragFree: true }} className="px-0.5">
         <CarouselContent>
-          {items.map((item) => (
-            <CarouselItem key={item.name} className="basis-[46%] sm:basis-1/2 lg:basis-1/4">
-              <Link
-                to={to}
-                className="block overflow-hidden rounded-lg border bg-card transition hover:border-primary/50"
-              >
-                <div className="aspect-square bg-muted sm:aspect-[4/3]">
-                  <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
-                </div>
-                <div className="p-3 sm:p-4">
-                  <div>
-                    <h3 className="line-clamp-2 text-sm font-semibold leading-tight sm:text-base">
-                      {item.name}
-                    </h3>
-                    <p className="mt-1 truncate text-xs text-muted-foreground sm:text-sm">
-                      {item.place}
-                    </p>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, index) => (
+              <CarouselItem key={index} className="basis-[46%] sm:basis-1/2 lg:basis-1/4">
+                <div className="overflow-hidden rounded-lg border bg-card p-3 sm:p-4">
+                  <div className="aspect-square bg-muted sm:aspect-[4/3] animate-pulse rounded" />
+                  <div className="mt-3 space-y-2">
+                    <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
+                    <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
+                    <div className="h-4 bg-muted animate-pulse rounded w-1/4 mt-2" />
                   </div>
-                  <p className="mt-2 text-sm font-semibold">{item.price}</p>
                 </div>
-              </Link>
-            </CarouselItem>
-          ))}
+              </CarouselItem>
+            ))
+          ) : items.length === 0 ? (
+            <div className="w-full py-10 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
+              No items available right now.
+            </div>
+          ) : (
+            items.map((item) => {
+              const placeName = item.restaurants?.name || item.grocery_stores?.name || "Zoomly Partner";
+              const imageUrl = item.image_url || (to === "/app/food"
+                ? "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80"
+                : "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=700&q=80");
+              const linkParams = to === "/app/food"
+                ? { restaurantId: item.restaurant_id || "" }
+                : { storeId: item.store_id || "" };
+              const linkTo = to === "/app/food"
+                ? "/app/food/$restaurantId"
+                : "/app/grocery/$storeId";
+
+              return (
+                <CarouselItem key={item.id} className="basis-[46%] sm:basis-1/2 lg:basis-1/4">
+                  <Link
+                    to={linkTo as any}
+                    params={linkParams as any}
+                    className="block overflow-hidden rounded-xl border bg-card/60 backdrop-blur-md shadow-sm transition-all duration-300 hover:border-primary/50 hover:scale-[1.02] hover:shadow-md"
+                  >
+                    <div className="aspect-square bg-muted sm:aspect-[4/3]">
+                      <img src={imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                    </div>
+                    <div className="p-3 sm:p-4">
+                      <div>
+                        <h3 className="line-clamp-2 text-sm font-semibold leading-tight sm:text-base">
+                          {item.name}
+                        </h3>
+                        <p className="mt-1 truncate text-xs text-muted-foreground sm:text-sm">
+                          {placeName}
+                        </p>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold">₹{item.price}</p>
+                    </div>
+                  </Link>
+                </CarouselItem>
+              );
+            })
+          )}
         </CarouselContent>
-        <CarouselPrevious className="left-2 hidden bg-background/90 sm:inline-flex" />
-        <CarouselNext className="right-2 hidden bg-background/90 sm:inline-flex" />
+        {!loading && items.length > 0 && (
+          <>
+            <CarouselPrevious className="left-2 hidden bg-background/90 sm:inline-flex" />
+            <CarouselNext className="right-2 hidden bg-background/90 sm:inline-flex" />
+          </>
+        )}
       </Carousel>
     </section>
   );
@@ -191,6 +181,27 @@ function ItemCarousel({
 function AppHome() {
   const { user, roles } = useAuth();
   const { latestActiveOrder } = useOrderSummary();
+  const [foodItems, setFoodItems] = useState<CatalogItem[]>([]);
+  const [groceryItems, setGroceryItems] = useState<CatalogItem[]>([]);
+  const [loadingFood, setLoadingFood] = useState(true);
+  const [loadingGrocery, setLoadingGrocery] = useState(true);
+
+  useEffect(() => {
+    api.catalog.getPopularFoodItems()
+      .then(({ items }) => {
+        setFoodItems(items || []);
+      })
+      .catch((err) => console.error("Error fetching popular food:", err))
+      .finally(() => setLoadingFood(false));
+
+    api.catalog.getPopularGroceryItems()
+      .then(({ items }) => {
+        setGroceryItems(items || []);
+      })
+      .catch((err) => console.error("Error fetching popular grocery:", err))
+      .finally(() => setLoadingGrocery(false));
+  }, []);
+
   return (
     <div className="container mx-auto px-4 py-5 md:py-8">
       {user?.id && <OnboardingDialog userId={user.id} email={user.email} />}
@@ -209,10 +220,11 @@ function AppHome() {
       </div>
 
       {latestActiveOrder && (
-        <section className="mb-6 rounded-lg border bg-card p-4 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <section className="mb-6 rounded-xl border bg-primary/10 border-primary/20 backdrop-blur-md p-4 shadow-lg shadow-primary/5 relative overflow-hidden animate-pulse">
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/20 rounded-full blur-[40px] pointer-events-none" />
+          <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/20">
                 <MapPin className="h-5 w-5 text-primary" />
               </span>
               <div>
@@ -222,7 +234,7 @@ function AppHome() {
                 </p>
               </div>
             </div>
-            <Button asChild className="min-h-11 shrink-0">
+            <Button asChild className="min-h-11 shrink-0 btn-interactive shadow-md shadow-primary/10">
               <Link
                 to="/app/track"
                 search={{ id: latestActiveOrder.id, kind: latestActiveOrder.kind }}
@@ -236,33 +248,33 @@ function AppHome() {
 
       <section>
         <div className="mb-3 flex items-center gap-2 md:mb-4">
-          <Sparkles className="h-5 w-5" />
-          <h2 className="text-lg font-semibold md:text-xl">Book anything from one place</h2>
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold tracking-tight md:text-xl">Book anything from one place</h2>
         </div>
         <div className="grid grid-cols-4 gap-2 md:auto-rows-[180px] md:grid-cols-4 md:gap-4">
           {bentoActions.map((s) => (
             <Link
               key={s.to}
               to={s.to}
-              className={`group relative min-h-20 overflow-hidden rounded-lg border bg-card p-2 transition hover:border-primary/50 md:min-h-0 md:p-5 ${s.className}`}
+              className={`group relative min-h-20 overflow-hidden rounded-xl liquid-glass-card p-2 md:min-h-0 md:p-5 ${s.className}`}
             >
               <img
                 src={s.image}
                 alt={`${s.title} service`}
-                className="hidden absolute inset-0 h-full w-full object-cover opacity-30 transition group-hover:scale-105 md:block"
+                className="hidden absolute inset-0 h-full w-full object-cover opacity-25 transition duration-500 group-hover:scale-105 group-hover:opacity-40 md:block"
               />
-              <div className="hidden absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/20 md:block" />
-              <div className="relative flex h-full flex-col items-center justify-center gap-2 text-center md:items-stretch md:justify-between md:text-left">
-                <div className="flex items-center justify-center md:justify-between gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-secondary md:bg-background/90">
-                    <s.icon className="h-5 w-5" />
+              <div className="hidden absolute inset-0 bg-gradient-to-t from-background/90 via-background/60 to-background/10 md:block" />
+              <div className="relative z-10 flex h-full flex-col items-center justify-center gap-2 text-center md:items-stretch md:justify-between md:text-left w-full">
+                <div className="flex items-center justify-center md:justify-between gap-3 w-full">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 dark:bg-black/20 border border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-300">
+                    <s.icon className="h-5 w-5 text-foreground" />
                   </span>
-                  <span className="hidden rounded-md bg-background/90 px-2 py-1 text-xs font-medium md:inline-flex">
+                  <span className="hidden rounded-md bg-white/10 dark:bg-black/20 border border-white/5 px-2 py-1 text-xs font-semibold md:inline-flex text-muted-foreground">
                     {s.meta}
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-xs font-semibold leading-none md:text-2xl md:leading-normal">
+                  <h3 className="text-xs font-bold leading-none md:text-2xl md:leading-normal group-hover:translate-x-1 transition-transform duration-300">
                     {s.title}
                   </h3>
                   <p className="mt-1 hidden max-w-sm text-sm text-muted-foreground md:block">
@@ -280,12 +292,14 @@ function AppHome() {
         subtitle="Quick picks for lunch, dinner, and cravings."
         to="/app/food"
         items={foodItems}
+        loading={loadingFood}
       />
       <ItemCarousel
         title="Grocery picks"
         subtitle="Fresh items and home essentials for fast delivery."
         to="/app/grocery"
         items={groceryItems}
+        loading={loadingGrocery}
       />
     </div>
   );

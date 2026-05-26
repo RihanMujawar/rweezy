@@ -1,6 +1,7 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "@/components/ui/sonner";
+import { LiquidBackground } from "@/components/liquid-background";
 
 import appCss from "../styles.css?url";
 
@@ -31,14 +32,22 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Zoomly — Food, Rides, Packages & Grocery" },
+      { title: "Rweezy — Food, Rides, Packages & Grocery" },
       {
         name: "description",
         content:
           "Your all-in-one super app for food delivery, rides, package transfer, and grocery delivery.",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap",
+      },
+      { rel: "stylesheet", href: appCss },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -62,8 +71,10 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   return (
     <AuthProvider>
+      <LiquidBackground />
       <Outlet />
       <Toaster richColors position="top-right" />
     </AuthProvider>
   );
 }
+

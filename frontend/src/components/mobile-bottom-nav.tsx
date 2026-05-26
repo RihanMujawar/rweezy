@@ -41,11 +41,11 @@ export function MobileBottomNav() {
               to={item.to}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium text-muted-foreground transition",
+                "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium text-muted-foreground transition btn-interactive",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 active
-                  ? "bg-primary/95 text-primary-foreground shadow-lg shadow-primary/20"
-                  : "hover:bg-background/80 hover:text-foreground",
+                  ? "bg-primary/95 text-primary-foreground shadow-lg shadow-primary/25 scale-105"
+                  : "hover:bg-white/10 dark:hover:bg-white/5 hover:text-foreground",
               )}
             >
               <Icon className="h-5 w-5" />

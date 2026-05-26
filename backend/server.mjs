@@ -878,6 +878,28 @@ const routes = [
       items: itemRows ?? [],
     };
   }),
+  route("GET", /^\/api\/catalog\/items\/food$/, async ({ token }) => {
+    const items = await restRequest(
+      token,
+      buildPath("/menu_items", {
+        select: "id,name,description,price,image_url,category,is_available,restaurant_id,restaurants(name)",
+        is_available: "eq.true",
+        limit: "12",
+      }),
+    );
+    return { items: items ?? [] };
+  }),
+  route("GET", /^\/api\/catalog\/items\/grocery$/, async ({ token }) => {
+    const items = await restRequest(
+      token,
+      buildPath("/grocery_items", {
+        select: "id,name,description,price,image_url,category,is_available,store_id,grocery_stores(name)",
+        is_available: "eq.true",
+        limit: "12",
+      }),
+    );
+    return { items: items ?? [] };
+  }),
   route("GET", /^\/api\/catalog\/stores$/, async ({ token }) => {
     const stores = await restRequest(
       token,

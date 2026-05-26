@@ -33,14 +33,14 @@ function ProtectedLayout() {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex min-h-screen w-full bg-transparent">
         <AppSidebar />
-        <div className="flex flex-1 flex-col">
-          <header className="hidden h-12 items-center border-b px-2 md:flex">
+        <div className="flex flex-1 flex-col bg-transparent">
+          <header className="hidden h-12 items-center border-b border-white/10 px-2 md:flex">
             <SidebarTrigger />
             <ShellActions />
           </header>
-          <main className="flex-1 bg-muted/20 pb-28 md:pb-0">
+          <main className="flex-1 bg-transparent pb-28 md:pb-0 animate-fade-in-up">
             <Outlet />
           </main>
           <MobileBottomNav />
