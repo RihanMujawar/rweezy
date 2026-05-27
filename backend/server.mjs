@@ -134,6 +134,122 @@ function distanceKm(from, to) {
   return earthKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+const DEFAULT_CATALOG_RADIUS_KM = 25;
+const MIN_CATALOG_RADIUS_KM = 1;
+const MAX_CATALOG_RADIUS_KM = 100;
+
+function cleanCompareText(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function isLocationMatchByText(location, row) {
+  const userPincode = cleanCompareText(location?.pincode);
+  const rowPincode = cleanCompareText(row?.pincode);
+  if (userPincode && rowPincode) return userPincode === rowPincode;
+
+  const userTown = cleanCompareText(location?.town_name);
+  const rowTown = cleanCompareText(row?.town_name);
+  if (userTown && rowTown) return userTown === rowTown;
+  return false;
+}
+
+function filterCatalogRowsByLocation(rows, location, radiusKm = DEFAULT_CATALOG_RADIUS_KM) {
+  if (!location) return rows ?? [];
+  const data = rows ?? [];
+  const hasTextLocation =
+    Boolean(cleanCompareText(location?.pincode)) || Boolean(cleanCompareText(location?.town_name));
+
+  const hasCoords = Number.isFinite(Number(location.lat)) && Number.isFinite(Number(location.lng));
+  if (!hasCoords && !hasTextLocation) return data;
+  if (hasCoords) {
+    const nearby = data.filter((row) => {
+      if (!Number.isFinite(Number(row?.lat)) || !Number.isFinite(Number(row?.lng))) return false;
+      return (
+        distanceKm(
+          { lat: Number(location.lat), lng: Number(location.lng) },
+          { lat: Number(row.lat), lng: Number(row.lng) },
+        ) <= radiusKm
+      );
+    });
+    if (nearby.length > 0) return nearby;
+  }
+
+  return data.filter((row) => isLocationMatchByText(location, row));
+}
+
+function normalizeCatalogRadius(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return DEFAULT_CATALOG_RADIUS_KM;
+  return Math.max(MIN_CATALOG_RADIUS_KM, Math.min(MAX_CATALOG_RADIUS_KM, Math.round(num)));
+}
+
+async function getCatalogRadiusKm(token) {
+  try {
+    const rows = await restRequest(
+      token,
+      buildPath("/platform_settings", { select: "value", key: "eq.catalog_radius_km", limit: "1" }),
+    );
+    const row = firstRow(rows);
+    return normalizeCatalogRadius(row?.value);
+  } catch (error) {
+    if (!isMissingTableError(error, "platform_settings")) {
+      console.warn(`Catalog radius setting unavailable: ${error.message}`);
+    }
+  }
+  return DEFAULT_CATALOG_RADIUS_KM;
+}
+
+async function saveCatalogRadiusKm(token, radiusKm) {
+  const value = normalizeCatalogRadius(radiusKm);
+  const rows = await restRequest(
+    token,
+    buildPath("/platform_settings", {
+      select: "key,value",
+      key: "eq.catalog_radius_km",
+      limit: "1",
+    }),
+    {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: { key: "catalog_radius_km", value },
+    },
+  );
+  return normalizeCatalogRadius(firstRow(rows)?.value);
+}
+
+async function getUserCatalogLocation(token, userId) {
+  const [profileRows, addressRows] = await Promise.all([
+    restRequest(
+      token,
+      buildPath("/profiles", {
+        select: "town_name,pincode",
+        id: `eq.${userId}`,
+        limit: "1",
+      }),
+    ),
+    restRequest(
+      token,
+      buildPath("/saved_addresses", {
+        select: "lat,lng,is_default,created_at",
+        user_id: `eq.${userId}`,
+        order: "is_default.desc,created_at.desc",
+        limit: "1",
+      }),
+    ),
+  ]);
+
+  const profile = firstRow(profileRows);
+  const address = firstRow(addressRows);
+  return {
+    town_name: profile?.town_name ?? null,
+    pincode: profile?.pincode ?? null,
+    lat: Number.isFinite(Number(address?.lat)) ? Number(address.lat) : null,
+    lng: Number.isFinite(Number(address?.lng)) ? Number(address.lng) : null,
+  };
+}
+
 function chatTarget(kind) {
   return {
     ride: { table: "rides", partnerColumn: "rider_id" },
@@ -845,7 +961,11 @@ const routes = [
 
     return { row: firstRow(rows) };
   }),
-  route("GET", /^\/api\/catalog\/restaurants$/, async ({ token }) => {
+  route("GET", /^\/api\/catalog\/restaurants$/, async ({ token, user }) => {
+    const [location, radiusKm] = await Promise.all([
+      getUserCatalogLocation(token, user.id),
+      getCatalogRadiusKm(token),
+    ]);
     const restaurants = await restRequest(
       token,
       buildPath("/restaurants", {
@@ -854,7 +974,10 @@ const routes = [
       }),
     );
 
-    return { restaurants: restaurants ?? [], location: null };
+    return {
+      restaurants: filterCatalogRowsByLocation(restaurants, location, radiusKm),
+      location: { ...location, radius_km: radiusKm },
+    };
   }),
   route("GET", /^\/api\/catalog\/restaurants\/([^/]+)$/, async ({ token, match }) => {
     const restaurantId = decodeURIComponent(match[1]);
@@ -882,29 +1005,67 @@ const routes = [
       items: itemRows ?? [],
     };
   }),
-  route("GET", /^\/api\/catalog\/items\/food$/, async ({ token }) => {
+  route("GET", /^\/api\/catalog\/items\/food$/, async ({ token, user }) => {
+    const [location, radiusKm] = await Promise.all([
+      getUserCatalogLocation(token, user.id),
+      getCatalogRadiusKm(token),
+    ]);
+    const restaurants = await restRequest(
+      token,
+      buildPath("/restaurants", {
+        select: "id,town_name,pincode,lat,lng,is_open",
+      }),
+    );
+    const visibleRestaurants = filterCatalogRowsByLocation(restaurants, location, radiusKm).filter(
+      (row) => row?.is_open !== false,
+    );
+    const restaurantIds = visibleRestaurants.map((row) => row.id).filter(Boolean);
+    if (restaurantIds.length === 0) return { items: [] };
+
     const items = await restRequest(
       token,
       buildPath("/menu_items", {
         select: "id,name,description,price,image_url,category,is_available,restaurant_id,restaurants(name)",
         is_available: "eq.true",
+        restaurant_id: `in.(${restaurantIds.join(",")})`,
         limit: "12",
       }),
     );
     return { items: items ?? [] };
   }),
-  route("GET", /^\/api\/catalog\/items\/grocery$/, async ({ token }) => {
+  route("GET", /^\/api\/catalog\/items\/grocery$/, async ({ token, user }) => {
+    const [location, radiusKm] = await Promise.all([
+      getUserCatalogLocation(token, user.id),
+      getCatalogRadiusKm(token),
+    ]);
+    const stores = await restRequest(
+      token,
+      buildPath("/grocery_stores", {
+        select: "id,town_name,pincode,lat,lng,is_open",
+      }),
+    );
+    const visibleStores = filterCatalogRowsByLocation(stores, location, radiusKm).filter(
+      (row) => row?.is_open !== false,
+    );
+    const storeIds = visibleStores.map((row) => row.id).filter(Boolean);
+    if (storeIds.length === 0) return { items: [] };
+
     const items = await restRequest(
       token,
       buildPath("/grocery_items", {
         select: "id,name,description,price,image_url,category,is_available,store_id,grocery_stores(name)",
         is_available: "eq.true",
+        store_id: `in.(${storeIds.join(",")})`,
         limit: "12",
       }),
     );
     return { items: items ?? [] };
   }),
-  route("GET", /^\/api\/catalog\/stores$/, async ({ token }) => {
+  route("GET", /^\/api\/catalog\/stores$/, async ({ token, user }) => {
+    const [location, radiusKm] = await Promise.all([
+      getUserCatalogLocation(token, user.id),
+      getCatalogRadiusKm(token),
+    ]);
     const stores = await restRequest(
       token,
       buildPath("/grocery_stores", {
@@ -913,7 +1074,10 @@ const routes = [
       }),
     );
 
-    return { stores: stores ?? [], location: null };
+    return {
+      stores: filterCatalogRowsByLocation(stores, location, radiusKm),
+      location: { ...location, radius_km: radiusKm },
+    };
   }),
   route("GET", /^\/api\/catalog\/stores\/([^/]+)$/, async ({ token, match }) => {
     const storeId = decodeURIComponent(match[1]);
@@ -2653,6 +2817,36 @@ const routes = [
     };
     const saved = await savePlatformCommissions(token, value);
     return { commissions: saved };
+  }),
+  route("GET", /^\/api\/admin\/catalog-settings$/, async ({ token }) => ({
+    radius_km: await getCatalogRadiusKm(token),
+    limits: {
+      min_km: MIN_CATALOG_RADIUS_KM,
+      max_km: MAX_CATALOG_RADIUS_KM,
+      default_km: DEFAULT_CATALOG_RADIUS_KM,
+    },
+  })),
+  route("PUT", /^\/api\/admin\/catalog-settings$/, async ({ token, body }) => {
+    const requested = Number(body?.radius_km);
+    if (!Number.isFinite(requested)) {
+      throw new HttpError(400, "radius_km must be a number");
+    }
+    if (requested < MIN_CATALOG_RADIUS_KM || requested > MAX_CATALOG_RADIUS_KM) {
+      throw new HttpError(
+        400,
+        `radius_km must be between ${MIN_CATALOG_RADIUS_KM} and ${MAX_CATALOG_RADIUS_KM}`,
+      );
+    }
+
+    const saved = await saveCatalogRadiusKm(token, requested);
+    return {
+      radius_km: saved,
+      limits: {
+        min_km: MIN_CATALOG_RADIUS_KM,
+        max_km: MAX_CATALOG_RADIUS_KM,
+        default_km: DEFAULT_CATALOG_RADIUS_KM,
+      },
+    };
   }),
   route("POST", /^\/api\/reviews$/, async ({ token, user, body }) => {
     const allowed = ["food", "grocery", "ride", "package"];

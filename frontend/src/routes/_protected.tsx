@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { AppModeProvider } from "@/lib/app-mode-context";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_protected")({
 });
 
 function ProtectedLayout() {
-  const { user, loading } = useAuth();
+  const { user, loading, roles } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -33,19 +34,21 @@ function ProtectedLayout() {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-transparent">
-        <AppSidebar />
-        <div className="flex flex-1 flex-col bg-transparent">
-          <header className="hidden h-12 items-center border-b border-white/10 px-2 md:flex">
-            <SidebarTrigger />
-            <ShellActions />
-          </header>
-          <main className="flex-1 bg-transparent pb-28 md:pb-0 animate-fade-in-up">
-            <Outlet />
-          </main>
-          <MobileBottomNav />
+      <AppModeProvider roles={roles}>
+        <div className="flex min-h-screen w-full bg-transparent">
+          <AppSidebar />
+          <div className="flex flex-1 flex-col bg-transparent">
+            <header className="hidden h-12 items-center border-b border-white/10 px-2 md:flex">
+              <SidebarTrigger />
+              <ShellActions />
+            </header>
+          <main className="flex-1 bg-transparent pb-32 md:pb-0 animate-fade-in-up">
+              <Outlet />
+            </main>
+            <MobileBottomNav />
+          </div>
         </div>
-      </div>
+      </AppModeProvider>
     </SidebarProvider>
   );
 }

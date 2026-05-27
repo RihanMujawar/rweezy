@@ -31,6 +31,7 @@ The platform consists of three main components:
 - Choose customer access immediately or request rider, delivery partner, restaurant manager, or grocery manager access for admin approval
 - Save profile addresses and reuse them during checkout
 - Browse restaurants and grocery stores
+- Browse restaurants and grocery stores filtered by saved/default user location
 - Add food and grocery items to carts and checkout
 - Book rides with pickup/drop pins, vehicle selection, fare estimate, and route distance
 - Create package delivery requests with pickup/drop, receiver details, and package size
@@ -62,6 +63,7 @@ The platform consists of three main components:
 - Admin review flow for pending rider, delivery partner, restaurant manager, and grocery manager requests
 - Restaurant CRUD, open/closed toggle, and manager assignment
 - Grocery store CRUD
+- Configure catalog discovery radius (km) for location-based listings
 
 ### Platform Features
 
@@ -449,7 +451,25 @@ All routes live under `/api`.
 | Riders | `/api/rider/jobs`, `/api/rider/active`, `/api/rider/rides/:id/accept`, `/api/rider/packages/:id/accept`, `/api/rider/:table/:id/advance`, `/api/rider/:table/:id/cancel` |
 | Restaurant managers | `/api/hotel/dashboard`, `/api/hotel/restaurant`, `/api/hotel/menu`, `/api/hotel/orders` |
 | Grocery managers | `/api/grocery/dashboard`, `/api/grocery/store`, `/api/grocery/items`, `/api/grocery/orders` |
-| Admin | `/api/admin/stats`, `/api/admin/analytics`, `/api/admin/users`, `/api/admin/restaurants`, `/api/admin/stores`, `/api/admin/health` |
+| Admin | `/api/admin/stats`, `/api/admin/analytics`, `/api/admin/users`, `/api/admin/restaurants`, `/api/admin/stores`, `/api/admin/health`, `/api/admin/commissions`, `/api/admin/catalog-settings` |
+
+### Catalog Radius Setting (Admin)
+
+Customer catalog endpoints (`/api/catalog/restaurants`, `/api/catalog/stores`, and popular item feeds) are filtered by user location.  
+The backend checks:
+
+1. Default/latest saved address coordinates (`saved_addresses.lat/lng`) and applies a distance radius.
+2. If coordinates are missing, it falls back to `pincode` and then `town_name` matching.
+
+The radius is configurable from admin APIs:
+
+- `GET /api/admin/catalog-settings` -> current radius + min/max/default limits
+- `PUT /api/admin/catalog-settings` with body `{ "radius_km": 15 }` -> saves radius
+
+Defaults and limits in backend:
+
+- Default: `25 km`
+- Allowed range: `1` to `100` km
 
 ## Database Notes
 

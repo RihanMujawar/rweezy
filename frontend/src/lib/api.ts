@@ -321,6 +321,16 @@ export const api = {
         "/api/admin/commissions",
         { method: "PUT", body: payload },
       ),
+    getCatalogSettings: () =>
+      apiRequest<{
+        radius_km: number;
+        limits: { min_km: number; max_km: number; default_km: number };
+      }>("/api/admin/catalog-settings"),
+    saveCatalogSettings: (payload: { radius_km: number }) =>
+      apiRequest<{
+        radius_km: number;
+        limits: { min_km: number; max_km: number; default_km: number };
+      }>("/api/admin/catalog-settings", { method: "PUT", body: payload }),
     toggleRole: (userId: string, role: string, has_role: boolean) =>
       apiRequest<{ ok: true }>(`/api/admin/users/${userId}/roles/toggle`, {
         method: "POST",

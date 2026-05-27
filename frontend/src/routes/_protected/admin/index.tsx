@@ -369,50 +369,52 @@ function AdminDashboard() {
             </div>
             <Badge variant="outline">{analytics.totals.deliveriesMonth} this month</Badge>
           </div>
-          <Table className="mt-4">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Delivery boy</TableHead>
-                <TableHead className="text-right">Food</TableHead>
-                <TableHead className="text-right">Grocery</TableHead>
-                <TableHead className="text-right">Today</TableHead>
-                <TableHead className="text-right">Month</TableHead>
-                <TableHead className="text-right">Km</TableHead>
-                <TableHead className="text-right">Commission</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {analytics.deliveryBoys.length === 0 ? (
+          <div className="mt-4 overflow-x-auto">
+            <Table className="min-w-[700px]">
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                    No delivery boys found.
-                  </TableCell>
+                  <TableHead>Delivery boy</TableHead>
+                  <TableHead className="text-right">Food</TableHead>
+                  <TableHead className="text-right">Grocery</TableHead>
+                  <TableHead className="text-right">Today</TableHead>
+                  <TableHead className="text-right">Month</TableHead>
+                  <TableHead className="text-right">Km</TableHead>
+                  <TableHead className="text-right">Commission</TableHead>
                 </TableRow>
-              ) : (
-                analytics.deliveryBoys.map((boy) => (
-                  <TableRow key={boy.id}>
-                    <TableCell>
-                      <div className="font-medium">{boy.name}</div>
-                      <div className="text-xs text-muted-foreground">{boy.phone ?? boy.id}</div>
-                    </TableCell>
-                    <TableCell className="text-right">{boy.foodDeliveries}</TableCell>
-                    <TableCell className="text-right">{boy.groceryDeliveries}</TableCell>
-                    <TableCell className="text-right">{boy.todayDeliveries}</TableCell>
-                    <TableCell className="text-right">{boy.monthDeliveries}</TableCell>
-                    <TableCell className="text-right">{boy.trackedKm.toFixed(1)}</TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(
-                        commission(
-                          boy.foodIncomeHandled + boy.groceryIncomeHandled,
-                          deliveryCommissionRate,
-                        ),
-                      )}
+              </TableHeader>
+              <TableBody>
+                {analytics.deliveryBoys.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                      No delivery boys found.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  analytics.deliveryBoys.map((boy) => (
+                    <TableRow key={boy.id}>
+                      <TableCell>
+                        <div className="font-medium">{boy.name}</div>
+                        <div className="text-xs text-muted-foreground">{boy.phone ?? boy.id}</div>
+                      </TableCell>
+                      <TableCell className="text-right">{boy.foodDeliveries}</TableCell>
+                      <TableCell className="text-right">{boy.groceryDeliveries}</TableCell>
+                      <TableCell className="text-right">{boy.todayDeliveries}</TableCell>
+                      <TableCell className="text-right">{boy.monthDeliveries}</TableCell>
+                      <TableCell className="text-right">{boy.trackedKm.toFixed(1)}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(
+                          commission(
+                            boy.foodIncomeHandled + boy.groceryIncomeHandled,
+                            deliveryCommissionRate,
+                          ),
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </section>
       </div>
     </RoleGate>
@@ -434,49 +436,51 @@ function PartnerIncomeTable({
         <h2 className="text-lg font-semibold">{title}</h2>
         <Badge variant="outline">{rows.length} listings</Badge>
       </div>
-      <Table className="mt-4">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead className="text-right">Today</TableHead>
-            <TableHead className="text-right">Month</TableHead>
-            <TableHead className="text-right">Orders</TableHead>
-            <TableHead className="text-right">Commission</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.length === 0 ? (
+      <div className="mt-4 overflow-x-auto">
+        <Table className="min-w-[640px]">
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                No listings found.
-              </TableCell>
+              <TableHead>Name</TableHead>
+              <TableHead className="text-right">Today</TableHead>
+              <TableHead className="text-right">Month</TableHead>
+              <TableHead className="text-right">Orders</TableHead>
+              <TableHead className="text-right">Commission</TableHead>
             </TableRow>
-          ) : (
-            rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>
-                  <div className="font-medium">{row.name}</div>
-                  <Badge variant={row.is_open ? "default" : "secondary"} className="mt-1">
-                    {row.is_open ? "Open" : "Closed"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div>{formatCurrency(row.todayIncome)}</div>
-                  <div className="text-xs text-muted-foreground">{row.todayOrders} orders</div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div>{formatCurrency(row.monthIncome)}</div>
-                  <div className="text-xs text-muted-foreground">{row.monthOrders} orders</div>
-                </TableCell>
-                <TableCell className="text-right">{row.totalOrders}</TableCell>
-                <TableCell className="text-right">
-                  {formatCurrency(commission(row.monthIncome, commissionRate))}
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  No listings found.
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            ) : (
+              rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>
+                    <div className="font-medium">{row.name}</div>
+                    <Badge variant={row.is_open ? "default" : "secondary"} className="mt-1">
+                      {row.is_open ? "Open" : "Closed"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div>{formatCurrency(row.todayIncome)}</div>
+                    <div className="text-xs text-muted-foreground">{row.todayOrders} orders</div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div>{formatCurrency(row.monthIncome)}</div>
+                    <div className="text-xs text-muted-foreground">{row.monthOrders} orders</div>
+                  </TableCell>
+                  <TableCell className="text-right">{row.totalOrders}</TableCell>
+                  <TableCell className="text-right">
+                    {formatCurrency(commission(row.monthIncome, commissionRate))}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </section>
   );
 }

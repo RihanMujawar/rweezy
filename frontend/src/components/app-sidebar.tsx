@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth, type AppRole } from "@/lib/auth-context";
-import { useEffect, useMemo, useState } from "react";
+import { useAppMode } from "@/lib/app-mode-context";
+import { useMemo } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -75,6 +76,7 @@ const adminNav: NavItem[] = [
 
 export function AppSidebar() {
   const { roles, user, signOut } = useAuth();
+  const { mode, setMode } = useAppMode();
   const path = useRouterState({ select: (r) => r.location.pathname });
   const isActive = (url: string) => path === url;
   const businessGroups = useMemo(() => {
@@ -94,13 +96,6 @@ export function AppSidebar() {
     path.startsWith("/delivery") ||
     path.startsWith("/rider") ||
     path.startsWith("/admin");
-  const [mode, setMode] = useState<"customer" | "business">(
-    pathSuggestsBusiness && hasBusinessMode ? "business" : "customer",
-  );
-
-  useEffect(() => {
-    if (pathSuggestsBusiness && hasBusinessMode) setMode("business");
-  }, [hasBusinessMode, pathSuggestsBusiness]);
 
   const groups: { label: string; items: NavItem[] }[] =
     mode === "business" && hasBusinessMode
