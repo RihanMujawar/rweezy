@@ -4,27 +4,27 @@ import { serviceRoleRestRequest } from "../backend/lib/supabase.mjs";
 const password = process.env.DEMO_PASSWORD || "Demo123456";
 
 const demoUsers = [
-  { email: "demo.customer@zoomly.test", fullName: "Demo Customer", phone: "+919000000001", role: "customer" },
-  { email: "demo.rider@zoomly.test", fullName: "Demo Rider", phone: "+919000000002", role: "rider" },
+  { email: "demo.customer@rweezy.test", fullName: "Demo Customer", phone: "+919000000001", role: "customer" },
+  { email: "demo.rider@rweezy.test", fullName: "Demo Rider", phone: "+919000000002", role: "rider" },
   {
-    email: "demo.delivery@zoomly.test",
+    email: "demo.delivery@rweezy.test",
     fullName: "Demo Delivery Partner",
     phone: "+919000000003",
     role: "delivery_boy",
   },
   {
-    email: "demo.restaurant@zoomly.test",
+    email: "demo.restaurant@rweezy.test",
     fullName: "Demo Restaurant Manager",
     phone: "+919000000004",
     role: "hotel_manager",
   },
   {
-    email: "demo.grocery@zoomly.test",
+    email: "demo.grocery@rweezy.test",
     fullName: "Demo Grocery Manager",
     phone: "+919000000005",
     role: "grocery_manager",
   },
-  { email: "demo.admin@zoomly.test", fullName: "Demo Admin", phone: "+919000000006", role: "admin" },
+  { email: "demo.admin@rweezy.test", fullName: "Demo Admin", phone: "+919000000006", role: "admin" },
 ];
 
 async function adminAuth(path, options = {}) {

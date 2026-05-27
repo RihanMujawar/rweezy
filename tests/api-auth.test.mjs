@@ -62,7 +62,7 @@ test("login rejects invalid credentials", async (t) => {
 
   const { response, body } = await fetchJson("/api/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email: "nobody@zoomly.test", password: "wrong-password-xyz" }),
+    body: JSON.stringify({ email: "nobody@rweezy.test", password: "wrong-password-xyz" }),
   });
   assert.ok(response.status >= 400);
   assert.ok(body?.error);

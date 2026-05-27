@@ -6,12 +6,13 @@ export class HttpError extends Error {
   }
 }
 
-export function getCorsHeaders(origin = "*") {
+export function getCorsHeaders(origin = "*", allowCredentials = true) {
   return {
     "Access-Control-Allow-Origin": origin,
+    Vary: "Origin",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cookie",
+    "Access-Control-Allow-Credentials": allowCredentials ? "true" : "false",
   };
 }
 

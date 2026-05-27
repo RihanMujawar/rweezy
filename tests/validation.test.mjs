@@ -23,7 +23,7 @@ test("loginPhoneSchema accepts normalized Indian phone", () => {
 test("registerSchema requires matching passwords", () => {
   const result = registerSchema.safeParse({
     fullName: "Demo User",
-    email: "demo@zoomly.test",
+    email: "demo@rweezy.test",
     phone: "+919876543210",
     password: "secret1",
     confirmPassword: "other",

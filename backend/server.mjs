@@ -38,8 +38,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendDistDir = path.join(ROOT_DIR, "frontend", "dist");
 const frontendClientDir = path.join(frontendDistDir, "client");
 const frontendServerEntryPath = path.join(frontendDistDir, "server", "index.js");
-const ACCESS_COOKIE = "zoomly_access_token";
-const REFRESH_COOKIE = "zoomly_refresh_token";
+const ACCESS_COOKIE = "rweezy_access_token";
+const REFRESH_COOKIE = "rweezy_refresh_token";
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -368,11 +368,13 @@ function buildSessionCookies(payload) {
       maxAge: session.expiresIn,
       path: "/",
       sameSite: "Lax",
+      secure: env.cookieSecure,
     }),
     serializeCookie(REFRESH_COOKIE, session.refreshToken, {
       maxAge: 60 * 60 * 24 * 30,
       path: "/",
       sameSite: "Lax",
+      secure: env.cookieSecure,
     }),
   ];
 }
@@ -383,11 +385,13 @@ function clearSessionCookies() {
       maxAge: 0,
       path: "/",
       sameSite: "Lax",
+      secure: env.cookieSecure,
     }),
     serializeCookie(REFRESH_COOKIE, "", {
       maxAge: 0,
       path: "/",
       sameSite: "Lax",
+      secure: env.cookieSecure,
     }),
   ];
 }
@@ -2801,6 +2805,18 @@ async function matchApiRoute(req, url) {
   return null;
 }
 
+function resolveCorsOrigin(requestOrigin) {
+  if (env.corsAllowAll) return requestOrigin || "*";
+  if (requestOrigin && env.corsAllowedOrigins.includes(requestOrigin)) return requestOrigin;
+  return "null";
+}
+
+function corsHeadersForRequest(req) {
+  const resolvedOrigin = resolveCorsOrigin(req.headers.origin);
+  const allowCredentials = resolvedOrigin !== "*" && resolvedOrigin !== "null";
+  return getCorsHeaders(resolvedOrigin, allowCredentials);
+}
+
 async function handleApi(req, res, url) {
   const clientIp =
     cleanText(req.headers["x-forwarded-for"])?.split(",")[0]?.trim() ||
@@ -2817,7 +2833,7 @@ async function handleApi(req, res, url) {
   }
 
   const started = Date.now();
-  const corsHeaders = getCorsHeaders(req.headers.origin || "*");
+  const corsHeaders = corsHeadersForRequest(req);
 
   if (req.method === "OPTIONS") {
     res.writeHead(204, corsHeaders);
@@ -2840,9 +2856,12 @@ async function handleApi(req, res, url) {
 
   const { __responseHeaders, ...safePayload } = payload ?? {};
 
-  console.info(
-    `[api] ${req.method} ${url.pathname} ${context.user?.id ?? "anon"} ${Date.now() - started}ms`,
-  );
+  logEvent("info", "api_request", {
+    method: req.method,
+    path: url.pathname,
+    userId: context.user?.id ?? "anon",
+    durationMs: Date.now() - started,
+  });
 
   sendJson(
     res,
@@ -2948,7 +2967,7 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
-      res.writeHead(204, getCorsHeaders(req.headers.origin || "*"));
+      res.writeHead(204, corsHeadersForRequest(req));
       res.end();
       return;
     }
@@ -2969,7 +2988,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const headers = url.pathname.startsWith("/api/")
-      ? { ...getCorsHeaders(req.headers.origin || "*"), "X-Request-Id": requestId }
+      ? { ...corsHeadersForRequest(req), "X-Request-Id": requestId }
       : { "X-Request-Id": requestId };
 
     sendJson(res, status, { error: message, requestId }, headers);

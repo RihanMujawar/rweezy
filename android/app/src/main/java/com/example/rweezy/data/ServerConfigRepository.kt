@@ -27,6 +27,7 @@ class SharedPreferencesServerConfigRepository(private val context: Context) : Se
     companion object {
         private const val PREFS_NAME = "server_config_prefs"
         private const val KEY_SERVER_URL = "server_url"
-        private const val DEFAULT_URL = "http://10.0.2.2:3000" // Default to emulator loopback for local Vite server
+        // Default to emulator loopback for local/production-like backend container (port 4000).
+        private const val DEFAULT_URL = "http://10.0.2.2:4000"
     }
 }

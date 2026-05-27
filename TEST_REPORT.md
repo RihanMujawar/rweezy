@@ -1,12 +1,12 @@
-# Zoomly Production Test Report
+# Rweezy Production Test Report
 
 Date: 2026-05-22  
-Project: Zoomly multi-service delivery platform  
+Project: Rweezy multi-service delivery platform  
 Scope: Current repository verification, automated command results, test coverage review, and launch gaps.
 
 ## Executive Summary
 
-Zoomly is a full-stack multi-service marketplace for food delivery, grocery delivery, ride booking, and package delivery with role-based experiences for customers, riders, delivery partners, restaurant managers, grocery managers, and admins.
+Rweezy is a full-stack multi-service marketplace for food delivery, grocery delivery, ride booking, and package delivery with role-based experiences for customers, riders, delivery partners, restaurant managers, grocery managers, and admins.
 
 **Current production status:** suitable for **staging / closed beta** after Supabase migrations and manual role QA. It is not ready for unrestricted public launch until the local Node test-runner issue is resolved, API/E2E tests run against a seeded staging environment, RLS is reviewed, and payment/support decisions are finalized.
 

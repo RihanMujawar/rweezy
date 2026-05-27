@@ -129,7 +129,8 @@ function ItemCarousel({
             </div>
           ) : (
             items.map((item) => {
-              const placeName = item.restaurants?.name || item.grocery_stores?.name || "Zoomly Partner";
+              const placeName =
+                item.restaurants?.name || item.grocery_stores?.name || "Rweezy Partner";
               const imageUrl = item.image_url || (to === "/app/food"
                 ? "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80"
                 : "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=700&q=80");

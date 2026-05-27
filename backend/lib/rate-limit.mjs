@@ -1,4 +1,5 @@
 const buckets = new Map();
+const enabled = process.env.RATE_LIMIT_ENABLED !== "false";
 
 const DEFAULT_LIMITS = {
   "/api/auth/login": { windowMs: 60_000, max: 20 },
@@ -13,6 +14,8 @@ function bucketKey(ip, pathname) {
 }
 
 export function checkRateLimit(ip, pathname) {
+  if (!enabled) return null;
+
   const rule =
     DEFAULT_LIMITS[pathname] ??
     (pathname.startsWith("/api/chat/") ? DEFAULT_LIMITS["/api/chat"] : null);

@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 60_000,
   retries: 0,
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:8080",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:4000",
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
@@ -13,7 +13,7 @@ export default defineConfig({
     ? undefined
     : {
         command: "npm run start",
-        url: "http://127.0.0.1:8080/api/health",
+        url: "http://127.0.0.1:4000/api/health",
         reuseExistingServer: true,
         timeout: 120_000,
       },

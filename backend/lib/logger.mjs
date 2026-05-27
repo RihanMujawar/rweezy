@@ -1,4 +1,14 @@
+const levelRank = { error: 0, warn: 1, info: 2 };
+const currentLevel = process.env.LOG_LEVEL || (process.env.NODE_ENV === "production" ? "warn" : "info");
+
+function shouldLog(level) {
+  const requested = levelRank[level] ?? levelRank.info;
+  const current = levelRank[currentLevel] ?? levelRank.info;
+  return requested <= current;
+}
+
 export function logEvent(level, message, meta = {}) {
+  if (!shouldLog(level)) return;
   const entry = {
     ts: new Date().toISOString(),
     level,
