@@ -108,6 +108,30 @@ export const api = {
       apiRequest<{ ok: true }>(`/api/profile/addresses/${id}`, { method: "DELETE" }),
   },
 
+  notifications: {
+    saveToken: (payload: {
+      token: string;
+      platform?: "web" | "android" | "ios";
+      user_agent?: string;
+      device_label?: string;
+    }) => apiRequest<{ pushToken: unknown }>("/api/notifications/token", { method: "POST", body: payload }),
+    sendTest: (payload: {
+      token?: string;
+      user_id?: string;
+      title?: string;
+      body?: string;
+      data?: Record<string, string>;
+    }) =>
+      apiRequest<{
+        sent: number;
+        failed: number;
+        results: Array<{ token: string; ok: boolean; error?: string }>;
+      }>("/api/admin/notifications/test", {
+        method: "POST",
+        body: payload,
+      }),
+  },
+
   roleRequests: {
     getMine: () => apiRequest<{ requests: unknown[] }>("/api/role-requests"),
     create: (payload: { requested_role: string; business_name?: string; message?: string }) =>
@@ -256,13 +280,21 @@ export const api = {
           trackedKm: number;
         };
       }>("/api/admin/analytics"),
-    getRestaurants: () =>
-      apiRequest<{
+    getRestaurants: (params?: { page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.page) query.set("page", String(params.page));
+      if (params?.limit) query.set("limit", String(params.limit));
+      const qs = query.toString();
+      return apiRequest<{
         restaurants: unknown[];
         profiles: unknown[];
         roles: unknown[];
         orders: unknown[];
-      }>("/api/admin/restaurants"),
+        page: number;
+        limit: number;
+        hasNext: boolean;
+      }>(`/api/admin/restaurants${qs ? `?${qs}` : ""}`);
+    },
     createRestaurant: (payload: Record<string, unknown>) =>
       apiRequest<{ restaurant: unknown }>("/api/admin/restaurants", {
         method: "POST",
@@ -290,7 +322,15 @@ export const api = {
         method: "POST",
         body: { user_id },
       }),
-    getStores: () => apiRequest<{ stores: unknown[] }>("/api/admin/stores"),
+    getStores: (params?: { page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.page) query.set("page", String(params.page));
+      if (params?.limit) query.set("limit", String(params.limit));
+      const qs = query.toString();
+      return apiRequest<{ stores: unknown[]; page: number; limit: number; hasNext: boolean }>(
+        `/api/admin/stores${qs ? `?${qs}` : ""}`,
+      );
+    },
     createStore: (payload: Record<string, unknown>) =>
       apiRequest<{ store: unknown }>("/api/admin/stores", { method: "POST", body: payload }),
     updateStore: (id: string, payload: Record<string, unknown>) =>

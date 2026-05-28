@@ -132,9 +132,9 @@ function FoodList() {
               key={r.id}
               to="/app/food/$restaurantId"
               params={{ restaurantId: r.id }}
-              className="overflow-hidden rounded-lg border bg-card transition-transform hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="overflow-hidden rounded-lg border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <div className="aspect-video animate-pulse bg-muted">
+              <div className="aspect-video bg-muted">
                 {r.image_url && (
                   <img src={r.image_url} alt={r.name} className="h-full w-full object-cover" />
                 )}

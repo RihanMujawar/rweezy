@@ -37,19 +37,40 @@ function AdminUsers() {
   const [allRoles, setAllRoles] = useState<RoleRow[]>([]);
   const [roleRequests, setRoleRequests] = useState<RoleRequest[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 20;
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    const { profiles, roles, roleRequests } = await api.admin.getUsers();
-    setProfiles((profiles as Profile[]) ?? []);
-    setAllRoles((roles as RoleRow[]) ?? []);
-    setRoleRequests((roleRequests as RoleRequest[]) ?? []);
-    setLoading(false);
+  const load = useCallback(async (nextPage: number, nextSearch: string, initial = false) => {
+    if (initial) setLoadingInitial(true);
+    else setRefreshing(true);
+    try {
+      const response = await api.admin.getUsers({
+        page: nextPage,
+        limit,
+        search: nextSearch || undefined,
+      });
+      setProfiles((response.profiles as Profile[]) ?? []);
+      setAllRoles((response.roles as RoleRow[]) ?? []);
+      setRoleRequests((response.roleRequests as RoleRequest[]) ?? []);
+      setTotal(response.total ?? 0);
+    } finally {
+      if (initial) setLoadingInitial(false);
+      else setRefreshing(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    load(page, debouncedSearch, loadingInitial);
+  }, [debouncedSearch, load, page]);
 
   const userRoles = (uid: string) => allRoles.filter((r) => r.user_id === uid).map((r) => r.role);
 
@@ -58,7 +79,7 @@ function AdminUsers() {
     try {
       await api.admin.toggleRole(uid, role, has);
       toast.success("Updated");
-      load();
+      load(page, debouncedSearch);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update role");
     }
@@ -68,16 +89,12 @@ function AdminUsers() {
     try {
       await api.admin.reviewRoleRequest(id, decision);
       toast.success(decision === "approved" ? "Role approved" : "Request rejected");
-      load();
+      load(page, debouncedSearch);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to review request");
     }
   };
-
-  const filtered = profiles.filter(
-    (p) =>
-      !search || p.full_name?.toLowerCase().includes(search.toLowerCase()) || p.id.includes(search),
-  );
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <RoleGate allowed={["admin"]} hasAny={roles.includes("admin")}>
@@ -87,10 +104,19 @@ function AdminUsers() {
           className="mt-4 max-w-sm"
           placeholder="Search by name or ID..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
         />
+        <p className="mt-2 text-xs text-muted-foreground">
+          Showing {profiles.length} of {total} users (20 per request).
+        </p>
+        {refreshing && !loadingInitial && (
+          <p className="mt-1 text-xs text-muted-foreground">Refreshing list...</p>
+        )}
 
-        {loading ? (
+        {loadingInitial ? (
           <p className="mt-4 text-muted-foreground">Loading...</p>
         ) : (
           <div className="mt-6 space-y-3">
@@ -138,7 +164,7 @@ function AdminUsers() {
                 </div>
               </div>
             )}
-            {filtered.map((p) => (
+            {profiles.map((p) => (
               <div key={p.id} className="rounded-xl border bg-card p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
@@ -172,6 +198,29 @@ function AdminUsers() {
                 </div>
               </div>
             ))}
+            <div className="flex items-center justify-between rounded-xl border bg-card p-3">
+              <div className="text-sm text-muted-foreground">
+                Page {page} / {totalPages}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1 || refreshing}
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages || refreshing}
+                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>

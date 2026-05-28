@@ -7,7 +7,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
+import android.webkit.WebSettings
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -67,6 +70,26 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import com.example.rweezy.data.SharedPreferencesServerConfigRepository
 
+private fun normalizeServerUrl(raw: String): String {
+    var normalized = raw.trim()
+    if (normalized.isEmpty()) return ""
+    if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+        normalized = "http://$normalized"
+    }
+    return normalized.trimEnd('/')
+}
+
+private fun isValidServerUrl(raw: String): Boolean {
+    val normalized = normalizeServerUrl(raw)
+    if (normalized.isEmpty()) return false
+    return try {
+        val parsed = Uri.parse(normalized)
+        !parsed.scheme.isNullOrBlank() && !parsed.host.isNullOrBlank()
+    } catch (_: Exception) {
+        false
+    }
+}
+
 /**
  * A robust WebView screen that loads the Rweezy application with features:
  * - Back button integration
@@ -90,10 +113,12 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
     var showSettingsDialog by remember { mutableStateOf(false) }
 
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
+    var canGoBack by remember { mutableStateOf(false) }
 
     // Intercept system back button to navigate history inside the WebView
-    BackHandler(enabled = webViewInstance?.canGoBack() == true) {
+    BackHandler(enabled = canGoBack) {
         webViewInstance?.goBack()
+        canGoBack = webViewInstance?.canGoBack() == true
     }
 
     // Geolocation permission launcher
@@ -130,7 +155,11 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
         fileCallback = null
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+    ) {
         // Android WebView wrapper
         AndroidView(
             factory = { ctx ->
@@ -142,6 +171,12 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
                     settings.setGeolocationEnabled(true)
                     settings.allowFileAccess = true
                     settings.allowContentAccess = true
+                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+
+                    // Keep auth/session cookies working across modern Android WebView versions.
+                    val cookieManager = CookieManager.getInstance()
+                    cookieManager.setAcceptCookie(true)
+                    cookieManager.setAcceptThirdPartyCookies(this, true)
                     
                     // Allow hardware acceleration
                     setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
@@ -150,10 +185,12 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                             isLoading = true
                             loadError = null
+                            canGoBack = view?.canGoBack() == true
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             isLoading = false
+                            canGoBack = view?.canGoBack() == true
                         }
 
                         override fun onReceivedError(
@@ -383,6 +420,8 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
         // Server URL input settings dialog
         if (showSettingsDialog) {
             var tempUrl by remember { mutableStateOf(currentUrl) }
+            val normalizedTempUrl = normalizeServerUrl(tempUrl)
+            val urlIsValid = isValidServerUrl(tempUrl)
             Dialog(onDismissRequest = { showSettingsDialog = false }) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
@@ -408,13 +447,43 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
                             label = { Text("Server URL") },
                             placeholder = { Text("http://10.0.2.2:3000") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            isError = tempUrl.isNotBlank() && !urlIsValid
                         )
+
+                        if (tempUrl.isNotBlank() && !urlIsValid) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Please enter a valid URL (example: http://10.0.2.2:4000)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                         
                         Spacer(modifier = Modifier.height(12.dp))
                         
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { tempUrl = "http://10.0.2.2:4000" },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Emulator")
+                            }
+                            OutlinedButton(
+                                onClick = { tempUrl = "http://192.168.1.10:4000" },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Real phone")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Text(
-                            text = "Note: If you are using the Android emulator, use http://10.0.2.2:3000 to connect to your host's Vite development server.",
+                            text = "For emulator use http://10.0.2.2:4000. For real phone use your laptop LAN IP, for example http://192.168.1.10:4000.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -431,13 +500,15 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
                                 onClick = {
-                                    configRepository.saveServerUrl(tempUrl)
+                                    if (!urlIsValid) return@Button
+                                    configRepository.saveServerUrl(normalizedTempUrl)
                                     currentUrl = configRepository.getServerUrl()
                                     showSettingsDialog = false
                                     loadError = null
                                     isLoading = true
                                     webViewInstance?.loadUrl(currentUrl)
-                                }
+                                },
+                                enabled = urlIsValid
                             ) {
                                 Text("Save")
                             }

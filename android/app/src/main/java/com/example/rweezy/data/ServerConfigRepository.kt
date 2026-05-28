@@ -1,6 +1,7 @@
 package com.example.rweezy.data
 
 import android.content.Context
+import com.example.rweezy.BuildConfig
 
 interface ServerConfigRepository {
     fun getServerUrl(): String
@@ -20,6 +21,7 @@ class SharedPreferencesServerConfigRepository(private val context: Context) : Se
             if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
                 normalizedUrl = "http://$normalizedUrl"
             }
+            normalizedUrl = normalizedUrl.trimEnd('/')
             prefs.edit().putString(KEY_SERVER_URL, normalizedUrl).apply()
         }
     }
@@ -27,7 +29,8 @@ class SharedPreferencesServerConfigRepository(private val context: Context) : Se
     companion object {
         private const val PREFS_NAME = "server_config_prefs"
         private const val KEY_SERVER_URL = "server_url"
-        // Default to emulator loopback for local/production-like backend container (port 4000).
-        private const val DEFAULT_URL = "http://10.0.2.2:4000"
+        // Default comes from BuildConfig and can be overridden with BACKEND_URL Gradle property.
+        private val DEFAULT_URL =
+            BuildConfig.BACKEND_URL.trim().ifEmpty { "http://10.0.2.2:4000" }.trimEnd('/')
     }
 }

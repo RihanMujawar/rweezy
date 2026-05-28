@@ -1,10 +1,15 @@
 plugins {
   alias(libs.plugins.android.application)
+  alias(libs.plugins.google.services)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
 }
 
 android {
+    val backendUrl = (project.findProperty("BACKEND_URL") as String?)?.trim()
+        ?.ifEmpty { "http://10.0.2.2:4000" }
+        ?: "http://10.0.2.2:4000"
+
     namespace = "com.example.rweezy"
     compileSdk = 36
     defaultConfig {
@@ -13,6 +18,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
     }
 
     buildTypes {
@@ -28,7 +34,7 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      buildConfig = true
       shaders = false
     }
 
@@ -44,6 +50,9 @@ kotlin {
 }
 
 dependencies {
+  implementation(platform(libs.firebase.bom))
+  implementation(libs.firebase.messaging.ktx)
+
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)

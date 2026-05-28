@@ -242,7 +242,7 @@ function AdminDashboard() {
           {loading && <Badge variant="secondary">Loading</Badge>}
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
           {tiles.map((tile) => (
             <div key={tile.label} className="rounded-xl border bg-card p-5">
               <div className="text-sm text-muted-foreground">{tile.label}</div>
@@ -252,7 +252,7 @@ function AdminDashboard() {
         </div>
 
         {health && (
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
             <div className="rounded-xl border bg-card p-4">
               <div className="text-sm text-muted-foreground">Pending role requests</div>
               <div className="mt-1 text-2xl font-bold">{health.pendingRoleRequests}</div>
@@ -272,7 +272,7 @@ function AdminDashboard() {
           </div>
         )}
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-8 grid grid-cols-2 gap-4 xl:grid-cols-3">
           {moneyTiles.map((tile) => {
             const Icon = tile.icon;
             return (
@@ -369,7 +369,7 @@ function AdminDashboard() {
             </div>
             <Badge variant="outline">{analytics.totals.deliveriesMonth} this month</Badge>
           </div>
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 hidden md:block">
             <Table className="min-w-[700px]">
               <TableHeader>
                 <TableRow>
@@ -415,6 +415,36 @@ function AdminDashboard() {
               </TableBody>
             </Table>
           </div>
+          <div className="mt-4 space-y-3 md:hidden">
+            {analytics.deliveryBoys.length === 0 ? (
+              <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+                No delivery boys found.
+              </div>
+            ) : (
+              analytics.deliveryBoys.map((boy) => (
+                <div key={boy.id} className="rounded-lg border p-4">
+                  <div className="font-medium">{boy.name}</div>
+                  <div className="text-xs text-muted-foreground">{boy.phone ?? boy.id}</div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div>Food: {boy.foodDeliveries}</div>
+                    <div>Grocery: {boy.groceryDeliveries}</div>
+                    <div>Today: {boy.todayDeliveries}</div>
+                    <div>Month: {boy.monthDeliveries}</div>
+                    <div>Km: {boy.trackedKm.toFixed(1)}</div>
+                    <div>
+                      Commission:{" "}
+                      {formatCurrency(
+                        commission(
+                          boy.foodIncomeHandled + boy.groceryIncomeHandled,
+                          deliveryCommissionRate,
+                        ),
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </section>
       </div>
     </RoleGate>
@@ -436,7 +466,7 @@ function PartnerIncomeTable({
         <h2 className="text-lg font-semibold">{title}</h2>
         <Badge variant="outline">{rows.length} listings</Badge>
       </div>
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 hidden md:block">
         <Table className="min-w-[640px]">
           <TableHeader>
             <TableRow>
@@ -480,6 +510,44 @@ function PartnerIncomeTable({
             )}
           </TableBody>
         </Table>
+      </div>
+      <div className="mt-4 space-y-3 md:hidden">
+        {rows.length === 0 ? (
+          <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+            No listings found.
+          </div>
+        ) : (
+          rows.map((row) => (
+            <div key={row.id} className="rounded-lg border p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-medium">{row.name}</div>
+                <Badge variant={row.is_open ? "default" : "secondary"}>
+                  {row.is_open ? "Open" : "Closed"}
+                </Badge>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <div className="text-xs text-muted-foreground">Today</div>
+                  <div>{formatCurrency(row.todayIncome)}</div>
+                  <div className="text-xs text-muted-foreground">{row.todayOrders} orders</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Month</div>
+                  <div>{formatCurrency(row.monthIncome)}</div>
+                  <div className="text-xs text-muted-foreground">{row.monthOrders} orders</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Total orders</div>
+                  <div>{row.totalOrders}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Commission</div>
+                  <div>{formatCurrency(commission(row.monthIncome, commissionRate))}</div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </section>
   );

@@ -76,4 +76,5 @@ export const env = {
   corsAllowAll: process.env.CORS_ALLOW_ALL === "true" || process.env.NODE_ENV !== "production",
   corsAllowedOrigins: parseCsv(process.env.CORS_ALLOWED_ORIGINS),
   cookieSecure: process.env.COOKIE_SECURE === "true" || process.env.NODE_ENV === "production",
+  fcmServerKey: process.env.FCM_SERVER_KEY || "",
 };

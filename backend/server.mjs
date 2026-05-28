@@ -219,6 +219,51 @@ async function saveCatalogRadiusKm(token, radiusKm) {
   return normalizeCatalogRadius(firstRow(rows)?.value);
 }
 
+function trimToken(value) {
+  return String(value ?? "").trim();
+}
+
+async function sendFcmNotification({ token, title, body, data = {} }) {
+  if (!env.fcmServerKey) {
+    throw new HttpError(
+      500,
+      "Missing FCM_SERVER_KEY. Add your Firebase server key to backend .env and restart the server.",
+    );
+  }
+
+  const targetToken = trimToken(token);
+  if (!targetToken) throw new HttpError(400, "Push token is required");
+
+  const response = await fetch("https://fcm.googleapis.com/fcm/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `key=${env.fcmServerKey}`,
+    },
+    body: JSON.stringify({
+      to: targetToken,
+      priority: "high",
+      notification: {
+        title: cleanText(title) || "Rweezy",
+        body: cleanText(body) || "You have a new update.",
+      },
+      data: Object.fromEntries(
+        Object.entries(data ?? {}).map(([key, value]) => [String(key), String(value ?? "")]),
+      ),
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new HttpError(502, "Failed to deliver push notification");
+
+  if (payload?.failure > 0) {
+    const message = payload?.results?.[0]?.error;
+    throw new HttpError(400, message ? `FCM rejected token: ${message}` : "FCM rejected notification");
+  }
+
+  return payload;
+}
+
 async function getUserCatalogLocation(token, userId) {
   const [profileRows, addressRows] = await Promise.all([
     restRequest(
@@ -807,6 +852,33 @@ const routes = [
   route("GET", /^\/api\/auth\/me$/, async ({ token, user }) => {
     const roles = await getRoles(token, user.id);
     return { user, roles };
+  }),
+  route("POST", /^\/api\/notifications\/token$/, async ({ user, body }) => {
+    const token = trimToken(body.token);
+    if (!token) throw new HttpError(400, "token is required");
+
+    const platform = cleanText(body.platform) || "web";
+    const deviceLabel = cleanText(body.device_label || body.user_agent || "");
+
+    const rows = await serviceRoleRestRequest(
+      buildPath("/user_push_tokens", {
+        select: "id,user_id,token,platform,device_label,updated_at",
+        on_conflict: "token",
+      }),
+      {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+        body: {
+          user_id: user.id,
+          token,
+          platform,
+          device_label: deviceLabel || null,
+          updated_at: new Date().toISOString(),
+        },
+      },
+    );
+
+    return { pushToken: firstRow(rows) };
   }),
   route("GET", /^\/api\/map\/route$/, async ({ url }) => {
     const fromLat = url.searchParams.get("fromLat");
@@ -1564,6 +1636,61 @@ const routes = [
 
     return { packageDelivery: firstRow(rows) };
   }),
+  route("POST", /^\/api\/admin\/notifications\/test$/, async ({ token, user, body }) => {
+    const roles = await getRoles(token, user.id);
+    if (!roles.includes("admin")) {
+      throw new HttpError(403, "Only admin users can send test notifications");
+    }
+
+    const explicitToken = trimToken(body.token);
+    const targetUserId = cleanText(body.user_id);
+
+    let targetTokens = explicitToken ? [explicitToken] : [];
+    if (!explicitToken && targetUserId) {
+      const rows = await serviceRoleRestRequest(
+        buildPath("/user_push_tokens", {
+          select: "token",
+          user_id: `eq.${targetUserId}`,
+          order: "updated_at.desc",
+          limit: "5",
+        }),
+      );
+      targetTokens = (rows ?? []).map((row) => trimToken(row.token)).filter(Boolean);
+    }
+
+    if (targetTokens.length === 0) {
+      throw new HttpError(400, "Provide token or user_id with at least one saved token");
+    }
+
+    const title = cleanText(body.title) || "Test notification";
+    const message = cleanText(body.body) || "This is a test push from Rweezy backend.";
+    const data = body.data && typeof body.data === "object" ? body.data : {};
+
+    const results = [];
+    for (const fcmToken of targetTokens) {
+      try {
+        const result = await sendFcmNotification({
+          token: fcmToken,
+          title,
+          body: message,
+          data,
+        });
+        results.push({ token: fcmToken, ok: true, result });
+      } catch (error) {
+        results.push({
+          token: fcmToken,
+          ok: false,
+          error: error instanceof Error ? error.message : "Failed",
+        });
+      }
+    }
+
+    return {
+      sent: results.filter((item) => item.ok).length,
+      failed: results.filter((item) => !item.ok).length,
+      results,
+    };
+  }),
   route("GET", /^\/api\/admin\/stats$/, async ({ token }) => {
     const [profiles, restaurants, foodOrders, rides, packages, stores] = await Promise.all([
       restRequest(token, buildPath("/profiles", { select: "id" })),
@@ -1733,22 +1860,61 @@ const routes = [
       },
     };
   }),
-  route("GET", /^\/api\/admin\/restaurants$/, async ({ token }) => {
-    const [restaurants, profiles, roles, orders] = await Promise.all([
-      restRequest(token, buildPath("/restaurants", { select: "*", order: "created_at.desc" })),
-      restRequest(token, buildPath("/profiles", { select: "id,full_name" })),
-      restRequest(
-        token,
-        buildPath("/user_roles", { select: "user_id,role", role: "eq.hotel_manager" }),
-      ),
-      restRequest(token, buildPath("/food_orders", { select: "restaurant_id" })),
+  route("GET", /^\/api\/admin\/restaurants$/, async ({ token, url }) => {
+    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
+    const limit = Math.min(100, Math.max(10, Number(url.searchParams.get("limit") ?? 20)));
+    const offset = (page - 1) * limit;
+    const fetchLimit = limit + 1;
+    const restaurants = await restRequest(
+      token,
+      buildPath("/restaurants", {
+        select: "*",
+        order: "created_at.desc",
+        limit: String(fetchLimit),
+        offset: String(offset),
+      }),
+    );
+    const hasNext = (restaurants?.length ?? 0) > limit;
+    const pageRestaurants = (restaurants ?? []).slice(0, limit);
+    const managerIds = pageRestaurants
+      .map((item) => item?.manager_id)
+      .filter((id) => typeof id === "string" && id.length > 0);
+    const restaurantIds = pageRestaurants
+      .map((item) => item?.id)
+      .filter((id) => typeof id === "string" && id.length > 0);
+    const [profiles, roles, orders] = await Promise.all([
+      managerIds.length > 0
+        ? restRequest(
+            token,
+            buildPath("/profiles", { select: "id,full_name", id: `in.(${managerIds.join(",")})` }),
+          )
+        : [],
+      managerIds.length > 0
+        ? restRequest(
+            token,
+            buildPath("/user_roles", {
+              select: "user_id,role",
+              role: "eq.hotel_manager",
+              user_id: `in.(${managerIds.join(",")})`,
+            }),
+          )
+        : [],
+      restaurantIds.length > 0
+        ? restRequest(
+            token,
+            buildPath("/food_orders", { select: "restaurant_id", restaurant_id: `in.(${restaurantIds.join(",")})` }),
+          )
+        : [],
     ]);
 
     return {
-      restaurants: restaurants ?? [],
+      restaurants: pageRestaurants,
       profiles: profiles ?? [],
       roles: roles ?? [],
       orders: orders ?? [],
+      page,
+      limit,
+      hasNext,
     };
   }),
   route("POST", /^\/api\/admin\/restaurants$/, async ({ token, body }) => {
@@ -1848,13 +2014,24 @@ const routes = [
       return { restaurant: firstRow(rows) };
     },
   ),
-  route("GET", /^\/api\/admin\/stores$/, async ({ token }) => {
+  route("GET", /^\/api\/admin\/stores$/, async ({ token, url }) => {
+    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
+    const limit = Math.min(100, Math.max(10, Number(url.searchParams.get("limit") ?? 20)));
+    const offset = (page - 1) * limit;
+    const fetchLimit = limit + 1;
     const stores = await restRequest(
       token,
-      buildPath("/grocery_stores", { select: "*", order: "created_at.desc" }),
+      buildPath("/grocery_stores", {
+        select: "*",
+        order: "created_at.desc",
+        limit: String(fetchLimit),
+        offset: String(offset),
+      }),
     );
+    const hasNext = (stores?.length ?? 0) > limit;
+    const pageStores = (stores ?? []).slice(0, limit);
 
-    return { stores: stores ?? [] };
+    return { stores: pageStores, page, limit, hasNext };
   }),
   route("POST", /^\/api\/admin\/stores$/, async ({ token, body }) => {
     const rows = await restRequest(token, buildPath("/grocery_stores", { select: "*" }), {
@@ -1903,9 +2080,8 @@ const routes = [
       profileParams.or = `(full_name.ilike.*${search}*,phone.ilike.*${search}*)`;
     }
 
-    const [profiles, roles, roleRequests, countRows] = await Promise.all([
+    const [profiles, roleRequests, countRows] = await Promise.all([
       restRequest(token, buildPath("/profiles", profileParams)),
-      restRequest(token, buildPath("/user_roles", { select: "user_id,role" })),
       restRequest(
         token,
         buildPath("/role_requests", {
@@ -1922,6 +2098,20 @@ const routes = [
         },
       ).catch(() => []),
     ]);
+
+    const pageUserIds = (profiles ?? [])
+      .map((profile) => profile?.id)
+      .filter((id) => typeof id === "string" && id.length > 0);
+    const roles =
+      pageUserIds.length > 0
+        ? await restRequest(
+            token,
+            buildPath("/user_roles", {
+              select: "user_id,role",
+              user_id: `in.(${pageUserIds.join(",")})`,
+            }),
+          )
+        : [];
 
     return {
       profiles: profiles ?? [],

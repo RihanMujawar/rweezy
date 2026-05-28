@@ -1,5 +1,7 @@
 [versions]
 androidGradlePlugin = "9.0.1"
+googleServices = "4.4.4"
+firebaseBom = "34.4.0"
 androidxCore = "1.18.0"
 androidxLifecycle = "2.10.0"
 androidxActivity = "1.13.0"
@@ -15,6 +17,8 @@ nav3Core = "1.0.1"
 lifecycleViewmodelNav3 = "2.10.0"
 
 [libraries]
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging-ktx = { module = "com.google.firebase:firebase-messaging-ktx" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "androidxComposeBom" }
@@ -40,5 +44,6 @@ androidx-lifecycle-viewmodel-navigation3 = { module = "androidx.lifecycle:lifecy
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

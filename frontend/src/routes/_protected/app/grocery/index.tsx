@@ -130,9 +130,9 @@ function GroceryStores() {
               key={s.id}
               to="/app/grocery/$storeId"
               params={{ storeId: s.id }}
-              className="overflow-hidden rounded-lg border bg-card transition-transform hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="overflow-hidden rounded-lg border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <div className="aspect-video animate-pulse bg-muted">
+              <div className="aspect-video bg-muted">
                 {s.image_url && (
                   <img src={s.image_url} alt={s.name} className="h-full w-full object-cover" />
                 )}

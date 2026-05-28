@@ -184,6 +184,15 @@ VITE_SUPABASE_PROJECT_ID="your-project-ref"
 MAPBOX_ACCESS_TOKEN="your-mapbox-public-token"
 VITE_MAPBOX_ACCESS_TOKEN="your-mapbox-public-token"
 
+VITE_FIREBASE_API_KEY="your-firebase-api-key"
+VITE_FIREBASE_AUTH_DOMAIN="your-project-id.firebaseapp.com"
+VITE_FIREBASE_PROJECT_ID="your-project-id"
+VITE_FIREBASE_STORAGE_BUCKET="your-project-id.appspot.com"
+VITE_FIREBASE_MESSAGING_SENDER_ID="your-firebase-messaging-sender-id"
+VITE_FIREBASE_APP_ID="your-firebase-web-app-id"
+VITE_FIREBASE_VAPID_KEY="your-web-push-vapid-public-key"
+FCM_SERVER_KEY="your-firebase-server-key"
+
 BACKEND_HOST="127.0.0.1"
 BACKEND_PORT="4000"
 FRONTEND_DEV_URL="http://127.0.0.1:3000"
@@ -250,6 +259,24 @@ http://127.0.0.1:3000
 1. Open the `android/` directory in Android Studio
 2. Sync the project with Gradle files
 3. Run on an emulator or physical device
+
+**Firebase Cloud Messaging (FCM) setup (Android):**
+- Create a Firebase project and add an Android app with package id `com.example.rweezy`
+- Download `google-services.json` and place it in `android/app/google-services.json`
+- In Firebase Console, enable Cloud Messaging
+- For Android 13+, allow notification permission on first app launch
+- Send a test notification from Firebase Console and verify it appears on device
+
+### Web Push Notifications (FCM)
+
+- Web push service worker is available at `frontend/public/firebase-messaging-sw.js`
+- Frontend auto-registers browser tokens after login and sends them to `POST /api/notifications/token`
+- Saved tokens are stored in Supabase table `public.user_push_tokens`
+- Admin test endpoint: `POST /api/admin/notifications/test`
+  - payload with direct token:
+    - `{ "token": "<FCM_TOKEN>", "title": "Test", "body": "Hello from backend" }`
+  - payload with user id:
+    - `{ "user_id": "<auth-user-id>", "title": "Test", "body": "Hello from backend" }`
 
 **Connecting to Development Server:**
 - For Android Emulator (default): Use `http://10.0.2.2:4000` to connect to the backend.

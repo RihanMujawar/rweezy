@@ -36,17 +36,31 @@ type Store = {
 function AdminStores() {
   const { roles } = useAuth();
   const [list, setList] = useState<Store[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const limit = 20;
+  const [refreshing, setRefreshing] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<Store>>({});
 
-  const load = useCallback(async () => {
-    const { stores } = await api.admin.getStores();
-    setList((stores as Store[]) ?? []);
+  const load = useCallback(async (nextPage: number) => {
+    setRefreshing(true);
+    try {
+      const { stores, page: currentPage, hasNext: nextHasNext } = await api.admin.getStores({
+        page: nextPage,
+        limit,
+      });
+      setList((stores as Store[]) ?? []);
+      setPage(currentPage ?? nextPage);
+      setHasNext(Boolean(nextHasNext));
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    load(page);
+  }, [load, page]);
 
   const save = async () => {
     if (!editing.name) return toast.error("Name required");
@@ -66,7 +80,7 @@ function AdminStores() {
       toast.success("Saved");
       setOpen(false);
       setEditing({});
-      load();
+      load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save store");
     }
@@ -76,7 +90,11 @@ function AdminStores() {
     if (!confirm("Delete this store and all its items?")) return;
     try {
       await api.admin.deleteStore(id);
-      load();
+      if (list.length === 1 && page > 1) {
+        setPage((prev) => prev - 1);
+      } else {
+        load(page);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete store");
     }
@@ -86,7 +104,10 @@ function AdminStores() {
     <RoleGate allowed={["admin"]} hasAny={roles.includes("admin")}>
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Grocery stores</h1>
+          <div>
+            <h1 className="text-2xl font-bold">Grocery stores</h1>
+            {refreshing && <p className="text-xs text-muted-foreground">Refreshing list...</p>}
+          </div>
           <Dialog
             open={open}
             onOpenChange={(o) => {
@@ -200,6 +221,29 @@ function AdminStores() {
               </Button>
             </div>
           ))}
+          <div className="flex items-center justify-between rounded-xl border bg-card p-3">
+            <div className="text-sm text-muted-foreground">
+              Page {page} (20 per request)
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1 || refreshing}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasNext || refreshing}
+                onClick={() => setPage((prev) => prev + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </RoleGate>

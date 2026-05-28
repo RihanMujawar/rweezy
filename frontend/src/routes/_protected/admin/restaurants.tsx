@@ -44,32 +44,45 @@ function AdminRestaurants() {
   const [list, setList] = useState<Restaurant[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [managerRoles, setManagerRoles] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const limit = 20;
+  const [refreshing, setRefreshing] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<Restaurant>>({});
   const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
 
-  const load = useCallback(async () => {
-    const {
-      restaurants: rests,
-      profiles: profs,
-      roles: rRoles,
-      orders,
-    } = await api.admin.getRestaurants();
-    setList((rests as Restaurant[]) ?? []);
-    const profMap: Record<string, Profile> = {};
-    (profs as Profile[] | null)?.forEach((p) => (profMap[p.id] = p));
-    setProfiles(profMap);
-    setManagerRoles(new Set((rRoles as RoleRow[] | null)?.map((r) => r.user_id) ?? []));
-    const counts: Record<string, number> = {};
-    (orders as { restaurant_id: string }[] | null)?.forEach((o) => {
-      counts[o.restaurant_id] = (counts[o.restaurant_id] ?? 0) + 1;
-    });
-    setOrderCounts(counts);
+  const load = useCallback(async (nextPage: number) => {
+    setRefreshing(true);
+    try {
+      const {
+        restaurants: rests,
+        profiles: profs,
+        roles: rRoles,
+        orders,
+        page: currentPage,
+        hasNext: nextHasNext,
+      } = await api.admin.getRestaurants({ page: nextPage, limit });
+      setList((rests as Restaurant[]) ?? []);
+      setPage(currentPage ?? nextPage);
+      setHasNext(Boolean(nextHasNext));
+      const profMap: Record<string, Profile> = {};
+      (profs as Profile[] | null)?.forEach((p) => (profMap[p.id] = p));
+      setProfiles(profMap);
+      setManagerRoles(new Set((rRoles as RoleRow[] | null)?.map((r) => r.user_id) ?? []));
+      const counts: Record<string, number> = {};
+      (orders as { restaurant_id: string }[] | null)?.forEach((o) => {
+        counts[o.restaurant_id] = (counts[o.restaurant_id] ?? 0) + 1;
+      });
+      setOrderCounts(counts);
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    load(page);
+  }, [load, page]);
 
   const save = async () => {
     if (!editing.name) return toast.error("Name required");
@@ -89,7 +102,7 @@ function AdminRestaurants() {
       toast.success("Saved");
       setOpen(false);
       setEditing({});
-      load();
+      load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save restaurant");
     }
@@ -99,7 +112,11 @@ function AdminRestaurants() {
     if (!confirm("Delete this restaurant and all its menu items?")) return;
     try {
       await api.admin.deleteRestaurant(id);
-      load();
+      if (list.length === 1 && page > 1) {
+        setPage((prev) => prev - 1);
+      } else {
+        load(page);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete restaurant");
     }
@@ -109,7 +126,7 @@ function AdminRestaurants() {
     try {
       await api.admin.toggleRestaurant(r.id, !r.is_open);
       toast.success(`Restaurant ${!r.is_open ? "activated" : "deactivated"}`);
-      load();
+      load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update restaurant");
     }
@@ -121,7 +138,7 @@ function AdminRestaurants() {
     try {
       await api.admin.revokeRestaurantManager(r.id, r.manager_id);
       toast.success("Manager access revoked");
-      load();
+      load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to revoke manager");
     }
@@ -133,7 +150,7 @@ function AdminRestaurants() {
     try {
       await api.admin.grantRestaurantManager(restaurantId, uid);
       toast.success("Manager role granted");
-      load();
+      load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to grant manager role");
     }
@@ -148,6 +165,7 @@ function AdminRestaurants() {
             <p className="text-sm text-muted-foreground">
               Review listings, activate/deactivate, and manage hotel manager access.
             </p>
+            {refreshing && <p className="text-xs text-muted-foreground">Refreshing list...</p>}
           </div>
           <Dialog
             open={open}
@@ -319,6 +337,29 @@ function AdminRestaurants() {
               </div>
             );
           })}
+          <div className="flex items-center justify-between rounded-xl border bg-card p-3">
+            <div className="text-sm text-muted-foreground">
+              Page {page} (20 per request)
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1 || refreshing}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasNext || refreshing}
+                onClick={() => setPage((prev) => prev + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </RoleGate>
