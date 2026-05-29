@@ -10,7 +10,7 @@ import { RoleGate } from "@/components/coming-soon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { Bell, BellOff, Clock, IndianRupee, Phone } from "lucide-react";
-import { useLiveAlerts } from "@/hooks/use-live-alerts";
+import { useAlertsPreference } from "@/hooks/use-alerts-preference";
 
 export const Route = createFileRoute("/_protected/hotel/orders")({
   component: HotelOrders,
@@ -61,7 +61,7 @@ function HotelOrders() {
   const [history, setHistory] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const { alertsEnabled, setAlertsEnabled } = useAlertsPreference();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState("active");
 
@@ -96,12 +96,6 @@ function HotelOrders() {
     const timer = window.setInterval(load, 12000);
     return () => window.clearInterval(timer);
   }, [user, load]);
-
-  useLiveAlerts({
-    items: orders.filter((order) => order.status === "pending"),
-    label: "restaurant order",
-    enabled: alertsEnabled,
-  });
 
   useEffect(() => {
     if (activeTab === "history" && history.length === 0) loadHistory();

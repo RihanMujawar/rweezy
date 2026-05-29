@@ -52,13 +52,19 @@ function bindForegroundListener() {
   foregroundBound = true;
 }
 
+/** Bind FCM foreground handler app-wide (safe to call on every protected page). */
+export function ensureForegroundMessageListener() {
+  if (typeof window === "undefined" || !isWebPushConfigured()) return;
+  bindForegroundListener();
+}
+
 export async function registerWebPushForUser() {
   if (typeof window === "undefined") return;
   if (!isWebPushConfigured()) return;
   if (!(await isSupported())) return;
   if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
 
-  bindForegroundListener();
+  ensureForegroundMessageListener();
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return;

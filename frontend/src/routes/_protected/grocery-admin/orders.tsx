@@ -10,7 +10,7 @@ import { RoleGate } from "@/components/coming-soon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { Bell, BellOff, ClipboardList, IndianRupee, PackageCheck, Phone } from "lucide-react";
-import { useLiveAlerts } from "@/hooks/use-live-alerts";
+import { useAlertsPreference } from "@/hooks/use-alerts-preference";
 
 export const Route = createFileRoute("/_protected/grocery-admin/orders")({
   component: GroceryOrders,
@@ -61,7 +61,7 @@ function GroceryOrders() {
   const [history, setHistory] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const { alertsEnabled, setAlertsEnabled } = useAlertsPreference();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState("active");
 
@@ -96,12 +96,6 @@ function GroceryOrders() {
     const timer = window.setInterval(load, 12000);
     return () => window.clearInterval(timer);
   }, [user, load]);
-
-  useLiveAlerts({
-    items: orders.filter((order) => order.status === "pending"),
-    label: "grocery order",
-    enabled: alertsEnabled,
-  });
 
   useEffect(() => {
     if (activeTab === "history" && history.length === 0) loadHistory();

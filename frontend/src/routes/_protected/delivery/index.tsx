@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { RoleGate } from "@/components/coming-soon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
-import { useLiveAlerts } from "@/hooks/use-live-alerts";
+import { useAlertsPreference } from "@/hooks/use-alerts-preference";
 import { Bell, BellOff, Filter } from "lucide-react";
 
 export const Route = createFileRoute("/_protected/delivery/")({
@@ -38,7 +38,7 @@ function DeliveryAvailable() {
   const [food, setFood] = useState<FoodOrder[]>([]);
   const [grocery, setGrocery] = useState<GroceryOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const { alertsEnabled, setAlertsEnabled } = useAlertsPreference();
   const [selectedFood, setSelectedFood] = useState<Set<string>>(new Set());
   const [selectedGrocery, setSelectedGrocery] = useState<Set<string>>(new Set());
   const [minAmount, setMinAmount] = useState(0);
@@ -56,8 +56,6 @@ function DeliveryAvailable() {
     const timer = window.setInterval(load, 12000);
     return () => window.clearInterval(timer);
   }, [load]);
-
-  useLiveAlerts({ items: [...food, ...grocery], label: "delivery job", enabled: alertsEnabled });
 
   const acceptFood = async (id: string) => {
     if (!user) return;

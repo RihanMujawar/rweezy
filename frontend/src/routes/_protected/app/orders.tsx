@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -104,7 +104,6 @@ function MyOrders() {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const statusSnapshot = useRef<Map<string, string>>(new Map());
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -118,20 +117,6 @@ function MyOrders() {
         const nextGrocery = (grocery as GroceryOrder[]) ?? [];
         const nextRides = (rides as Ride[]) ?? [];
         const nextPkgs = (packages as Pkg[]) ?? [];
-        const nextSnapshot = new Map<string, string>();
-        [
-          ...nextFood.map((order) => [`food:${order.id}`, order.status, "Food order"] as const),
-          ...nextGrocery.map(
-            (order) => [`grocery:${order.id}`, order.status, "Grocery order"] as const,
-          ),
-          ...nextRides.map((order) => [`ride:${order.id}`, order.status, "Ride"] as const),
-          ...nextPkgs.map((order) => [`package:${order.id}`, order.status, "Package"] as const),
-        ].forEach(([key, status, label]) => {
-          nextSnapshot.set(key, status);
-          const previous = statusSnapshot.current.get(key);
-          if (previous && previous !== status) toast.info(`${label} is now ${status}`);
-        });
-        statusSnapshot.current = nextSnapshot;
         setFood(nextFood);
         setGrocery(nextGrocery);
         setRides(nextRides);

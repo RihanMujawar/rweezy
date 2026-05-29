@@ -6,6 +6,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { ShellActions } from "@/components/shell-actions";
+import { GlobalNotificationWatcher } from "@/components/global-notification-watcher";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_protected")({
@@ -35,6 +36,7 @@ function ProtectedLayout() {
   return (
     <SidebarProvider>
       <AppModeProvider roles={roles}>
+        <GlobalNotificationWatcher />
         <div className="flex min-h-screen w-full bg-transparent">
           <AppSidebar />
           <div className="flex flex-1 flex-col bg-transparent">
