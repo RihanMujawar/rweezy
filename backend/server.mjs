@@ -341,6 +341,108 @@ async function getChatContext(token, user, kind, serviceId) {
   return { kind: normalizedKind, row, partnerColumn: target.partnerColumn };
 }
 
+function chatKindLabel(kind) {
+  return (
+    {
+      ride: "Ride chat",
+      package: "Package chat",
+      food: "Food order chat",
+      grocery: "Grocery order chat",
+    }[kind] ?? "Chat"
+  );
+}
+
+function getChatRecipientUserIds(context, senderId) {
+  const { row, partnerColumn } = context;
+  const recipients = [];
+  if (row.customer_id && row.customer_id !== senderId) {
+    recipients.push(row.customer_id);
+  }
+  const partnerId = row[partnerColumn];
+  if (partnerId && partnerId !== senderId) {
+    recipients.push(partnerId);
+  }
+  return recipients;
+}
+
+async function getProfileDisplayName(userId) {
+  const rows = await serviceRoleRestRequest(
+    buildPath("/profiles", {
+      select: "full_name",
+      id: `eq.${userId}`,
+      limit: "1",
+    }),
+  );
+  return cleanText(firstRow(rows)?.full_name) || "Someone";
+}
+
+async function getPushTokensForUsers(userIds) {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return [];
+
+  const rows = await serviceRoleRestRequest(
+    buildPath("/user_push_tokens", {
+      select: "token,user_id",
+      user_id: `in.(${uniqueIds.join(",")})`,
+      order: "updated_at.desc",
+      limit: "50",
+    }),
+  );
+
+  const seen = new Set();
+  return (rows ?? [])
+    .map((row) => trimToken(row.token))
+    .filter((token) => {
+      if (!token || seen.has(token)) return false;
+      seen.add(token);
+      return true;
+    });
+}
+
+async function trySendFcmNotification(params) {
+  if (!env.fcmServerKey) return { ok: false, skipped: true };
+  try {
+    await sendFcmNotification(params);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed to send push notification",
+    };
+  }
+}
+
+async function notifyChatRecipients({ senderId, context, kind, serviceId, messageBody }) {
+  const recipientIds = getChatRecipientUserIds(context, senderId);
+  if (recipientIds.length === 0) return;
+
+  const [senderName, tokens] = await Promise.all([
+    getProfileDisplayName(senderId),
+    getPushTokensForUsers(recipientIds),
+  ]);
+  if (tokens.length === 0) return;
+
+  const preview =
+    messageBody.length > 120 ? `${messageBody.slice(0, 117)}...` : messageBody;
+  const title = `${senderName} · ${chatKindLabel(kind)}`;
+
+  await Promise.all(
+    tokens.map((token) =>
+      trySendFcmNotification({
+        token,
+        title,
+        body: preview,
+        data: {
+          type: "chat",
+          service_kind: kind,
+          service_id: serviceId,
+          sender_id: senderId,
+        },
+      }),
+    ),
+  );
+}
+
 function normalizeSignupRole(role) {
   return ["customer", "hotel_manager", "grocery_manager", "delivery_boy", "rider"].includes(role)
     ? role
@@ -1533,7 +1635,7 @@ const routes = [
     async ({ token, user, match, body }) => {
       const kind = match[1];
       const serviceId = decodeURIComponent(match[2]);
-      await getChatContext(token, user, kind, serviceId);
+      const context = await getChatContext(token, user, kind, serviceId);
 
       const messageBody = cleanText(body.message);
       if (!messageBody) {
@@ -1555,7 +1657,22 @@ const routes = [
         },
       });
 
-      return { message: firstRow(rows) };
+      const saved = firstRow(rows);
+      void notifyChatRecipients({
+        senderId: user.id,
+        context,
+        kind,
+        serviceId,
+        messageBody,
+      }).catch((error) => {
+        logEvent("warn", "chat_push_notify_failed", {
+          serviceId,
+          kind,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+
+      return { message: saved };
     },
   ),
   route("POST", /^\/api\/rides$/, async ({ token, user, body }) => {
