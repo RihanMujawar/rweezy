@@ -1,11 +1,15 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PickerMap, distanceKm, type LatLng } from "@/components/route-map";
+import { PickerMap, type LatLng } from "@/components/lazy-route-map";
+import { distanceKm } from "@/lib/geo";
+import { OrderReceipt, type ReceiptData } from "@/components/order-receipt";
+import { SavedAddressPicker } from "@/components/saved-address-picker";
+import { PriceBreakdown } from "@/components/price-breakdown";
 import { toast } from "sonner";
 import { Package as PackageIcon, Bike, Zap, Car } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,7 +20,14 @@ export const Route = createFileRoute("/_protected/app/package")({
 });
 
 type Size = "small" | "medium" | "large";
-const SIZES: { id: Size; label: string; icon: typeof Bike; rate: number; base: number; desc: string }[] = [
+const SIZES: {
+  id: Size;
+  label: string;
+  icon: typeof Bike;
+  rate: number;
+  base: number;
+  desc: string;
+}[] = [
   { id: "small", label: "Small", icon: Bike, rate: 10, base: 30, desc: "Documents, food" },
   { id: "medium", label: "Medium", icon: Zap, rate: 14, base: 50, desc: "Up to 10 kg" },
   { id: "large", label: "Large", icon: Car, rate: 20, base: 80, desc: "Up to 25 kg" },
@@ -24,7 +35,6 @@ const SIZES: { id: Size; label: string; icon: typeof Bike; rate: number; base: n
 
 function SendPackage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
   const [pickup, setPickup] = useState<LatLng | null>(null);
   const [drop, setDrop] = useState<LatLng | null>(null);
@@ -35,8 +45,13 @@ function SendPackage() {
   const [notes, setNotes] = useState("");
   const [size, setSize] = useState<Size>("small");
   const [placing, setPlacing] = useState(false);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
   useEffect(() => setMounted(true), []);
+
+  if (receipt) {
+    return <OrderReceipt receipt={receipt} />;
+  }
 
   const km = pickup && drop ? distanceKm(pickup, drop) : 0;
   const fareFor = (s: Size) => {
@@ -49,10 +64,12 @@ function SendPackage() {
     if (!user) return;
     if (!pickup || !drop) return toast.error("Drop pickup and drop pins on the map");
     if (!pickupAddress.trim() || !dropAddress.trim()) return toast.error("Fill addresses");
-    if (!receiverName.trim() || !receiverPhone.trim()) return toast.error("Fill receiver name & phone");
+    if (!receiverName.trim() || !receiverPhone.trim())
+      return toast.error("Fill receiver name & phone");
     setPlacing(true);
+    const platformFee = Math.max(15, Math.round(fare * 0.12));
     try {
-      await api.packages.create({
+      const { packageDelivery } = await api.packages.create({
         pickup_lat: pickup.lat,
         pickup_lng: pickup.lng,
         pickup_address: pickupAddress,
@@ -65,13 +82,30 @@ function SendPackage() {
         receiver_phone: receiverPhone,
         notes,
       });
+      const placed = packageDelivery as {
+        id?: string;
+        delivery_pin?: string;
+        estimated_delivery_at?: string;
+      };
+      setReceipt({
+        id: placed.id,
+        title: "Package requested",
+        total: fare + platformFee,
+        address: `${pickupAddress} → ${dropAddress}`,
+        deliveryPin: placed.delivery_pin,
+        estimatedAt: placed.estimated_delivery_at,
+        trackKind: "package",
+        lines: [
+          { label: `Delivery (${size})`, amount: fare },
+          { label: "Platform fee (demo)", amount: platformFee },
+        ],
+        paymentNote: "Cash on delivery (demo)",
+      });
     } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to request pickup");
+    } finally {
       setPlacing(false);
-      return toast.error(error instanceof Error ? error.message : "Failed to request pickup");
     }
-    setPlacing(false);
-    toast.success("Package requested! Looking for nearby riders.");
-    navigate({ to: "/app/orders" });
   };
 
   return (
@@ -87,7 +121,19 @@ function SendPackage() {
 
       <div className="mt-4">
         {mounted ? (
-          <PickerMap pickup={pickup} drop={drop} onChange={({ pickup: p, drop: d }) => { setPickup(p); setDrop(d); }} height={360} />
+          <PickerMap
+            pickup={pickup}
+            drop={drop}
+            onChange={({ pickup: p, drop: d }) => {
+              setPickup(p);
+              setDrop(d);
+            }}
+            onAddressChange={(kind, address) => {
+              if (kind === "pickup") setPickupAddress(address);
+              else setDropAddress(address);
+            }}
+            height={360}
+          />
         ) : (
           <div className="h-[360px] rounded-xl border bg-muted" />
         )}
@@ -140,7 +186,11 @@ function SendPackage() {
 
       <div className="mt-4 space-y-2">
         <Label>Notes (optional)</Label>
-        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Item details / instructions" />
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Item details / instructions"
+        />
       </div>
 
       <div className="mt-6 rounded-2xl border bg-card p-6">
@@ -157,6 +207,9 @@ function SendPackage() {
         <Button className="mt-4 w-full" onClick={book} disabled={placing || !pickup || !drop}>
           {placing ? "Requesting..." : "Request pickup"}
         </Button>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Payment: cash/manual demo on delivery.
+        </p>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
+import { registerWebPushForUser } from "@/lib/fcm";
 
 export type AppRole =
   | "customer"
@@ -47,6 +48,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshAuth();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    registerWebPushForUser().catch(() => {
+      // Permission denied / unsupported browsers / transient issues should not block auth flow.
+    });
+  }, [user?.id]);
 
   const signOut = async () => {
     await api.auth.logout();

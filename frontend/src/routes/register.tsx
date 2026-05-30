@@ -1,17 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { fieldErrors, registerSchema } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/register")({
@@ -23,75 +17,181 @@ function RegisterPage() {
   const { refreshAuth } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
+  const [phoneSuffix, setPhoneSuffix] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"customer" | "hotel_manager" | "delivery_boy">("customer");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const hasStarted = fullName || email || phoneSuffix || password || confirmPassword;
+    if (!hasStarted) return;
+    const parsed = registerSchema.safeParse({
+      fullName,
+      email,
+      phone: `${countryCode}${phoneSuffix.replace(/\D/g, "")}`,
+      password,
+      confirmPassword,
+      requestedRole: "customer",
+    });
+    setErrors(parsed.success ? {} : fieldErrors(parsed.error));
+  }, [confirmPassword, countryCode, email, fullName, password, phoneSuffix]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const fullPhone = `${countryCode}${phoneSuffix.replace(/\D/g, "")}`;
+    const parsed = registerSchema.safeParse({
+      fullName,
+      email,
+      phone: fullPhone,
+      password,
+      confirmPassword,
+      requestedRole: "customer",
+    });
+
+    if (!parsed.success) {
+      const nextErrors = fieldErrors(parsed.error);
+      setErrors(nextErrors);
+      toast.error(Object.values(nextErrors)[0] ?? "Please check the form");
+      return;
+    }
+
+    setErrors({});
     setLoading(true);
     try {
       const result = await api.auth.register({
-        full_name: fullName,
-        email,
+        full_name: parsed.data.fullName,
+        email: parsed.data.email.toLowerCase(),
+        phone: parsed.data.phone,
         password,
-        role,
       });
+
       if (result.authenticated) {
         await refreshAuth();
+        toast.success("Account created!");
+        navigate({ to: "/app" });
+      } else {
+        toast.success("Account created! You can now sign in.");
+        navigate({ to: "/login" });
       }
-      setLoading(false);
-      toast.success(result.authenticated ? "Account created!" : "Account created! You can now sign in.");
-      navigate({ to: result.authenticated ? "/app" : "/login" });
     } catch (error) {
-      setLoading(false);
       toast.error(error instanceof Error ? error.message : "Failed to create account");
-      return;
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
-      <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-sm">
-        <Link to="/" className="text-xl font-bold">Zoomly</Link>
-        <h1 className="mt-6 text-2xl font-semibold">Create your account</h1>
-        <p className="text-sm text-muted-foreground">Choose your role and create your account.</p>
+    <div className="flex min-h-screen items-center justify-center bg-transparent px-4 py-12 animate-fade-in-up">
+      <div className="w-full max-w-lg rounded-2xl border bg-card/60 p-8 shadow-2xl backdrop-blur-xl">
+        <Link 
+          to="/" 
+          className="text-2xl font-extrabold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent hover:opacity-90 transition-opacity"
+        >
+          Rweezy
+        </Link>
+        <h1 className="mt-6 text-2xl font-bold tracking-tight">Create your customer account</h1>
+        <p className="text-sm text-muted-foreground">
+          Use this page for a normal customer account. Other roles have a separate signup path.
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="space-y-2">
-            <Label>Register as</Label>
-            <Select value={role} onValueChange={(value) => setRole(value as typeof role)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="customer">User</SelectItem>
-                <SelectItem value="hotel_manager">Restaurant</SelectItem>
-                <SelectItem value="delivery_boy">Delivery boy</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="fullName">Full name</Label>
-            <Input id="fullName" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+            <Input
+              id="fullName"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              autoFocus
+              aria-invalid={Boolean(errors.fullName)}
+            />
+            {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              aria-invalid={Boolean(errors.email)}
+            />
+            {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="password">Password (min 6 characters)</Label>
-            <Input id="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Label htmlFor="phone">Phone number</Label>
+            <div className="flex gap-2">
+              <Input
+                aria-label="Country code"
+                value={countryCode}
+                onChange={(e) =>
+                  setCountryCode(e.target.value.replace(/[^\d+]/g, "").slice(0, 5) || "+")
+                }
+                className="w-20"
+                aria-invalid={Boolean(errors.phone)}
+              />
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="9876543210"
+                value={phoneSuffix}
+                onChange={(e) => setPhoneSuffix(e.target.value.replace(/\D/g, "").slice(0, 15))}
+                className="flex-1"
+                aria-invalid={Boolean(errors.phone)}
+              />
+            </div>
+            {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
           </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={Boolean(errors.password)}
+              />
+              {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                aria-invalid={Boolean(errors.confirmPassword)}
+              />
+              {errors.confirmPassword && (
+                <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+              )}
+            </div>
+          </div>
+
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Creating account..." : "Sign up"}
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <Link to="/login" className="font-medium text-primary hover:underline">Sign in</Link>
-        </p>
+        <div className="mt-6 space-y-2 text-center text-sm text-muted-foreground">
+          <p>
+            Need rider, delivery, restaurant, or grocery access?{" "}
+            <Link to="/register-partner" className="font-medium text-primary hover:underline">
+              Use the partner signup page
+            </Link>
+          </p>
+          <p>
+            Already have an account?{" "}
+            <Link to="/login" className="font-medium text-primary hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { RoleGate } from "@/components/coming-soon";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RouteMap } from "@/components/route-map";
+import { RouteMap } from "@/components/lazy-route-map";
 import { useRiderBroadcast } from "@/lib/use-rider-broadcast";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -35,7 +35,10 @@ type Job = {
   customer_id: string;
 };
 
-const NEXT_STATUS: Record<string, { label: string; next: "accepted" | "started" | "completed" } | null> = {
+const NEXT_STATUS: Record<
+  string,
+  { label: string; next: "accepted" | "started" | "completed" } | null
+> = {
   accepted: { label: "Start trip (picked up)", next: "started" },
   started: { label: "Mark as completed", next: "completed" },
   completed: null,
@@ -52,7 +55,11 @@ function ActiveRide() {
 
   // Continuously broadcast rider's live location while there is an active job
   const broadcastActive = !!job && job.status !== "completed" && job.status !== "cancelled";
-  useRiderBroadcast(broadcastActive ? table : null, broadcastActive ? job!.id : null, broadcastActive);
+  useRiderBroadcast(
+    broadcastActive ? table : null,
+    broadcastActive ? job!.id : null,
+    broadcastActive,
+  );
 
   useEffect(() => setMounted(true), []);
 
@@ -101,16 +108,23 @@ function ActiveRide() {
   };
 
   return (
-    <RoleGate allowed={["rider", "admin"]} hasAny={roles.includes("rider") || roles.includes("admin")}>
+    <RoleGate
+      allowed={["rider", "admin"]}
+      hasAny={roles.includes("rider") || roles.includes("admin")}
+    >
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold">Active {table === "package_deliveries" ? "package" : "trip"}</h1>
+        <h1 className="text-2xl font-bold">
+          Active {table === "package_deliveries" ? "package" : "trip"}
+        </h1>
 
         {loading ? (
           <p className="mt-4 text-muted-foreground">Loading...</p>
         ) : !job ? (
           <div className="mt-8 rounded-2xl border bg-card p-12 text-center text-muted-foreground">
             <p>No active job.</p>
-            <Button asChild className="mt-4"><Link to="/rider">Find jobs</Link></Button>
+            <Button asChild className="mt-4">
+              <Link to="/rider">Find jobs</Link>
+            </Button>
           </div>
         ) : (
           <>
@@ -127,18 +141,26 @@ function ActiveRide() {
             <div className="mt-4 rounded-2xl border bg-card p-6">
               <div className="flex items-center justify-between">
                 <Badge>{job.status}</Badge>
-                {job.fare_estimate && <span className="font-semibold">₹{Number(job.fare_estimate).toFixed(0)}</span>}
+                {job.fare_estimate && (
+                  <span className="font-semibold">₹{Number(job.fare_estimate).toFixed(0)}</span>
+                )}
               </div>
               <div className="mt-3 space-y-1 text-sm">
-                <p><span className="text-green-600">●</span> Pickup: {job.pickup_address}</p>
-                <p><span className="text-red-600">●</span> Drop: {job.drop_address}</p>
+                <p>
+                  <span className="text-green-600">●</span> Pickup: {job.pickup_address}
+                </p>
+                <p>
+                  <span className="text-red-600">●</span> Drop: {job.drop_address}
+                </p>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {NEXT_STATUS[job.status] && (
                   <Button onClick={advance}>{NEXT_STATUS[job.status]!.label}</Button>
                 )}
                 {job.status !== "completed" && job.status !== "cancelled" && (
-                  <Button variant="outline" onClick={cancel}>Cancel</Button>
+                  <Button variant="outline" onClick={cancel}>
+                    Cancel
+                  </Button>
                 )}
               </div>
             </div>

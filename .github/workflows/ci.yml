@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      # Set to "true" to enable Playwright E2E (requires Supabase + Playwright browser install).
+      RUN_E2E: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci || npm install
+      - run: npm install --prefix backend
+      - run: npm install --prefix frontend
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - run: npm audit --audit-level=high
+      - name: Install Playwright browsers (optional)
+        if: env.RUN_E2E == 'true'
+        run: npx playwright install chromium
+      - name: Seed demo data (optional)
+        if: env.RUN_E2E == 'true'
+        run: npm run seed:demo
+      - name: Run Playwright E2E (optional)
+        if: env.RUN_E2E == 'true'
+        run: npm run test:e2e

@@ -40,27 +40,39 @@ async function apiRequest<T>(
 
 export const api = {
   auth: {
-    login: (payload: { email: string; password: string }) =>
-      apiRequest<{ user: { id: string; email?: string | null }; roles: string[] }>("/api/auth/login", {
-        method: "POST",
-        body: payload,
-      }),
+    login: (payload: { email?: string; phone?: string; password: string }) =>
+      apiRequest<{ user: { id: string; email?: string | null }; roles: string[] }>(
+        "/api/auth/login",
+        {
+          method: "POST",
+          body: payload,
+        },
+      ),
     register: (payload: {
       full_name: string;
       email: string;
+      phone: string;
       password: string;
-      role: "customer" | "hotel_manager" | "delivery_boy";
+      role?: string;
+      requested_role?: string;
+      business_name?: string;
+      role_message?: string;
     }) =>
       apiRequest<{
         user: { id: string; email?: string | null } | null;
         roles: string[];
         authenticated: boolean;
+        roleRequestPending?: boolean;
+        roleRequestWarning?: string | null;
       }>("/api/auth/register", {
         method: "POST",
         body: payload,
       }),
     logout: () => apiRequest<{ ok: true }>("/api/auth/logout", { method: "POST" }),
-    getMe: () => apiRequest<{ user: { id: string; email?: string | null } | null; roles: string[] }>("/api/auth/me"),
+    getMe: () =>
+      apiRequest<{ user: { id: string; email?: string | null } | null; roles: string[] }>(
+        "/api/auth/me",
+      ),
   },
 
   map: {
@@ -71,12 +83,59 @@ export const api = {
   },
 
   profile: {
-    get: () => apiRequest<{ profile: { full_name?: string | null; phone?: string | null } | null }>("/api/profile"),
+    get: () =>
+      apiRequest<{ profile: { full_name?: string | null; phone?: string | null } | null }>(
+        "/api/profile",
+      ),
     update: (payload: { full_name: string; phone: string }) =>
-      apiRequest<{ profile: { full_name?: string | null; phone?: string | null } | null }>("/api/profile", {
-        method: "PUT",
+      apiRequest<{ profile: { full_name?: string | null; phone?: string | null } | null }>(
+        "/api/profile",
+        {
+          method: "PUT",
+          body: payload,
+        },
+      ),
+    getAddresses: () => apiRequest<{ addresses: unknown[] }>("/api/profile/addresses"),
+    addAddress: (payload: {
+      label: string;
+      address: string;
+      lat?: number | null;
+      lng?: number | null;
+      is_default?: boolean;
+    }) =>
+      apiRequest<{ address: unknown }>("/api/profile/addresses", { method: "POST", body: payload }),
+    deleteAddress: (id: string) =>
+      apiRequest<{ ok: true }>(`/api/profile/addresses/${id}`, { method: "DELETE" }),
+  },
+
+  notifications: {
+    saveToken: (payload: {
+      token: string;
+      platform?: "web" | "android" | "ios";
+      user_agent?: string;
+      device_label?: string;
+    }) => apiRequest<{ pushToken: unknown }>("/api/notifications/token", { method: "POST", body: payload }),
+    sendTest: (payload: {
+      token?: string;
+      user_id?: string;
+      title?: string;
+      body?: string;
+      data?: Record<string, string>;
+    }) =>
+      apiRequest<{
+        sent: number;
+        failed: number;
+        results: Array<{ token: string; ok: boolean; error?: string }>;
+      }>("/api/admin/notifications/test", {
+        method: "POST",
         body: payload,
       }),
+  },
+
+  roleRequests: {
+    getMine: () => apiRequest<{ requests: unknown[] }>("/api/role-requests"),
+    create: (payload: { requested_role: string; business_name?: string; message?: string }) =>
+      apiRequest<{ request: unknown }>("/api/role-requests", { method: "POST", body: payload }),
   },
 
   liveLocation: {
@@ -92,11 +151,16 @@ export const api = {
     getRestaurants: () =>
       apiRequest<{ restaurants: unknown[]; location: null }>("/api/catalog/restaurants"),
     getRestaurant: (restaurantId: string) =>
-      apiRequest<{ restaurant: unknown | null; items: unknown[] }>(`/api/catalog/restaurants/${restaurantId}`),
-    getStores: () =>
-      apiRequest<{ stores: unknown[]; location: null }>("/api/catalog/stores"),
+      apiRequest<{ restaurant: unknown | null; items: unknown[] }>(
+        `/api/catalog/restaurants/${restaurantId}`,
+      ),
+    getStores: () => apiRequest<{ stores: unknown[]; location: null }>("/api/catalog/stores"),
     getStore: (storeId: string) =>
       apiRequest<{ store: unknown | null; items: unknown[] }>(`/api/catalog/stores/${storeId}`),
+    getPopularFoodItems: () =>
+      apiRequest<{ items: any[] }>("/api/catalog/items/food"),
+    getPopularGroceryItems: () =>
+      apiRequest<{ items: any[] }>("/api/catalog/items/grocery"),
   },
 
   orders: {
@@ -107,6 +171,8 @@ export const api = {
       delivery_lng: number;
       notes: string;
       total: number;
+      payment_method?: string;
+      contactless_delivery?: boolean;
       items: { id: string; name: string; price: number; quantity: number }[];
     }) => apiRequest<{ order: unknown }>("/api/orders/food", { method: "POST", body: payload }),
     placeGrocery: (payload: {
@@ -116,10 +182,18 @@ export const api = {
       delivery_lng: number;
       notes: string;
       total: number;
+      payment_method?: string;
       items: { id: string; name: string; price: number; quantity: number }[];
     }) => apiRequest<{ order: unknown }>("/api/orders/grocery", { method: "POST", body: payload }),
     getMine: () =>
-      apiRequest<{ food: unknown[]; grocery: unknown[]; rides: unknown[]; packages: unknown[] }>("/api/orders/me"),
+      apiRequest<{ food: unknown[]; grocery: unknown[]; rides: unknown[]; packages: unknown[] }>(
+        "/api/orders/me",
+      ),
+    cancel: (kind: "ride" | "package" | "food" | "grocery", id: string, reason: string) =>
+      apiRequest<{ row: unknown }>(`/api/orders/${kind}/${id}/cancel`, {
+        method: "POST",
+        body: { reason },
+      }),
   },
 
   track: {
@@ -151,6 +225,7 @@ export const api = {
       fare_estimate: number;
       vehicle_type: string;
       notes: string;
+      payment_method?: string;
     }) => apiRequest<{ ride: unknown }>("/api/rides", { method: "POST", body: payload }),
   },
 
@@ -167,7 +242,9 @@ export const api = {
       receiver_name: string;
       receiver_phone: string;
       notes: string;
-    }) => apiRequest<{ packageDelivery: unknown }>("/api/packages", { method: "POST", body: payload }),
+      payment_method?: string;
+    }) =>
+      apiRequest<{ packageDelivery: unknown }>("/api/packages", { method: "POST", body: payload }),
   },
 
   admin: {
@@ -180,14 +257,54 @@ export const api = {
         packages: number;
         stores: number;
       }>("/api/admin/stats"),
-    getRestaurants: () =>
-      apiRequest<{ restaurants: unknown[]; profiles: unknown[]; roles: unknown[]; orders: unknown[] }>(
-        "/api/admin/restaurants",
-      ),
+    getHealth: () =>
+      apiRequest<{
+        pendingRoleRequests: number;
+        foodOrdersNeedingAttention: number;
+        groceryOrdersNeedingAttention: number;
+        readyFoodWithoutRider: number;
+      }>("/api/admin/health"),
+    getAnalytics: () =>
+      apiRequest<{
+        restaurantIncome: unknown[];
+        groceryStoreIncome: unknown[];
+        deliveryBoys: unknown[];
+        totals: {
+          restaurantTodayIncome: number;
+          restaurantMonthIncome: number;
+          groceryTodayIncome: number;
+          groceryMonthIncome: number;
+          deliveryBoys: number;
+          deliveriesToday: number;
+          deliveriesMonth: number;
+          trackedKm: number;
+        };
+      }>("/api/admin/analytics"),
+    getRestaurants: (params?: { page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.page) query.set("page", String(params.page));
+      if (params?.limit) query.set("limit", String(params.limit));
+      const qs = query.toString();
+      return apiRequest<{
+        restaurants: unknown[];
+        profiles: unknown[];
+        roles: unknown[];
+        orders: unknown[];
+        page: number;
+        limit: number;
+        hasNext: boolean;
+      }>(`/api/admin/restaurants${qs ? `?${qs}` : ""}`);
+    },
     createRestaurant: (payload: Record<string, unknown>) =>
-      apiRequest<{ restaurant: unknown }>("/api/admin/restaurants", { method: "POST", body: payload }),
+      apiRequest<{ restaurant: unknown }>("/api/admin/restaurants", {
+        method: "POST",
+        body: payload,
+      }),
     updateRestaurant: (id: string, payload: Record<string, unknown>) =>
-      apiRequest<{ restaurant: unknown }>(`/api/admin/restaurants/${id}`, { method: "PUT", body: payload }),
+      apiRequest<{ restaurant: unknown }>(`/api/admin/restaurants/${id}`, {
+        method: "PUT",
+        body: payload,
+      }),
     deleteRestaurant: (id: string) =>
       apiRequest<{ ok: true }>(`/api/admin/restaurants/${id}`, { method: "DELETE" }),
     toggleRestaurant: (id: string, is_open: boolean) =>
@@ -205,51 +322,112 @@ export const api = {
         method: "POST",
         body: { user_id },
       }),
-    getStores: () => apiRequest<{ stores: unknown[] }>("/api/admin/stores"),
+    getStores: (params?: { page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.page) query.set("page", String(params.page));
+      if (params?.limit) query.set("limit", String(params.limit));
+      const qs = query.toString();
+      return apiRequest<{ stores: unknown[]; page: number; limit: number; hasNext: boolean }>(
+        `/api/admin/stores${qs ? `?${qs}` : ""}`,
+      );
+    },
     createStore: (payload: Record<string, unknown>) =>
       apiRequest<{ store: unknown }>("/api/admin/stores", { method: "POST", body: payload }),
     updateStore: (id: string, payload: Record<string, unknown>) =>
       apiRequest<{ store: unknown }>(`/api/admin/stores/${id}`, { method: "PUT", body: payload }),
-    deleteStore: (id: string) => apiRequest<{ ok: true }>(`/api/admin/stores/${id}`, { method: "DELETE" }),
-    getUsers: () => apiRequest<{ profiles: unknown[]; roles: unknown[] }>("/api/admin/users"),
+    deleteStore: (id: string) =>
+      apiRequest<{ ok: true }>(`/api/admin/stores/${id}`, { method: "DELETE" }),
+    getUsers: (params?: { search?: string; page?: number; limit?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.search) query.set("search", params.search);
+      if (params?.page) query.set("page", String(params.page));
+      if (params?.limit) query.set("limit", String(params.limit));
+      const qs = query.toString();
+      return apiRequest<{
+        profiles: unknown[];
+        roles: unknown[];
+        roleRequests: unknown[];
+        page: number;
+        limit: number;
+        total: number;
+      }>(`/api/admin/users${qs ? `?${qs}` : ""}`);
+    },
+    getCommissions: () =>
+      apiRequest<{ commissions: { restaurant: number; grocery: number; delivery: number } }>(
+        "/api/admin/commissions",
+      ),
+    saveCommissions: (payload: { restaurant: number; grocery: number; delivery: number }) =>
+      apiRequest<{ commissions: { restaurant: number; grocery: number; delivery: number } }>(
+        "/api/admin/commissions",
+        { method: "PUT", body: payload },
+      ),
+    getCatalogSettings: () =>
+      apiRequest<{
+        radius_km: number;
+        limits: { min_km: number; max_km: number; default_km: number };
+      }>("/api/admin/catalog-settings"),
+    saveCatalogSettings: (payload: { radius_km: number }) =>
+      apiRequest<{
+        radius_km: number;
+        limits: { min_km: number; max_km: number; default_km: number };
+      }>("/api/admin/catalog-settings", { method: "PUT", body: payload }),
     toggleRole: (userId: string, role: string, has_role: boolean) =>
       apiRequest<{ ok: true }>(`/api/admin/users/${userId}/roles/toggle`, {
         method: "POST",
         body: { role, has_role },
       }),
+    reviewRoleRequest: (id: string, decision: "approved" | "rejected") =>
+      apiRequest<{ request: unknown }>(`/api/admin/role-requests/${id}/review`, {
+        method: "POST",
+        body: { decision },
+      }),
   },
 
   hotel: {
     getDashboard: () =>
-      apiRequest<{ restaurant: unknown | null; stats: { total: number; pending: number; today: number } }>(
-        "/api/hotel/dashboard",
-      ),
+      apiRequest<{
+        restaurant: unknown | null;
+        stats: { total: number; pending: number; today: number };
+      }>("/api/hotel/dashboard"),
     saveRestaurant: (payload: Record<string, unknown>) =>
-      apiRequest<{ restaurant: unknown | null }>("/api/hotel/restaurant", { method: "PUT", body: payload }),
+      apiRequest<{ restaurant: unknown | null }>("/api/hotel/restaurant", {
+        method: "PUT",
+        body: payload,
+      }),
     getMenu: () => apiRequest<{ restaurantId: string | null; items: unknown[] }>("/api/hotel/menu"),
     createMenuItem: (payload: Record<string, unknown>) =>
       apiRequest<{ item: unknown }>("/api/hotel/menu", { method: "POST", body: payload }),
     updateMenuItem: (id: string, payload: Record<string, unknown>) =>
       apiRequest<{ item: unknown }>(`/api/hotel/menu/${id}`, { method: "PUT", body: payload }),
-    deleteMenuItem: (id: string) => apiRequest<{ ok: true }>(`/api/hotel/menu/${id}`, { method: "DELETE" }),
+    deleteMenuItem: (id: string) =>
+      apiRequest<{ ok: true }>(`/api/hotel/menu/${id}`, { method: "DELETE" }),
     toggleMenuItem: (id: string, is_available: boolean) =>
       apiRequest<{ item: unknown }>(`/api/hotel/menu/${id}/toggle`, {
         method: "POST",
         body: { is_available },
       }),
-    getOrders: () => apiRequest<{ restaurantId: string | null; orders: unknown[] }>("/api/hotel/orders"),
+    getOrders: () =>
+      apiRequest<{ restaurantId: string | null; orders: unknown[] }>("/api/hotel/orders"),
     advanceOrder: (id: string, status: string) =>
       apiRequest<{ order: unknown }>(`/api/hotel/orders/${id}/advance`, {
         method: "POST",
         body: { status },
       }),
+    rejectOrder: (id: string, reason?: string) =>
+      apiRequest<{ order: unknown }>(`/api/hotel/orders/${id}/reject`, {
+        method: "POST",
+        body: { reason },
+      }),
+    getHistory: () =>
+      apiRequest<{ restaurantId: string | null; orders: unknown[] }>("/api/hotel/history"),
   },
 
   groceryAdmin: {
     getDashboard: () =>
-      apiRequest<{ store: unknown | null; stats: { total: number; pending: number; today: number } }>(
-        "/api/grocery/dashboard",
-      ),
+      apiRequest<{
+        store: unknown | null;
+        stats: { total: number; pending: number; today: number };
+      }>("/api/grocery/dashboard"),
     saveStore: (payload: Record<string, unknown>) =>
       apiRequest<{ store: unknown | null }>("/api/grocery/store", { method: "PUT", body: payload }),
     getItems: () => apiRequest<{ storeId: string | null; items: unknown[] }>("/api/grocery/items"),
@@ -257,30 +435,53 @@ export const api = {
       apiRequest<{ item: unknown }>("/api/grocery/items", { method: "POST", body: payload }),
     updateItem: (id: string, payload: Record<string, unknown>) =>
       apiRequest<{ item: unknown }>(`/api/grocery/items/${id}`, { method: "PUT", body: payload }),
-    deleteItem: (id: string) => apiRequest<{ ok: true }>(`/api/grocery/items/${id}`, { method: "DELETE" }),
+    deleteItem: (id: string) =>
+      apiRequest<{ ok: true }>(`/api/grocery/items/${id}`, { method: "DELETE" }),
     toggleItem: (id: string, is_available: boolean) =>
       apiRequest<{ item: unknown }>(`/api/grocery/items/${id}/toggle`, {
         method: "POST",
         body: { is_available },
       }),
-    getOrders: () => apiRequest<{ storeId: string | null; orders: unknown[] }>("/api/grocery/orders"),
+    getOrders: () =>
+      apiRequest<{ storeId: string | null; orders: unknown[] }>("/api/grocery/orders"),
     advanceOrder: (id: string, status: string) =>
       apiRequest<{ order: unknown }>(`/api/grocery/orders/${id}/advance`, {
         method: "POST",
         body: { status },
       }),
+    getHistory: () =>
+      apiRequest<{ storeId: string | null; orders: unknown[] }>("/api/grocery/history"),
+    getAlerts: () =>
+      apiRequest<{ lowStock: unknown[]; expiringSoon: unknown[] }>("/api/grocery/alerts"),
+  },
+
+  reviews: {
+    create: (payload: {
+      service_kind: "food" | "grocery" | "ride" | "package";
+      service_id: string;
+      rating: number;
+      comment?: string;
+    }) => apiRequest<{ review: unknown }>("/api/reviews", { method: "POST", body: payload }),
+    list: (serviceKind: string, serviceId: string) =>
+      apiRequest<{ reviews: unknown[] }>(`/api/reviews/${serviceKind}/${serviceId}`),
   },
 
   delivery: {
-    getAvailable: () => apiRequest<{ food: unknown[]; grocery: unknown[] }>("/api/delivery/available"),
+    getAvailable: () =>
+      apiRequest<{ food: unknown[]; grocery: unknown[] }>("/api/delivery/available"),
     getActive: () => apiRequest<{ food: unknown[]; grocery: unknown[] }>("/api/delivery/active"),
     accept: (kind: "food" | "grocery", id: string) =>
       apiRequest<{ order: unknown }>(`/api/delivery/${kind}/${id}/accept`, { method: "POST" }),
-    advance: (kind: "food" | "grocery", id: string, status: string) =>
+    advance: (kind: "food" | "grocery", id: string, status: string, delivery_pin?: string) =>
       apiRequest<{ order: unknown }>(`/api/delivery/${kind}/${id}/advance`, {
         method: "POST",
-        body: { status },
+        body: { status, delivery_pin },
       }),
+    getHistory: () => apiRequest<{ food: unknown[]; grocery: unknown[] }>("/api/delivery/history"),
+    getEarnings: () =>
+      apiRequest<{ todayEarnings: number; monthEarnings: number; totalDeliveries: number }>(
+        "/api/delivery/earnings",
+      ),
   },
 
   rider: {
@@ -297,13 +498,25 @@ export const api = {
     acceptRide: (id: string) =>
       apiRequest<{ ride: unknown }>(`/api/rider/rides/${id}/accept`, { method: "POST" }),
     acceptPackage: (id: string) =>
-      apiRequest<{ packageDelivery: unknown }>(`/api/rider/packages/${id}/accept`, { method: "POST" }),
-    advance: (table: "rides" | "package_deliveries", id: string, status: string) =>
+      apiRequest<{ packageDelivery: unknown }>(`/api/rider/packages/${id}/accept`, {
+        method: "POST",
+      }),
+    advance: (
+      table: "rides" | "package_deliveries",
+      id: string,
+      status: string,
+      delivery_pin?: string,
+    ) =>
       apiRequest<{ job: unknown }>(`/api/rider/${table}/${id}/advance`, {
         method: "POST",
-        body: { status },
+        body: { status, delivery_pin },
       }),
+    getEarnings: () =>
+      apiRequest<{ todayEarnings: number; monthEarnings: number; totalJobs: number }>(
+        "/api/rider/earnings",
+      ),
     cancel: (table: "rides" | "package_deliveries", id: string) =>
       apiRequest<{ job: unknown }>(`/api/rider/${table}/${id}/cancel`, { method: "POST" }),
+    getHistory: () => apiRequest<{ rides: unknown[]; packages: unknown[] }>("/api/rider/history"),
   },
 };

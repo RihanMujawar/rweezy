@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { MessageCircle, Send } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -32,39 +32,33 @@ export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }:
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  const load = async (showLoading = false) => {
-    if (!user || disabled) return;
-    if (showLoading) setLoading(true);
-    try {
-      const data = await api.chat.get(kind, serviceId);
-      setMessages((data.messages as ChatMessage[]) ?? []);
-      setError(null);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to load chat");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const load = useCallback(
+    async (showLoading = false) => {
+      if (!user || disabled) return;
+      if (showLoading) setLoading(true);
+      try {
+        const data = await api.chat.get(kind, serviceId);
+        setMessages((data.messages as ChatMessage[]) ?? []);
+        setError(null);
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Failed to load chat");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [disabled, kind, serviceId, user],
+  );
 
   useEffect(() => {
-    let alive = true;
     if (!user || disabled) {
       setLoading(false);
       return;
     }
 
-    const refresh = async (showLoading = false) => {
-      if (!alive) return;
-      await load(showLoading);
-    };
-
-    refresh(true);
-    const timer = window.setInterval(() => refresh(), 2500);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
-  }, [user, kind, serviceId, disabled]);
+    load(true);
+    const timer = window.setInterval(() => load(), 2500);
+    return () => window.clearInterval(timer);
+  }, [disabled, load, user]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -101,7 +95,9 @@ export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }:
         className="mt-3 flex h-72 flex-col gap-2 overflow-y-auto rounded-lg border bg-background p-3"
       >
         {disabled ? (
-          <p className="m-auto text-center text-sm text-muted-foreground">Chat starts when a partner is assigned.</p>
+          <p className="m-auto text-center text-sm text-muted-foreground">
+            Chat starts when a partner is assigned.
+          </p>
         ) : loading ? (
           <p className="m-auto text-sm text-muted-foreground">Loading chat...</p>
         ) : error ? (
@@ -120,8 +116,14 @@ export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }:
                 )}
               >
                 <p className="whitespace-pre-wrap break-words">{message.body}</p>
-                <p className={cn("mt-1 text-[11px]", mine ? "text-primary-foreground/75" : "text-muted-foreground")}>
-                  {mine ? "You" : "Partner"} · {new Date(message.created_at).toLocaleTimeString([], {
+                <p
+                  className={cn(
+                    "mt-1 text-[11px]",
+                    mine ? "text-primary-foreground/75" : "text-muted-foreground",
+                  )}
+                >
+                  {mine ? "You" : "Partner"} ·{" "}
+                  {new Date(message.created_at).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
@@ -147,7 +149,11 @@ export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }:
           placeholder="Type a message"
           className="min-h-11 resize-none"
         />
-        <Button type="submit" size="icon" disabled={disabled || sending || draft.trim().length === 0}>
+        <Button
+          type="submit"
+          size="icon"
+          disabled={disabled || sending || draft.trim().length === 0}
+        >
           <Send className="h-4 w-4" aria-hidden="true" />
           <span className="sr-only">Send message</span>
         </Button>

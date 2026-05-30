@@ -7,7 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Plus, Trash2, ShieldOff, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/coming-soon";
@@ -38,25 +44,45 @@ function AdminRestaurants() {
   const [list, setList] = useState<Restaurant[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [managerRoles, setManagerRoles] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const limit = 20;
+  const [refreshing, setRefreshing] = useState(false);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<Restaurant>>({});
   const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
 
-  const load = useCallback(async () => {
-    const { restaurants: rests, profiles: profs, roles: rRoles, orders } = await api.admin.getRestaurants();
-    setList((rests as Restaurant[]) ?? []);
-    const profMap: Record<string, Profile> = {};
-    (profs as Profile[] | null)?.forEach((p) => (profMap[p.id] = p));
-    setProfiles(profMap);
-    setManagerRoles(new Set((rRoles as RoleRow[] | null)?.map((r) => r.user_id) ?? []));
-    const counts: Record<string, number> = {};
-    (orders as { restaurant_id: string }[] | null)?.forEach((o) => {
-      counts[o.restaurant_id] = (counts[o.restaurant_id] ?? 0) + 1;
-    });
-    setOrderCounts(counts);
+  const load = useCallback(async (nextPage: number) => {
+    setRefreshing(true);
+    try {
+      const {
+        restaurants: rests,
+        profiles: profs,
+        roles: rRoles,
+        orders,
+        page: currentPage,
+        hasNext: nextHasNext,
+      } = await api.admin.getRestaurants({ page: nextPage, limit });
+      setList((rests as Restaurant[]) ?? []);
+      setPage(currentPage ?? nextPage);
+      setHasNext(Boolean(nextHasNext));
+      const profMap: Record<string, Profile> = {};
+      (profs as Profile[] | null)?.forEach((p) => (profMap[p.id] = p));
+      setProfiles(profMap);
+      setManagerRoles(new Set((rRoles as RoleRow[] | null)?.map((r) => r.user_id) ?? []));
+      const counts: Record<string, number> = {};
+      (orders as { restaurant_id: string }[] | null)?.forEach((o) => {
+        counts[o.restaurant_id] = (counts[o.restaurant_id] ?? 0) + 1;
+      });
+      setOrderCounts(counts);
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load(page);
+  }, [load, page]);
 
   const save = async () => {
     if (!editing.name) return toast.error("Name required");
@@ -76,7 +102,7 @@ function AdminRestaurants() {
       toast.success("Saved");
       setOpen(false);
       setEditing({});
-      load();
+      load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save restaurant");
     }
@@ -86,7 +112,11 @@ function AdminRestaurants() {
     if (!confirm("Delete this restaurant and all its menu items?")) return;
     try {
       await api.admin.deleteRestaurant(id);
-      load();
+      if (list.length === 1 && page > 1) {
+        setPage((prev) => prev - 1);
+      } else {
+        load(page);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete restaurant");
     }
@@ -96,7 +126,7 @@ function AdminRestaurants() {
     try {
       await api.admin.toggleRestaurant(r.id, !r.is_open);
       toast.success(`Restaurant ${!r.is_open ? "activated" : "deactivated"}`);
-      load();
+      load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update restaurant");
     }
@@ -108,7 +138,7 @@ function AdminRestaurants() {
     try {
       await api.admin.revokeRestaurantManager(r.id, r.manager_id);
       toast.success("Manager access revoked");
-      load();
+      load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to revoke manager");
     }
@@ -120,7 +150,7 @@ function AdminRestaurants() {
     try {
       await api.admin.grantRestaurantManager(restaurantId, uid);
       toast.success("Manager role granted");
-      load();
+      load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to grant manager role");
     }
@@ -132,29 +162,91 @@ function AdminRestaurants() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Restaurants</h1>
-            <p className="text-sm text-muted-foreground">Review listings, activate/deactivate, and manage hotel manager access.</p>
+            <p className="text-sm text-muted-foreground">
+              Review listings, activate/deactivate, and manage hotel manager access.
+            </p>
+            {refreshing && <p className="text-xs text-muted-foreground">Refreshing list...</p>}
           </div>
-          <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing({}); }}>
+          <Dialog
+            open={open}
+            onOpenChange={(o) => {
+              setOpen(o);
+              if (!o) setEditing({});
+            }}
+          >
             <DialogTrigger asChild>
-              <Button onClick={() => setEditing({ is_open: true })}><Plus className="mr-2 h-4 w-4" /> Add restaurant</Button>
+              <Button onClick={() => setEditing({ is_open: true })}>
+                <Plus className="mr-2 h-4 w-4" /> Add restaurant
+              </Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>{editing.id ? "Edit" : "New"} restaurant</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle>{editing.id ? "Edit" : "New"} restaurant</DialogTitle>
+              </DialogHeader>
               <div className="space-y-3">
-                <div><Label>Name</Label><Input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
-                <div><Label>Description</Label><Textarea value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
-                <div><Label>Address</Label><Input value={editing.address ?? ""} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div><Label>Town name</Label><Input value={editing.town_name ?? ""} onChange={(e) => setEditing({ ...editing, town_name: e.target.value })} /></div>
-                  <div><Label>Pincode</Label><Input inputMode="numeric" value={editing.pincode ?? ""} onChange={(e) => setEditing({ ...editing, pincode: e.target.value })} /></div>
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={editing.name ?? ""}
+                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  />
                 </div>
-                <div><Label>Image URL</Label><Input value={editing.image_url ?? ""} onChange={(e) => setEditing({ ...editing, image_url: e.target.value })} /></div>
-                <div><Label>Manager user ID (paste from Users page)</Label><Input value={editing.manager_id ?? ""} onChange={(e) => setEditing({ ...editing, manager_id: e.target.value })} placeholder="uuid" /></div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={editing.description ?? ""}
+                    onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Address</Label>
+                  <Input
+                    value={editing.address ?? ""}
+                    onChange={(e) => setEditing({ ...editing, address: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>Town name</Label>
+                    <Input
+                      value={editing.town_name ?? ""}
+                      onChange={(e) => setEditing({ ...editing, town_name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Pincode</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={editing.pincode ?? ""}
+                      onChange={(e) => setEditing({ ...editing, pincode: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Image URL</Label>
+                  <Input
+                    value={editing.image_url ?? ""}
+                    onChange={(e) => setEditing({ ...editing, image_url: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Manager user ID (paste from Users page)</Label>
+                  <Input
+                    value={editing.manager_id ?? ""}
+                    onChange={(e) => setEditing({ ...editing, manager_id: e.target.value })}
+                    placeholder="uuid"
+                  />
+                </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={editing.is_open ?? true} onCheckedChange={(v) => setEditing({ ...editing, is_open: v })} />
+                  <Switch
+                    checked={editing.is_open ?? true}
+                    onCheckedChange={(v) => setEditing({ ...editing, is_open: v })}
+                  />
                   <Label>Active (open for orders)</Label>
                 </div>
-                <Button onClick={save} className="w-full">Save</Button>
+                <Button onClick={save} className="w-full">
+                  Save
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -173,7 +265,9 @@ function AdminRestaurants() {
               <div key={r.id} className="rounded-xl border bg-card p-4">
                 <div className="flex items-start gap-4">
                   <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
-                    {r.image_url && <img src={r.image_url} alt={r.name} className="h-full w-full object-cover" />}
+                    {r.image_url && (
+                      <img src={r.image_url} alt={r.name} className="h-full w-full object-cover" />
+                    )}
                   </div>
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -185,14 +279,20 @@ function AdminRestaurants() {
                     </div>
                     {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
                     {(r.town_name || r.pincode) && (
-                      <p className="mt-1 text-xs text-muted-foreground">{[r.town_name, r.pincode].filter(Boolean).join(" ")}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {[r.town_name, r.pincode].filter(Boolean).join(" ")}
+                      </p>
                     )}
-                    {r.description && <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>}
+                    {r.description && (
+                      <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>
+                    )}
                     <div className="mt-2 text-xs text-muted-foreground">
                       Manager:{" "}
                       {manager ? (
                         <>
-                          <span className="font-medium text-foreground">{manager.full_name || "(no name)"}</span>
+                          <span className="font-medium text-foreground">
+                            {manager.full_name || "(no name)"}
+                          </span>
                           {!managerHasRole && (
                             <span className="ml-2 text-amber-600">⚠ no hotel_manager role</span>
                           )}
@@ -210,7 +310,16 @@ function AdminRestaurants() {
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
-                  <Button variant="outline" size="sm" onClick={() => { setEditing(r); setOpen(true); }}>Edit</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditing(r);
+                      setOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
                   {r.manager_id && !managerHasRole && (
                     <Button variant="outline" size="sm" onClick={() => grantManager(r.manager_id!)}>
                       <ShieldCheck className="mr-1 h-4 w-4" /> Grant manager role
@@ -228,6 +337,29 @@ function AdminRestaurants() {
               </div>
             );
           })}
+          <div className="flex items-center justify-between rounded-xl border bg-card p-3">
+            <div className="text-sm text-muted-foreground">
+              Page {page} (20 per request)
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1 || refreshing}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasNext || refreshing}
+                onClick={() => setPage((prev) => prev + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </RoleGate>

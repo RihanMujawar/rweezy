@@ -31,7 +31,9 @@ export const useFoodCart = create<CartState>((set, get) => ({
       if (existing) {
         return {
           ...state,
-          items: state.items.map((i) => (i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i)),
+          items: state.items.map((i) =>
+            i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i,
+          ),
         };
       }
       return { items: [...state.items, { ...item, quantity: 1 }], restaurantId: item.restaurantId };

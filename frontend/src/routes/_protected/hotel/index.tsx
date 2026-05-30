@@ -42,7 +42,9 @@ function HotelDashboard() {
     setLoading(false);
   }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const save = async () => {
     if (!user) return;
@@ -73,7 +75,10 @@ function HotelDashboard() {
   };
 
   return (
-    <RoleGate allowed={["hotel_manager", "admin"]} hasAny={roles.includes("hotel_manager") || roles.includes("admin")}>
+    <RoleGate
+      allowed={["hotel_manager", "admin"]}
+      hasAny={roles.includes("hotel_manager") || roles.includes("admin")}
+    >
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold">Hotel dashboard</h1>
         {loading ? (
@@ -84,32 +89,87 @@ function HotelDashboard() {
               <>
                 <p className="text-muted-foreground">{restaurant.name}</p>
                 <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-2xl border bg-card p-6"><div className="text-sm text-muted-foreground">Total orders</div><div className="mt-1 text-3xl font-bold">{stats.total}</div></div>
-                  <div className="rounded-2xl border bg-card p-6"><div className="text-sm text-muted-foreground">Active</div><div className="mt-1 text-3xl font-bold">{stats.pending}</div></div>
-                  <div className="rounded-2xl border bg-card p-6"><div className="text-sm text-muted-foreground">Today</div><div className="mt-1 text-3xl font-bold">{stats.today}</div></div>
+                  <div className="rounded-2xl border bg-card p-6">
+                    <div className="text-sm text-muted-foreground">Total orders</div>
+                    <div className="mt-1 text-3xl font-bold">{stats.total}</div>
+                  </div>
+                  <div className="rounded-2xl border bg-card p-6">
+                    <div className="text-sm text-muted-foreground">Active</div>
+                    <div className="mt-1 text-3xl font-bold">{stats.pending}</div>
+                  </div>
+                  <div className="rounded-2xl border bg-card p-6">
+                    <div className="text-sm text-muted-foreground">Today</div>
+                    <div className="mt-1 text-3xl font-bold">{stats.today}</div>
+                  </div>
                 </div>
               </>
             )}
 
             <div className="mt-8 rounded-2xl border bg-card p-6">
-              <h2 className="text-lg font-semibold">{restaurant ? "Edit your restaurant" : "Create your restaurant"}</h2>
+              <h2 className="text-lg font-semibold">
+                {restaurant ? "Edit your restaurant" : "Create your restaurant"}
+              </h2>
               <p className="text-sm text-muted-foreground">
-                {restaurant ? "Update your restaurant details." : "You don't have a restaurant yet. Create one to start adding menu items."}
+                {restaurant
+                  ? "Update your restaurant details."
+                  : "You don't have a restaurant yet. Create one to start adding menu items."}
               </p>
               <div className="mt-4 space-y-3">
-                <div><Label>Name</Label><Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-                <div><Label>Description</Label><Textarea value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-                <div><Label>Address</Label><Input value={form.address ?? ""} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div><Label>Town name</Label><Input value={form.town_name ?? ""} onChange={(e) => setForm({ ...form, town_name: e.target.value })} /></div>
-                  <div><Label>Pincode</Label><Input inputMode="numeric" value={form.pincode ?? ""} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={form.name ?? ""}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  />
                 </div>
-                <div><Label>Image URL</Label><Input value={form.image_url ?? ""} onChange={(e) => setForm({ ...form, image_url: e.target.value })} /></div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={form.description ?? ""}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Address</Label>
+                  <Input
+                    value={form.address ?? ""}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>Town name</Label>
+                    <Input
+                      value={form.town_name ?? ""}
+                      onChange={(e) => setForm({ ...form, town_name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Pincode</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={form.pincode ?? ""}
+                      onChange={(e) => setForm({ ...form, pincode: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Image URL</Label>
+                  <Input
+                    value={form.image_url ?? ""}
+                    onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                  />
+                </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={form.is_open ?? true} onCheckedChange={(v) => setForm({ ...form, is_open: v })} />
+                  <Switch
+                    checked={form.is_open ?? true}
+                    onCheckedChange={(v) => setForm({ ...form, is_open: v })}
+                  />
                   <Label>Open for orders</Label>
                 </div>
-                <Button onClick={save} disabled={saving}>{saving ? "Saving..." : restaurant ? "Save changes" : "Create restaurant"}</Button>
+                <Button onClick={save} disabled={saving}>
+                  {saving ? "Saving..." : restaurant ? "Save changes" : "Create restaurant"}
+                </Button>
               </div>
             </div>
           </>
