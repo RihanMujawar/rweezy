@@ -6,20 +6,27 @@ export class HttpError extends Error {
   }
 }
 
-export function getCorsHeaders(origin = "*") {
+export function getCorsHeaders(origin = "*", allowCredentials = true) {
   return {
     "Access-Control-Allow-Origin": origin,
+    Vary: "Origin",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cookie",
+    "Access-Control-Allow-Credentials": allowCredentials ? "true" : "false",
   };
+}
+
+export function createRequestId() {
+  return crypto.randomUUID();
 }
 
 export function sendJson(res, status, body, extraHeaders = {}) {
   const payload = JSON.stringify(body);
+  const requestId = extraHeaders["X-Request-Id"] ?? createRequestId();
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(payload),
+    "X-Request-Id": requestId,
     ...extraHeaders,
   });
   res.end(payload);

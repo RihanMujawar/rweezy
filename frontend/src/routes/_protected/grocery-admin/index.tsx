@@ -32,6 +32,10 @@ function GroceryDashboard() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Partial<Store>>({ is_open: true });
   const [saving, setSaving] = useState(false);
+  const [alerts, setAlerts] = useState<{ lowStock: unknown[]; expiringSoon: unknown[] }>({
+    lowStock: [],
+    expiringSoon: [],
+  });
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -39,10 +43,16 @@ function GroceryDashboard() {
     setStore((s as Store | null) ?? null);
     if (s) setForm(s as Store);
     setStats(stats);
+    api.groceryAdmin
+      .getAlerts()
+      .then(setAlerts)
+      .catch(() => setAlerts({ lowStock: [], expiringSoon: [] }));
     setLoading(false);
   }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const save = async () => {
     if (!user) return;
@@ -73,7 +83,10 @@ function GroceryDashboard() {
   };
 
   return (
-    <RoleGate allowed={["grocery_manager", "admin"]} hasAny={roles.includes("grocery_manager") || roles.includes("admin")}>
+    <RoleGate
+      allowed={["grocery_manager", "admin"]}
+      hasAny={roles.includes("grocery_manager") || roles.includes("admin")}
+    >
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold">Store dashboard</h1>
         {loading ? (
@@ -84,32 +97,104 @@ function GroceryDashboard() {
               <>
                 <p className="text-muted-foreground">{store.name}</p>
                 <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-2xl border bg-card p-6"><div className="text-sm text-muted-foreground">Total orders</div><div className="mt-1 text-3xl font-bold">{stats.total}</div></div>
-                  <div className="rounded-2xl border bg-card p-6"><div className="text-sm text-muted-foreground">Active</div><div className="mt-1 text-3xl font-bold">{stats.pending}</div></div>
-                  <div className="rounded-2xl border bg-card p-6"><div className="text-sm text-muted-foreground">Today</div><div className="mt-1 text-3xl font-bold">{stats.today}</div></div>
+                  <div className="rounded-2xl border bg-card p-6">
+                    <div className="text-sm text-muted-foreground">Total orders</div>
+                    <div className="mt-1 text-3xl font-bold">{stats.total}</div>
+                  </div>
+                  <div className="rounded-2xl border bg-card p-6">
+                    <div className="text-sm text-muted-foreground">Active</div>
+                    <div className="mt-1 text-3xl font-bold">{stats.pending}</div>
+                  </div>
+                  <div className="rounded-2xl border bg-card p-6">
+                    <div className="text-sm text-muted-foreground">Today</div>
+                    <div className="mt-1 text-3xl font-bold">{stats.today}</div>
+                  </div>
                 </div>
+                {(alerts.lowStock.length > 0 || alerts.expiringSoon.length > 0) && (
+                  <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+                    <p className="font-semibold text-amber-900 dark:text-amber-100">
+                      Inventory alerts
+                    </p>
+                    {alerts.lowStock.length > 0 && (
+                      <p className="mt-1">
+                        {alerts.lowStock.length} item(s) at or below low-stock threshold.
+                      </p>
+                    )}
+                    {alerts.expiringSoon.length > 0 && (
+                      <p className="mt-1">
+                        {alerts.expiringSoon.length} item(s) expiring within 7 days.
+                      </p>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
             <div className="mt-8 rounded-2xl border bg-card p-6">
-              <h2 className="text-lg font-semibold">{store ? "Edit your store" : "Create your store"}</h2>
+              <h2 className="text-lg font-semibold">
+                {store ? "Edit your store" : "Create your store"}
+              </h2>
               <p className="text-sm text-muted-foreground">
-                {store ? "Update your store details." : "You don't have a store yet. Create one to start adding items."}
+                {store
+                  ? "Update your store details."
+                  : "You don't have a store yet. Create one to start adding items."}
               </p>
               <div className="mt-4 space-y-3">
-                <div><Label>Name</Label><Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-                <div><Label>Description</Label><Textarea value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-                <div><Label>Address</Label><Input value={form.address ?? ""} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div><Label>Town name</Label><Input value={form.town_name ?? ""} onChange={(e) => setForm({ ...form, town_name: e.target.value })} /></div>
-                  <div><Label>Pincode</Label><Input inputMode="numeric" value={form.pincode ?? ""} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={form.name ?? ""}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  />
                 </div>
-                <div><Label>Image URL</Label><Input value={form.image_url ?? ""} onChange={(e) => setForm({ ...form, image_url: e.target.value })} /></div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={form.description ?? ""}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Address</Label>
+                  <Input
+                    value={form.address ?? ""}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>Town name</Label>
+                    <Input
+                      value={form.town_name ?? ""}
+                      onChange={(e) => setForm({ ...form, town_name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Pincode</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={form.pincode ?? ""}
+                      onChange={(e) => setForm({ ...form, pincode: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Image URL</Label>
+                  <Input
+                    value={form.image_url ?? ""}
+                    onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                  />
+                </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={form.is_open ?? true} onCheckedChange={(v) => setForm({ ...form, is_open: v })} />
+                  <Switch
+                    checked={form.is_open ?? true}
+                    onCheckedChange={(v) => setForm({ ...form, is_open: v })}
+                  />
                   <Label>Open for orders</Label>
                 </div>
-                <Button onClick={save} disabled={saving}>{saving ? "Saving..." : store ? "Save changes" : "Create store"}</Button>
+                <Button onClick={save} disabled={saving}>
+                  {saving ? "Saving..." : store ? "Save changes" : "Create store"}
+                </Button>
               </div>
             </div>
           </>

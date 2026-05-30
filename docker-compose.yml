@@ -1,12 +1,13 @@
 services:
-  zoomly:
+  rweezy:
     build:
       context: .
       args:
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-${SUPABASE_URL:-}}
         VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
         VITE_SUPABASE_PROJECT_ID: ${VITE_SUPABASE_PROJECT_ID:-}
-    image: zoomly-fullstack:latest
+        VITE_MAPBOX_ACCESS_TOKEN: ${VITE_MAPBOX_ACCESS_TOKEN:-${MAPBOX_ACCESS_TOKEN:-}}
+    image: rweezy-fullstack:latest
     env_file:
       - .env
     environment:

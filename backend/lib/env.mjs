@@ -58,10 +58,23 @@ function required(name) {
   return value;
 }
 
+function parseCsv(value) {
+  return String(value ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
 export const env = {
   host: process.env.BACKEND_HOST || "127.0.0.1",
   port: Number(process.env.BACKEND_PORT || 4000),
   frontendDevUrl: process.env.FRONTEND_DEV_URL || "http://127.0.0.1:3000",
   supabaseUrl: required("SUPABASE_URL"),
   supabasePublishableKey: required("SUPABASE_PUBLISHABLE_KEY"),
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+  mapboxAccessToken: process.env.MAPBOX_ACCESS_TOKEN || process.env.VITE_MAPBOX_ACCESS_TOKEN || "",
+  corsAllowAll: process.env.CORS_ALLOW_ALL === "true" || process.env.NODE_ENV !== "production",
+  corsAllowedOrigins: parseCsv(process.env.CORS_ALLOWED_ORIGINS),
+  cookieSecure: process.env.COOKIE_SECURE === "true" || process.env.NODE_ENV === "production",
+  fcmServerKey: process.env.FCM_SERVER_KEY || "",
 };
