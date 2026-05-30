@@ -4,6 +4,11 @@ const enabled = process.env.RATE_LIMIT_ENABLED !== "false";
 const DEFAULT_LIMITS = {
   "/api/auth/login": { windowMs: 60_000, max: 20 },
   "/api/auth/register": { windowMs: 60_000, max: 10 },
+  "/api/auth/phone/send-otp": { windowMs: 60_000, max: 5 },
+  "/api/auth/phone/verify-otp": { windowMs: 60_000, max: 15 },
+  "/api/auth/password-reset/request": { windowMs: 60_000, max: 5 },
+  "/api/auth/password-reset/complete": { windowMs: 60_000, max: 10 },
+  "/api/auth/email/resend-verification": { windowMs: 60_000, max: 5 },
   "/api/chat": { windowMs: 60_000, max: 120 },
   "/api/live-location": { windowMs: 60_000, max: 300 },
 };

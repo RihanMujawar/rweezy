@@ -176,6 +176,84 @@ export async function createConfirmedUserWithPassword(email, password, fullName,
   });
 }
 
+export async function createSessionForEmail(email) {
+  const link = await adminAuthRequest("/generate_link", {
+    method: "POST",
+    body: {
+      type: "magiclink",
+      email,
+    },
+  });
+
+  const tokenHash = link?.properties?.hashed_token;
+  if (!tokenHash) {
+    throw new HttpError(500, "Unable to start a phone login session");
+  }
+
+  return authRequest("/verify", {
+    method: "POST",
+    body: {
+      type: "magiclink",
+      token_hash: tokenHash,
+    },
+  });
+}
+
+export async function resendSignupConfirmation(email) {
+  return authRequest("/resend", {
+    method: "POST",
+    body: {
+      type: "signup",
+      email,
+    },
+  });
+}
+
+export async function sendPasswordRecoveryEmail(email) {
+  return authRequest("/recover", {
+    method: "POST",
+    body: { email },
+  });
+}
+
+export async function verifyRecoveryToken(tokenHash) {
+  return authRequest("/verify", {
+    method: "POST",
+    body: {
+      type: "recovery",
+      token_hash: tokenHash,
+    },
+  });
+}
+
+export async function updatePasswordWithAccessToken(accessToken, password) {
+  return authRequest("/user", {
+    method: "PUT",
+    token: accessToken,
+    body: { password },
+  });
+}
+
+export async function findUserByEmail(email) {
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!normalizedEmail) return null;
+
+  for (let page = 1; page <= 10; page += 1) {
+    const payload = await adminAuthRequest(`/users?page=${page}&per_page=100`);
+    const users = Array.isArray(payload?.users) ? payload.users : [];
+
+    const found = users.find((user) => {
+      const userEmail = typeof user?.email === "string" ? user.email.trim().toLowerCase() : "";
+      return userEmail === normalizedEmail;
+    });
+
+    if (found) return found;
+    if (users.length < 100) break;
+  }
+
+  return null;
+}
+
 export async function findUserEmailByPhone(phone) {
   const normalizedPhone = typeof phone === "string" ? phone.trim() : "";
   if (!normalizedPhone) return null;

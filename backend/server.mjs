@@ -16,15 +16,27 @@ import {
 } from "./lib/http.mjs";
 import {
   createConfirmedUserWithPassword,
+  createSessionForEmail,
+  findUserByEmail,
   findUserEmailByPhone,
   getUserFromToken,
   refreshAuthSession,
+  resendSignupConfirmation,
   restRequest,
   revokeSession,
+  sendPasswordRecoveryEmail,
   serviceRoleRestRequest,
   signInWithPassword,
+  signUpWithPassword,
+  updatePasswordWithAccessToken,
+  verifyRecoveryToken,
 } from "./lib/supabase.mjs";
 import { checkRateLimit } from "./lib/rate-limit.mjs";
+import {
+  createPhoneVerificationToken,
+  verifyPhoneVerificationToken,
+} from "./lib/phone-verification.mjs";
+import { sendPhoneVerificationCode, verifyPhoneVerificationCode } from "./lib/twilio.mjs";
 import {
   assertStatusAdvance,
   estimateDeliveryAt,
@@ -608,6 +620,190 @@ async function writeAudit(token, actorId, action, targetType, targetId, message,
   }
 }
 
+function normalizeAuthPurpose(value) {
+  if (value === "register") return "register";
+  if (value === "reset_password") return "reset_password";
+  return "login";
+}
+
+function maskPhoneHint(phone) {
+  const digits = String(phone ?? "").replace(/\D/g, "");
+  if (digits.length < 4) return null;
+  return `••••${digits.slice(-4)}`;
+}
+
+async function resolveAccountForPasswordReset(email) {
+  const user = await findUserByEmail(email);
+  if (!user?.id) return null;
+
+  const rows = await serviceRoleRestRequest(
+    buildPath("/profiles", {
+      select: "phone",
+      id: `eq.${user.id}`,
+      limit: "1",
+    }),
+  );
+  const profilePhone = typeof rows?.[0]?.phone === "string" ? rows[0].phone.trim() : "";
+  const metadataPhone =
+    typeof user?.user_metadata?.phone === "string" ? user.user_metadata.phone.trim() : "";
+  const authPhone = typeof user?.phone === "string" ? user.phone.trim() : "";
+  const phone = profilePhone || metadataPhone || authPhone;
+
+  return {
+    userId: user.id,
+    email: user.email?.toLowerCase() ?? email,
+    phone: phone || null,
+  };
+}
+
+async function resolveEmailForPhone(phone) {
+  let foundEmail = null;
+
+  try {
+    const rows = await serviceRoleRestRequest("/rpc/email_for_phone_login", {
+      method: "POST",
+      body: { lookup_phone: phone },
+    });
+    foundEmail = typeof rows === "string" ? rows : null;
+  } catch (error) {
+    if (!(error instanceof HttpError) || error.status !== 404) {
+      throw error;
+    }
+  }
+
+  if (!foundEmail) {
+    foundEmail = await findUserEmailByPhone(phone);
+  }
+
+  return foundEmail;
+}
+
+async function assertPhoneAvailable(phone) {
+  const rows = await serviceRoleRestRequest(
+    buildPath("/profiles", {
+      select: "id",
+      phone: `eq.${phone}`,
+      limit: "1",
+    }),
+  );
+  if (rows?.length) {
+    throw new HttpError(409, "This phone number is already registered");
+  }
+}
+
+async function completeUserRegistration({
+  email,
+  fullName,
+  password,
+  phone,
+  phoneVerificationToken,
+  requestedRole,
+  businessName,
+  roleMessage,
+}) {
+  verifyPhoneVerificationToken(phoneVerificationToken, phone);
+  await assertPhoneAvailable(phone);
+
+  const role = "customer";
+  let createdUserId = null;
+  let emailVerificationRequired = env.authRequireEmailVerification;
+
+  if (env.authRequireEmailVerification) {
+    const signup = await signUpWithPassword(email, password, fullName, {
+      role,
+      phone,
+      requested_role: requestedRole,
+    });
+    createdUserId = signup?.user?.id ?? signup?.id ?? null;
+    if (!createdUserId) {
+      throw new HttpError(500, "Account was created but no user id was returned");
+    }
+  } else {
+    const createdUser = await createConfirmedUserWithPassword(email, password, fullName, {
+      role,
+      phone,
+      requested_role: requestedRole,
+    });
+    createdUserId = createdUser?.id ?? createdUser?.user?.id;
+    emailVerificationRequired = false;
+    if (!createdUserId) {
+      throw new HttpError(500, "Account was created but no user id was returned");
+    }
+  }
+
+  await serviceRoleRestRequest(buildPath("/profiles", { on_conflict: "id" }), {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: {
+      id: createdUserId,
+      full_name: fullName,
+      phone,
+    },
+  });
+
+  await serviceRoleRestRequest(buildPath("/user_roles", { on_conflict: "user_id,role" }), {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates" },
+    body: {
+      user_id: createdUserId,
+      role,
+    },
+  });
+
+  let roleRequestPending = false;
+  let roleRequestWarning = null;
+
+  if (requestedRole) {
+    try {
+      await serviceRoleRestRequest("/role_requests", {
+        method: "POST",
+        body: {
+          user_id: createdUserId,
+          requested_role: requestedRole,
+          business_name: cleanText(businessName) || null,
+          message: cleanText(roleMessage) || "Requested during registration",
+        },
+      });
+      roleRequestPending = true;
+    } catch (error) {
+      if (!isMissingTableError(error, "role_requests")) throw error;
+      roleRequestWarning =
+        "Account created, but role request storage is not available. Apply the latest Supabase migrations.";
+      console.warn(`Role request skipped: ${error.message}`);
+    }
+  }
+
+  if (emailVerificationRequired) {
+    return {
+      user: { id: createdUserId, email },
+      roles: [role],
+      authenticated: false,
+      emailVerificationRequired: true,
+      roleRequestPending,
+      roleRequestWarning,
+    };
+  }
+
+  const session = await signInWithPassword({ email }, password);
+  const normalized = normalizeAuthSession(session);
+  const roles =
+    normalized.accessToken && normalized.user
+      ? await getRoles(normalized.accessToken, normalized.user.id)
+      : [role];
+
+  return {
+    user: normalized.user,
+    roles,
+    authenticated: Boolean(normalized.accessToken),
+    emailVerificationRequired: false,
+    roleRequestPending,
+    roleRequestWarning,
+    __responseHeaders: {
+      "Set-Cookie": buildSessionCookies(session),
+    },
+  };
+}
+
 function normalizeAuthSession(payload) {
   const session = payload?.session ?? payload;
 
@@ -806,41 +1002,217 @@ const routes = [
       readyFoodWithoutRider: unassignedFood?.length ?? 0,
     };
   }),
+  route("POST", /^\/api\/auth\/phone\/send-otp$/, async ({ body }) => {
+    const phone = normalizeIndianPhone(body.phone);
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+      throw new HttpError(400, "Enter a valid phone number with country code");
+    }
+
+    const purpose = normalizeAuthPurpose(cleanText(body.purpose));
+    if (purpose === "login") {
+      const email = await resolveEmailForPhone(phone);
+      if (!email) {
+        throw new HttpError(404, "No account found for this phone number");
+      }
+    } else if (purpose === "reset_password") {
+      const email = cleanText(body.email)?.toLowerCase();
+      if (!email) {
+        throw new HttpError(400, "Email is required for password reset");
+      }
+      const account = await resolveAccountForPasswordReset(email);
+      if (!account?.phone) {
+        throw new HttpError(404, "No account found for this email, or no phone on file");
+      }
+      if (account.phone !== phone) {
+        throw new HttpError(400, "Phone number does not match the account for this email");
+      }
+    } else {
+      await assertPhoneAvailable(phone);
+    }
+
+    await sendPhoneVerificationCode(phone);
+    return {
+      ok: true,
+      purpose,
+      message: "Verification code sent by SMS",
+    };
+  }),
+  route("POST", /^\/api\/auth\/phone\/verify-otp$/, async ({ body }) => {
+    const phone = normalizeIndianPhone(body.phone);
+    const code = cleanText(body.code);
+    const purpose = normalizeAuthPurpose(cleanText(body.purpose));
+
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+      throw new HttpError(400, "Enter a valid phone number with country code");
+    }
+    if (!code) {
+      throw new HttpError(400, "Verification code is required");
+    }
+
+    await verifyPhoneVerificationCode(phone, code);
+
+    if (purpose === "register" || purpose === "reset_password") {
+      return {
+        ok: true,
+        phoneVerificationToken: createPhoneVerificationToken(phone),
+      };
+    }
+
+    const email = await resolveEmailForPhone(phone);
+    if (!email) {
+      throw new HttpError(404, "No account found for this phone number");
+    }
+
+    const session = await createSessionForEmail(email);
+    const normalized = normalizeAuthSession(session);
+    if (!normalized.user) {
+      throw new HttpError(401, "Unable to sign in with this phone number");
+    }
+
+    const roles = normalized.accessToken
+      ? await getRoles(normalized.accessToken, normalized.user.id)
+      : [];
+
+    return {
+      user: normalized.user,
+      roles,
+      __responseHeaders: {
+        "Set-Cookie": buildSessionCookies(session),
+      },
+    };
+  }),
+  route("POST", /^\/api\/auth\/password-reset\/request$/, async ({ body }) => {
+    const email = cleanText(body.email)?.toLowerCase();
+    if (!email) {
+      throw new HttpError(400, "Email is required");
+    }
+
+    const account = await resolveAccountForPasswordReset(email);
+    if (account) {
+      try {
+        await sendPasswordRecoveryEmail(email);
+      } catch (error) {
+        if (error instanceof HttpError && error.status === 429) {
+          throw error;
+        }
+        console.warn(
+          `Password reset email failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    return {
+      ok: true,
+      message:
+        "If an account exists for this email, we sent a password reset link. Check your inbox and spam folder.",
+      phoneHint: account?.phone ? maskPhoneHint(account.phone) : null,
+    };
+  }),
+  route("POST", /^\/api\/auth\/password-reset\/complete$/, async ({ body }) => {
+    const email = cleanText(body.email)?.toLowerCase();
+    const tokenHash = cleanText(body.token_hash);
+    const phone = normalizeIndianPhone(body.phone);
+    const phoneVerificationToken = cleanText(body.phone_verification_token);
+    const password = typeof body.password === "string" ? body.password : "";
+
+    if (!email) {
+      throw new HttpError(400, "Email is required");
+    }
+    if (!tokenHash) {
+      throw new HttpError(400, "Email reset link is required. Open the link from your email.");
+    }
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+      throw new HttpError(400, "Enter a valid phone number with country code");
+    }
+    if (password.length < 6) {
+      throw new HttpError(400, "Password must be at least 6 characters");
+    }
+
+    const account = await resolveAccountForPasswordReset(email);
+    if (!account?.phone) {
+      throw new HttpError(400, "Unable to reset password for this account");
+    }
+    if (account.phone !== phone) {
+      throw new HttpError(400, "Phone number does not match this account");
+    }
+
+    verifyPhoneVerificationToken(phoneVerificationToken, phone);
+
+    let session;
+    try {
+      session = await verifyRecoveryToken(tokenHash);
+    } catch (error) {
+      if (error instanceof HttpError) {
+        throw new HttpError(
+          400,
+          "Email reset link is invalid or expired. Request a new reset email and try again.",
+        );
+      }
+      throw error;
+    }
+
+    const normalized = normalizeAuthSession(session);
+    if (!normalized.user?.id || normalized.user.id !== account.userId) {
+      throw new HttpError(400, "Email reset link does not match this account");
+    }
+    if (!normalized.accessToken) {
+      throw new HttpError(400, "Email verification failed. Request a new reset email.");
+    }
+
+    await updatePasswordWithAccessToken(normalized.accessToken, password);
+
+    const roles = await getRoles(normalized.accessToken, normalized.user.id);
+
+    return {
+      ok: true,
+      user: normalized.user,
+      roles,
+      message: "Password updated. You are now signed in.",
+      __responseHeaders: {
+        "Set-Cookie": buildSessionCookies(session),
+      },
+    };
+  }),
+  route("POST", /^\/api\/auth\/email\/resend-verification$/, async ({ body }) => {
+    const email = cleanText(body.email)?.toLowerCase();
+    if (!email) {
+      throw new HttpError(400, "Email is required");
+    }
+
+    await resendSignupConfirmation(email);
+    return {
+      ok: true,
+      message: "Verification email sent. Check your inbox and spam folder.",
+    };
+  }),
   route("POST", /^\/api\/auth\/login$/, async ({ body }) => {
     const email = cleanText(body.email);
     const phone = normalizeIndianPhone(body.phone);
     let identifier = { email };
 
     if (phone) {
-      let foundEmail = null;
-
-      try {
-        const rows = await serviceRoleRestRequest("/rpc/email_for_phone_login", {
-          method: "POST",
-          body: { lookup_phone: phone },
-        });
-        foundEmail = typeof rows === "string" ? rows : null;
-      } catch (error) {
-        if (!(error instanceof HttpError) || error.status !== 404) {
-          throw error;
-        }
-      }
-
-      if (!foundEmail) {
-        foundEmail = await findUserEmailByPhone(phone);
-      }
-
-      if (!foundEmail) {
-        throw new HttpError(401, "No account found for this phone number");
-      }
-      identifier = { email: foundEmail };
+      throw new HttpError(
+        400,
+        "Phone sign-in uses OTP. Request a code from /api/auth/phone/send-otp and verify it.",
+      );
     }
 
     if (!identifier.email) {
-      throw new HttpError(400, "Email or phone is required");
+      throw new HttpError(400, "Email is required");
     }
 
-    const session = await signInWithPassword(identifier, body.password);
+    let session;
+    try {
+      session = await signInWithPassword(identifier, body.password);
+    } catch (error) {
+      if (error instanceof HttpError && /confirm/i.test(error.message)) {
+        throw new HttpError(
+          403,
+          "Verify your email before signing in. Check your inbox or request a new verification email.",
+        );
+      }
+      throw error;
+    }
     const normalized = normalizeAuthSession(session);
 
     if (!normalized.user) {
@@ -862,78 +1234,18 @@ const routes = [
   route("POST", /^\/api\/auth\/register$/, async ({ body }) => {
     const { email, fullName, password, phone } = validateRegistration(body);
     const requestedRole = normalizeBusinessRole(body.requested_role);
-    const role = "customer";
+    const phoneVerificationToken = cleanText(body.phone_verification_token);
 
-    const createdUser = await createConfirmedUserWithPassword(email, password, fullName, {
-      role,
+    return completeUserRegistration({
+      email,
+      fullName,
+      password,
       phone,
-      requested_role: requestedRole,
+      phoneVerificationToken,
+      requestedRole,
+      businessName: body.business_name,
+      roleMessage: body.role_message,
     });
-    const createdUserId = createdUser?.id ?? createdUser?.user?.id;
-
-    if (!createdUserId) {
-      throw new HttpError(500, "Account was created but no user id was returned");
-    }
-
-    await serviceRoleRestRequest(buildPath("/profiles", { on_conflict: "id" }), {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates" },
-      body: {
-        id: createdUserId,
-        full_name: fullName,
-        phone,
-      },
-    });
-
-    await serviceRoleRestRequest(buildPath("/user_roles", { on_conflict: "user_id,role" }), {
-      method: "POST",
-      headers: { Prefer: "resolution=ignore-duplicates" },
-      body: {
-        user_id: createdUserId,
-        role,
-      },
-    });
-
-    let roleRequestPending = false;
-    let roleRequestWarning = null;
-
-    if (requestedRole) {
-      try {
-        await serviceRoleRestRequest("/role_requests", {
-          method: "POST",
-          body: {
-            user_id: createdUserId,
-            requested_role: requestedRole,
-            business_name: cleanText(body.business_name) || null,
-            message: cleanText(body.role_message) || "Requested during registration",
-          },
-        });
-        roleRequestPending = true;
-      } catch (error) {
-        if (!isMissingTableError(error, "role_requests")) throw error;
-        roleRequestWarning =
-          "Account created, but role request storage is not available. Apply the latest Supabase migrations.";
-        console.warn(`Role request skipped: ${error.message}`);
-      }
-    }
-
-    const session = await signInWithPassword({ email }, password);
-    const normalized = normalizeAuthSession(session);
-    const roles =
-      normalized.accessToken && normalized.user
-        ? await getRoles(normalized.accessToken, normalized.user.id)
-        : [];
-
-    return {
-      user: normalized.user,
-      roles,
-      authenticated: Boolean(normalized.accessToken),
-      roleRequestPending,
-      roleRequestWarning,
-      __responseHeaders: {
-        "Set-Cookie": buildSessionCookies(session),
-      },
-    };
   }),
   route("POST", /^\/api\/auth\/logout$/, async ({ req }) => {
     const bearerToken = getBearerToken(req);

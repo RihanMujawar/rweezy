@@ -22,6 +22,11 @@ export function isPublicApiRoute(method, pathname) {
     pathname === "/api/health" ||
     (method === "POST" && pathname === "/api/auth/login") ||
     (method === "POST" && pathname === "/api/auth/register") ||
+    (method === "POST" && pathname === "/api/auth/phone/send-otp") ||
+    (method === "POST" && pathname === "/api/auth/phone/verify-otp") ||
+    (method === "POST" && pathname === "/api/auth/email/resend-verification") ||
+    (method === "POST" && pathname === "/api/auth/password-reset/request") ||
+    (method === "POST" && pathname === "/api/auth/password-reset/complete") ||
     (method === "POST" && pathname === "/api/auth/logout") ||
     (method === "GET" && pathname === "/api/map/route")
   );

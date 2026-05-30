@@ -77,4 +77,11 @@ export const env = {
   corsAllowedOrigins: parseCsv(process.env.CORS_ALLOWED_ORIGINS),
   cookieSecure: process.env.COOKIE_SECURE === "true" || process.env.NODE_ENV === "production",
   fcmServerKey: process.env.FCM_SERVER_KEY || "",
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || "",
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || "",
+  twilioVerifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID || "",
+  twilioDevBypass: process.env.TWILIO_DEV_BYPASS === "true",
+  twilioDevBypassCode: process.env.TWILIO_DEV_BYPASS_CODE || "123456",
+  phoneVerificationSecret: process.env.PHONE_VERIFICATION_SECRET || "",
+  authRequireEmailVerification: process.env.AUTH_REQUIRE_EMAIL_VERIFICATION !== "false",
 };
