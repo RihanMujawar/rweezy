@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { type AppRole, useAuth } from "@/lib/auth-context";
 import { useAppMode } from "@/lib/app-mode-context";
+import { motion, AnimatePresence } from "framer-motion";
 
 type MobileNavItem =
   | { type: "link"; title: string; to: string; icon: typeof Home }
@@ -94,70 +95,83 @@ export function MobileBottomNav() {
       ? [
           { type: "link", title: "Home", to: "/app", icon: Home },
           ...businessItems,
-          { type: "action", title: "Business", onClick: toggleMode, icon: BriefcaseBusiness },
+          { type: "action", title: "Mode", onClick: toggleMode, icon: BriefcaseBusiness },
           { type: "link", title: "Profile", to: "/app/profile", icon: User },
         ]
       : [
           ...customerItems,
           ...(hasBusinessMode
-            ? [{ type: "action", title: "Business", onClick: toggleMode, icon: BriefcaseBusiness }]
+            ? [{ type: "action", title: "Mode", onClick: toggleMode, icon: BriefcaseBusiness }]
             : []),
         ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 px-6 pb-6 md:hidden pointer-events-none">
       <div
         className={cn(
-          "mx-auto grid max-w-lg rounded-2xl border border-white/25 bg-background/55 p-1.5 shadow-2xl shadow-black/15 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/45",
+          "mx-auto grid max-w-md rounded-[2.5rem] border border-white/20 bg-background/50 p-2 shadow-2xl shadow-black/20 backdrop-blur-3xl pointer-events-auto items-center",
           items.length === 5 && "grid-cols-5",
           items.length === 6 && "grid-cols-6",
           items.length === 7 && "grid-cols-7",
         )}
       >
-        {items.map((item, idx) => {
-          const Icon = item.icon;
-          const active = item.type === "link" ? isActive(pathname, item.to) : mode === "business";
-          const key = item.type === "link" ? item.to : `action-${idx}-${item.title}`;
+        <AnimatePresence mode="popLayout">
+          {items.map((item, idx) => {
+            const Icon = item.icon;
+            const active = item.type === "link" ? isActive(pathname, item.to) : mode === "business" && item.title === "Mode";
+            const key = item.type === "link" ? item.to : `action-${idx}-${item.title}`;
 
-          const commonClass = cn(
-            "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium text-muted-foreground transition btn-interactive",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            active
-              ? "bg-primary/95 text-primary-foreground shadow-lg shadow-primary/25 scale-105"
-              : "hover:bg-white/10 dark:hover:bg-white/5 hover:text-foreground",
-          );
+            const commonClass = cn(
+              "relative flex h-14 flex-col items-center justify-center gap-1 rounded-[2rem] px-1 transition-all duration-300",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-90",
+              active
+                ? "text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            );
 
-          if (item.type === "action") {
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={item.onClick}
-                className={commonClass}
-                aria-pressed={mode === "business"}
-              >
-                <Icon className="h-5 w-5" />
-                <span className="max-w-full truncate text-[9px] leading-none sm:text-[10px]">
+            const content = (
+              <>
+                {active && (
+                  <motion.div
+                    layoutId="nav-pill"
+                    className="absolute inset-0 bg-primary shadow-lg shadow-primary/30 -z-10"
+                    style={{ borderRadius: "1.75rem" }}
+                    transition={{ type: "spring", bounce: 0.3, duration: 0.6 }}
+                  />
+                )}
+                <Icon className={cn("h-5 w-5 transition-transform", active && "scale-110")} />
+                <span className="max-w-full truncate text-[9px] font-bold leading-none uppercase tracking-tighter">
                   {item.title}
                 </span>
-              </button>
+              </>
             );
-          }
 
-          return (
-            <Link
-              key={key}
-              to={item.to}
-              aria-current={active ? "page" : undefined}
-              className={commonClass}
-            >
-              <Icon className="h-5 w-5" />
-              <span className="max-w-full truncate text-[9px] leading-none sm:text-[10px]">
-                {item.title}
-              </span>
-            </Link>
-          );
-        })}
+            if (item.type === "action") {
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={item.onClick}
+                  className={commonClass}
+                  aria-pressed={active}
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            return (
+              <Link
+                key={key}
+                to={item.to}
+                aria-current={active ? "page" : undefined}
+                className={commonClass}
+              >
+                {content}
+              </Link>
+            );
+          })}
+        </AnimatePresence>
       </div>
     </nav>
   );
