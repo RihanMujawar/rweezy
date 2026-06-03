@@ -19,6 +19,7 @@ The platform consists of three main components:
 | Forms | React Hook Form, Zod validation |
 | Backend | Node.js ESM HTTP server |
 | Database/Auth | Supabase Auth, Supabase Postgres, Supabase REST |
+| Phone OTP | Twilio Verify (SMS) |
 | State | React context, Zustand for cart management |
 | Testing | Node test runner, Playwright for E2E, JUnit for Android |
 | Deployment | Docker, Docker Compose |
@@ -27,7 +28,10 @@ The platform consists of three main components:
 
 ### Customer App
 
-- Register and login with email/password or Indian phone number plus password
+- Register with email, password, and Indian phone number — phone is verified by SMS OTP before signup completes
+- Sign in with email/password or phone OTP (SMS one-time code)
+- Reset password with dual verification: Supabase recovery email link plus SMS OTP on the registered phone
+- Resend signup email verification from the login page when required
 - Choose customer access immediately or request rider, delivery partner, restaurant manager, or grocery manager access for admin approval
 - Save profile addresses and reuse them during checkout
 - Browse restaurants and grocery stores
@@ -68,11 +72,18 @@ The platform consists of three main components:
 ### Platform Features
 
 - Cookie-based Supabase auth handled by the backend
+- Phone OTP via Twilio Verify for registration, phone login, and password reset
+- Email verification on signup (Supabase) and password recovery email for reset flow
 - Automatic access token refresh using refresh cookies
 - Supabase REST access wrapped behind backend routes
 - Mapbox geocoding, route display, and browser geolocation support
 - Chat messages between customers and assigned riders/delivery partners
-- Rate limiting on sensitive endpoints (auth, chat, orders, live location)
+- Web and Android push notifications (Firebase Cloud Messaging) with device token storage
+- Android native FCM for background notifications when the app is closed or minimized
+- System dark/light theme on web and Android (follows OS setting; no manual theme toggle)
+- Android app download prompt on mobile browsers (Android phones only; hidden inside the native app)
+- Global in-app alerts on every protected page (role-based polling + toast/sound)
+- Rate limiting on sensitive endpoints (auth, password reset, chat, orders, live location)
 - Docker image and Docker Compose setup
 - Supabase migrations in `backend/supabase/migrations`
 
@@ -86,9 +97,10 @@ The platform consists of three main components:
 │   │   │   ├── androidTest/     # Instrumented UI tests
 │   │   │   ├── main/
 │   │   │   │   ├── java/com/example/rweezy/
-│   │   │   │   │   ├── data/    # Repositories
-│   │   │   │   │   ├── theme/   # Material Design 3 theme
-│   │   │   │   │   └── ui/      # Compose UI screens
+│   │   │   │   │   ├── data/        # Repositories
+│   │   │   │   │   ├── messaging/   # FCM service + WebView JS bridge
+│   │   │   │   │   ├── theme/       # Material Design 3 theme (system dark/light)
+│   │   │   │   │   └── ui/          # Compose UI screens
 │   │   │   │   └── res/         # App resources
 │   │   │   └── test/            # Local unit tests
 │   │   └── build.gradle.kts
@@ -100,10 +112,12 @@ The platform consists of three main components:
 │   │   ├── env.mjs
 │   │   ├── http.mjs
 │   │   ├── logger.mjs
+│   │   ├── phone-verification.mjs
 │   │   ├── platform-helpers.mjs
 │   │   ├── rate-limit.mjs
 │   │   ├── request-utils.mjs
-│   │   └── supabase.mjs
+│   │   ├── supabase.mjs
+│   │   └── twilio.mjs
 │   ├── server.mjs
 │   ├── supabase/
 │   │   ├── config.toml
@@ -112,12 +126,23 @@ The platform consists of three main components:
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── ui/          # shadcn/ui components
-│   │   │   └── ...          # feature components
+│   │   │   ├── ui/                          # shadcn/ui components
+│   │   │   ├── android-app-download-prompt.tsx
+│   │   │   ├── global-notification-watcher.tsx
+│   │   │   ├── phone-otp-verification.tsx
+│   │   │   ├── system-theme-sync.tsx
+│   │   │   └── ...                          # feature components
 │   │   ├── integrations/supabase/
-│   │   ├── lib/
+│   │   ├── hooks/                           # use-global-notifications, use-live-alerts, etc.
+│   │   ├── lib/                             # api, auth, fcm, mobile-detect
+│   │   ├── public/              # firebase-messaging-sw.js
 │   │   ├── routes/
 │   │   │   ├── __root.tsx
+│   │   │   ├── forgot-password.tsx
+│   │   │   ├── login.tsx
+│   │   │   ├── register.tsx
+│   │   │   ├── register-partner.tsx
+│   │   │   ├── reset-password.tsx
 │   │   │   ├── _protected/
 │   │   │   │   ├── admin/
 │   │   │   │   ├── app/
@@ -152,13 +177,15 @@ The platform consists of three main components:
 - npm
 - Supabase project
 - Mapbox public token for maps, geocoding, and routing
+- Twilio Verify service for phone OTP during registration, phone login, and password reset
 - Supabase CLI if you want to push migrations from this repo
 
 **For Android App:**
 - Android Studio (latest version)
-- JDK 17
+- JDK 21
 - Android SDK 36 (compileSdk), minSdk 24
 - Kotlin 2.3.20
+- Firebase project with `google-services.json` for the Android app package `com.example.rweezy`
 
 ### Install Dependencies
 
@@ -191,7 +218,19 @@ VITE_FIREBASE_STORAGE_BUCKET="your-project-id.appspot.com"
 VITE_FIREBASE_MESSAGING_SENDER_ID="your-firebase-messaging-sender-id"
 VITE_FIREBASE_APP_ID="your-firebase-web-app-id"
 VITE_FIREBASE_VAPID_KEY="your-web-push-vapid-public-key"
+VITE_ANDROID_APP_URL=""
 FCM_SERVER_KEY="your-firebase-server-key"
+
+# Twilio Verify phone OTP.
+TWILIO_ACCOUNT_SID="your-twilio-account-sid"
+TWILIO_AUTH_TOKEN="your-twilio-auth-token"
+TWILIO_VERIFY_SERVICE_SID="your-twilio-verify-service-sid"
+# Local dev only: skip Twilio Verify and accept TWILIO_DEV_BYPASS_CODE.
+TWILIO_DEV_BYPASS="false"
+TWILIO_DEV_BYPASS_CODE="123456"
+PHONE_VERIFICATION_SECRET="your-random-phone-verification-secret"
+# Set to false to auto-confirm emails via admin API (dev/demo only)
+AUTH_REQUIRE_EMAIL_VERIFICATION="true"
 
 BACKEND_HOST="127.0.0.1"
 BACKEND_PORT="4000"
@@ -218,6 +257,49 @@ SUPABASE_DB_URL="postgresql://postgres:[YOUR-PASSWORD]@db.your-project-ref.supab
 ```
 
 > **Important security note:** Keep `SUPABASE_SERVICE_ROLE_KEY` backend-only. Never expose it as a `VITE_` variable.
+
+**Optional frontend variables:**
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_ANDROID_APP_URL` | Play Store or direct APK link shown in the Android download popup on mobile browsers. Leave empty to show the message without a download button. |
+
+**Optional backend variables:**
+
+| Variable | Purpose |
+| --- | --- |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` | Twilio Verify credentials for SMS OTP. |
+| `TWILIO_DEV_BYPASS` | Set to `"true"` in local dev to skip Twilio Verify and accept `TWILIO_DEV_BYPASS_CODE`. |
+| `PHONE_VERIFICATION_SECRET` | HMAC secret for short-lived phone verification tokens after OTP success. Falls back to service role key in dev. |
+| `AUTH_REQUIRE_EMAIL_VERIFICATION` | Default `"true"`. Set to `"false"` to auto-confirm signup emails via admin API (dev/demo only). |
+
+### Supabase Auth URL Configuration
+
+In **Supabase Dashboard → Authentication → URL configuration**, set:
+
+- **Site URL** — your production app origin (e.g. `https://your-domain.com`)
+- **Redirect URLs** — include password reset landing pages, for example:
+  - `http://127.0.0.1:3000/reset-password`
+  - `http://localhost:3000/reset-password`
+  - `https://your-domain.com/reset-password`
+
+Recovery emails must redirect to `/reset-password` so the app can read `token_hash` from the URL and complete reset after phone OTP verification.
+
+### Theme (Web and Android)
+
+Both the website and Android app follow the **system dark/light setting**. There is no manual theme toggle in the UI.
+
+- **Web:** `SystemThemeSync` listens to `prefers-color-scheme` and applies the Tailwind `dark` class.
+- **Android:** Compose uses `isSystemInDarkTheme()`; the WebView disables forced darkening so the website CSS matches the OS theme.
+
+### Android App Download Prompt (Web)
+
+When someone opens the website on an **Android phone browser** (not inside the native app), a popup suggests installing the Android app.
+
+- Shown only on Android phones (not iPhone, iPad, or desktop)
+- Hidden inside the native Android WebView (`RweezyAndroidBridge`)
+- Dismissed permanently when the user chooses **Continue on website**
+- Set `VITE_ANDROID_APP_URL` to enable the **Download Android app** button
 
 ### Apply Database Migrations
 
@@ -257,31 +339,54 @@ http://127.0.0.1:3000
 ### Run Android App
 
 1. Open the `android/` directory in Android Studio
-2. Sync the project with Gradle files
-3. Run on an emulator or physical device
+2. Add Firebase config (see below)
+3. Sync the project with Gradle files
+4. Run on an emulator or physical device
+
+**Firebase / `google-services.json` (required to build):**
+
+- Create a Firebase project and add an Android app with package id `com.example.rweezy`
+- Download `google-services.json` from Firebase Console
+- Place it at `android/app/google-services.json`
+- A template is included at `android/app/google-services.json.example` for reference
+- The real `google-services.json` is gitignored; each developer must add their own copy from Firebase
 
 **Firebase Cloud Messaging (FCM) setup (Android):**
-- Create a Firebase project and add an Android app with package id `com.example.rweezy`
-- Download `google-services.json` and place it in `android/app/google-services.json`
+
 - In Firebase Console, enable Cloud Messaging
 - For Android 13+, allow notification permission on first app launch
-- Send a test notification from Firebase Console and verify it appears on device
-
-### Web Push Notifications (FCM)
-
-- Web push service worker is available at `frontend/public/firebase-messaging-sw.js`
-- Frontend auto-registers browser tokens after login and sends them to `POST /api/notifications/token`
-- Saved tokens are stored in Supabase table `public.user_push_tokens`
-- Admin test endpoint: `POST /api/admin/notifications/test`
-  - payload with direct token:
-    - `{ "token": "<FCM_TOKEN>", "title": "Test", "body": "Hello from backend" }`
-  - payload with user id:
-    - `{ "user_id": "<auth-user-id>", "title": "Test", "body": "Hello from backend" }`
+- Log in inside the app so the native FCM token is registered with the backend
+- Send a test notification from Firebase Console or `POST /api/admin/notifications/test`
 
 **Connecting to Development Server:**
+
 - For Android Emulator (default): Use `http://10.0.2.2:4000` to connect to the backend.
 - For Physical Device: Use your computer's local IP address (e.g., `http://192.168.1.x:3000`)
 - The app includes a settings dialog (FAB button) to configure the server URL at runtime
+
+### Push Notifications (FCM)
+
+**Web (browser):**
+
+- Web push service worker: `frontend/public/firebase-messaging-sw.js`
+- After login, the app requests notification permission, registers the FCM token, and saves it via `POST /api/notifications/token` with `platform: "web"`
+- Foreground FCM messages show as toasts on **any** protected page (`GlobalNotificationWatcher` in `_protected` layout)
+
+**Android (native app):**
+
+- The WebView does not use the browser service worker for push. Instead, `RweezyAndroidBridge` exposes the native FCM token to the website after login.
+- Tokens are saved via `POST /api/notifications/token` with `platform: "android"`
+- `RweezyFirebaseMessagingService` shows notifications when the app is in the **background or closed**
+- Tapping a notification opens the app
+- Notification channel id: `rweezy_updates`
+
+**Shared backend behavior:**
+
+- Tokens are stored in `public.user_push_tokens` (one row per device token; upserted on conflict)
+- In-app alerts (new jobs, pending merchant orders, customer status changes) also run globally — not only on the orders/dashboard page
+- Admin test send: `POST /api/admin/notifications/test`
+  - By token: `{ "token": "<FCM_TOKEN>", "title": "Test", "body": "Hello" }`
+  - By user: `{ "user_id": "<auth-user-id>", "title": "Test", "body": "Hello" }`
 
 ## Scripts
 
@@ -370,9 +475,12 @@ The Android app is a native Kotlin application built with Jetpack Compose that w
 ### Features
 
 - **WebView-based**: Loads the web application with full feature parity
+- **System theme**: Native shell and website follow OS dark/light mode
 - **Geolocation Support**: Handles location permissions for delivery tracking
 - **File Upload**: Supports image and file uploads through the WebView
-- **Back Navigation**: Proper back button integration with WebView history
+- **Back Navigation**: System back navigates WebView history before exiting the app
+- **Firebase Cloud Messaging**: Native push via `RweezyFirebaseMessagingService` (foreground, background, and app closed)
+- **FCM token bridge**: `RweezyAndroidBridge` registers the native token with the backend after web login
 - **Server Configuration**: Runtime configuration for connecting to different backend servers
 - **Error Recovery**: Premium error UI with retry and server configuration options
 - **Progress Indicator**: Loading progress bar for page loads
@@ -406,22 +514,27 @@ To build a release APK:
 
 ```
 android/
-├── app/src/main/java/com/example/rweezy/
-│   ├── MainActivity.kt          # Main activity entry point
-│   ├── Navigation.kt            # Navigation configuration
-│   ├── NavigationKeys.kt        # Navigation route keys
-│   ├── data/
-│   │   ├── DataRepository.kt    # Data layer
-│   │   └── ServerConfigRepository.kt  # Server URL persistence
-│   ├── theme/
-│   │   ├── Color.kt             # Material Design 3 color scheme
-│   │   ├── Theme.kt             # App theme definition
-│   │   └── Type.kt              # Typography configuration
-│   └── ui/
-│       ├── WebViewScreen.kt     # Main WebView with error handling
-│       └── main/
-│           ├── MainScreen.kt    # Main screen layout
-│           └── MainScreenViewModel.kt  # ViewModel
+├── app/
+│   ├── google-services.json.example   # Firebase config template (copy to google-services.json)
+│   └── src/main/java/com/example/rweezy/
+│       ├── MainActivity.kt                # Main activity entry point
+│       ├── Navigation.kt                  # Navigation configuration
+│       ├── NavigationKeys.kt              # Navigation route keys
+│       ├── data/
+│       │   ├── DataRepository.kt          # Data layer
+│       │   └── ServerConfigRepository.kt  # Server URL persistence
+│       ├── messaging/
+│       │   ├── RweezyAndroidBridge.kt     # WebView JS bridge for FCM token
+│       │   └── RweezyFirebaseMessagingService.kt
+│       ├── theme/
+│       │   ├── Color.kt                   # Material Design 3 color scheme
+│       │   ├── Theme.kt                   # App theme (system dark/light)
+│       │   └── Type.kt                    # Typography configuration
+│       └── ui/
+│           ├── WebViewScreen.kt           # Main WebView with error handling
+│           └── main/
+│               ├── MainScreen.kt          # Main screen layout
+│               └── MainScreenViewModel.kt # ViewModel
 ```
 
 ### Android Minimum Requirements
@@ -429,17 +542,22 @@ android/
 - **minSdk**: 24 (Android 7.0)
 - **targetSdk**: 36
 - **compileSdk**: 36
-- **JVM Target**: Java 17
+- **JVM Target**: Java 21
 
 ## Runtime Architecture
 
 ```text
-Browser
+Browser / Android WebView
   -> React frontend
   -> /api/* requests with cookies
   -> Node backend
   -> Supabase Auth and Supabase REST
   -> Supabase Postgres
+
+Android (background push)
+  -> Firebase Cloud Messaging
+  -> RweezyFirebaseMessagingService
+  -> system notification tray
 ```
 
 In development, Vite serves the frontend and proxies `/api/*` to the backend. In production, `backend/server.mjs` serves the built frontend assets and API from the same origin.
@@ -452,6 +570,27 @@ Auth is cookie-based:
 - `rweezy_refresh_token` stores the refresh token
 - Backend refreshes expired access tokens and clears cookies on logout
 
+#### Sign up
+
+1. User enters name, email, phone, and password on `/register` (or `/register-partner` for business roles).
+2. User verifies phone with Twilio SMS OTP (`purpose: register`) and receives a short-lived `phone_verification_token`.
+3. Backend creates the Supabase user and profile; if `AUTH_REQUIRE_EMAIL_VERIFICATION=true`, Supabase sends a confirmation email before email/password login works.
+
+#### Sign in
+
+- **Email:** `/login` → email + password → session cookies.
+- **Phone:** `/login` → Twilio phone OTP (`purpose: login`) → backend resolves phone to account email and starts a session.
+
+#### Password reset
+
+1. User opens `/forgot-password` and submits their account email.
+2. Backend sends a Supabase recovery email (if the account exists).
+3. User opens the email link on `/reset-password` (provides `token_hash` in the URL).
+4. User verifies the registered phone with Twilio SMS OTP (`purpose: reset_password`).
+5. User sets a new password → backend verifies the recovery token and phone token, updates the password, and signs the user in.
+
+Requires `SUPABASE_SERVICE_ROLE_KEY` (user lookup), Twilio Verify credentials, and redirect URLs configured in Supabase (see above).
+
 ## API Summary
 
 All routes live under `/api`.
@@ -461,8 +600,13 @@ All routes live under `/api`.
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/health` | Health check |
-| `POST` | `/api/auth/login` | Login with email or phone plus password |
-| `POST` | `/api/auth/register` | Register user and assign initial role |
+| `POST` | `/api/auth/login` | Login with email and password |
+| `POST` | `/api/auth/register` | Register user (requires phone verification token) |
+| `POST` | `/api/auth/phone/send-otp` | Validate phone OTP request (`purpose`: `login`, `register`, or `reset_password`) and send SMS via Twilio |
+| `POST` | `/api/auth/phone/verify-otp` | Verify Twilio OTP code; returns session (login) or phone token (register / reset) |
+| `POST` | `/api/auth/email/resend-verification` | Resend signup confirmation email |
+| `POST` | `/api/auth/password-reset/request` | Send password recovery email |
+| `POST` | `/api/auth/password-reset/complete` | Set new password after email link + phone verification |
 | `POST` | `/api/auth/logout` | Revoke session and clear cookies |
 | `GET` | `/api/map/route` | Fetch Mapbox route coordinates |
 
@@ -478,7 +622,8 @@ All routes live under `/api`.
 | Riders | `/api/rider/jobs`, `/api/rider/active`, `/api/rider/rides/:id/accept`, `/api/rider/packages/:id/accept`, `/api/rider/:table/:id/advance`, `/api/rider/:table/:id/cancel` |
 | Restaurant managers | `/api/hotel/dashboard`, `/api/hotel/restaurant`, `/api/hotel/menu`, `/api/hotel/orders` |
 | Grocery managers | `/api/grocery/dashboard`, `/api/grocery/store`, `/api/grocery/items`, `/api/grocery/orders` |
-| Admin | `/api/admin/stats`, `/api/admin/analytics`, `/api/admin/users`, `/api/admin/restaurants`, `/api/admin/stores`, `/api/admin/health`, `/api/admin/commissions`, `/api/admin/catalog-settings` |
+| Admin | `/api/admin/stats`, `/api/admin/analytics`, `/api/admin/users`, `/api/admin/restaurants`, `/api/admin/stores`, `/api/admin/health`, `/api/admin/commissions`, `/api/admin/catalog-settings`, `/api/admin/notifications/test` |
+| Notifications | `POST /api/notifications/token` (save FCM device token for current user) |
 
 ### Catalog Radius Setting (Admin)
 
@@ -498,38 +643,171 @@ Defaults and limits in backend:
 - Default: `25 km`
 - Allowed range: `1` to `100` km
 
-## Database Notes
+## Database
 
-The schema is managed through SQL migrations in `backend/supabase/migrations`.
+PostgreSQL is hosted on **Supabase**. Auth users live in `auth.users`; application data lives in the `public` schema. Schema changes are applied with SQL migrations in `backend/supabase/migrations` (run `npx supabase db push` from `backend/supabase`).
 
-### Main Tables
+### Enums
 
-- `profiles`
-- `user_roles`
-- `role_requests`
-- `restaurants`
-- `menu_items`
-- `food_orders`
-- `food_order_items`
-- `grocery_stores`
-- `grocery_items`
-- `grocery_orders`
-- `grocery_order_items`
-- `rides`
-- `package_deliveries`
-- `chat_messages`
-- `saved_addresses`
-- `platform_settings`
-- `audit_events`
+| Enum | Values | Used by |
+| --- | --- | --- |
+| `app_role` | `customer`, `admin`, `hotel_manager`, `grocery_manager`, `delivery_boy`, `rider` | `user_roles`, `role_requests` |
+| `order_status` | `pending`, `accepted`, `preparing`, `ready`, `picked_up`, `delivered`, `cancelled` | `food_orders`, `grocery_orders` |
+| `ride_status` | `requested`, `accepted`, `started`, `completed`, `cancelled` | `rides`, `package_deliveries` |
 
-### User Roles
+Helper function `public.has_role(user_id, role)` checks role membership (used heavily in RLS policies).
 
-- `customer`
-- `delivery_boy`
-- `rider`
-- `hotel_manager`
-- `grocery_manager`
-- `admin`
+### Entity relationship overview
+
+```mermaid
+erDiagram
+  auth_users ||--o| profiles : "1:1"
+  auth_users ||--o{ user_roles : "has many"
+  auth_users ||--o{ role_requests : "requests"
+  auth_users ||--o{ saved_addresses : "owns"
+  auth_users ||--o{ user_push_tokens : "devices"
+  auth_users ||--o{ order_reviews : "writes"
+
+  auth_users ||--o{ restaurants : "manages"
+  restaurants ||--o{ menu_items : "menu"
+  restaurants ||--o{ food_orders : "receives"
+  auth_users ||--o{ food_orders : "customer"
+  auth_users ||--o{ food_orders : "delivery_boy"
+  food_orders ||--o{ food_order_items : "line items"
+  menu_items ||--o{ food_order_items : "snapshot ref"
+
+  auth_users ||--o{ grocery_stores : "manages"
+  grocery_stores ||--o{ grocery_items : "catalog"
+  grocery_stores ||--o{ grocery_orders : "receives"
+  auth_users ||--o{ grocery_orders : "customer"
+  auth_users ||--o{ grocery_orders : "delivery_boy"
+  grocery_orders ||--o{ grocery_order_items : "line items"
+  grocery_items ||--o{ grocery_order_items : "snapshot ref"
+
+  auth_users ||--o{ rides : "customer"
+  auth_users ||--o{ rides : "rider"
+  auth_users ||--o{ package_deliveries : "customer"
+  auth_users ||--o{ package_deliveries : "rider"
+
+  chat_messages }o--|| rides : "service_kind=ride"
+  chat_messages }o--|| package_deliveries : "service_kind=package"
+  chat_messages }o--|| food_orders : "service_kind=food"
+  chat_messages }o--|| grocery_orders : "service_kind=grocery"
+```
+
+`chat_messages` and `order_reviews` use a **polymorphic** pattern: `service_kind` + `service_id` (no single FK to one order table).
+
+### Tables and relationships
+
+#### Identity and access
+
+| Table | Primary key | Main foreign keys | Purpose |
+| --- | --- | --- | --- |
+| `profiles` | `id` | `id` → `auth.users(id)` CASCADE | Display name, phone, avatar, `town_name`, `pincode` |
+| `user_roles` | `id` | `user_id` → `auth.users` CASCADE | Many roles per user; UNIQUE (`user_id`, `role`) |
+| `role_requests` | `id` | `user_id` → `auth.users`; `reviewed_by` → `auth.users` | Partner role approval workflow (`pending` / `approved` / `rejected`) |
+| `saved_addresses` | `id` | `user_id` → `auth.users` CASCADE | Customer delivery addresses with optional `lat`/`lng`, `is_default` |
+| `user_push_tokens` | `id` | `user_id` → `auth.users` CASCADE | FCM tokens per device; UNIQUE `token` |
+
+On signup, trigger `handle_new_user` creates a `profiles` row and inserts the default `customer` role (or role from signup metadata).
+
+#### Food (restaurants)
+
+| Table | Primary key | Main foreign keys | Purpose |
+| --- | --- | --- | --- |
+| `restaurants` | `id` | `manager_id` → `auth.users` SET NULL | Store profile, `is_open`, location (`lat`, `lng`, `town_name`, `pincode`); one manager per restaurant (unique index) |
+| `menu_items` | `id` | `restaurant_id` → `restaurants` CASCADE | Menu catalog: price, `is_veg`, `prep_time_minutes`, `modifiers` JSONB |
+| `food_orders` | `id` | `customer_id`, `delivery_boy_id` → `auth.users`; `restaurant_id` → `restaurants` RESTRICT | Order header: `status`, totals, delivery/pickup coords, `delivery_pin`, ETA, live `rider_lat`/`rider_lng` |
+| `food_order_items` | `id` | `order_id` → `food_orders` CASCADE; `menu_item_id` → `menu_items` RESTRICT | Line items (name/price/qty snapshotted at order time) |
+
+#### Grocery
+
+| Table | Primary key | Main foreign keys | Purpose |
+| --- | --- | --- | --- |
+| `grocery_stores` | `id` | `manager_id` → `auth.users` SET NULL | Store profile (mirror of restaurants); one manager per store |
+| `grocery_items` | `id` | `store_id` → `grocery_stores` CASCADE | Catalog: `stock_quantity`, `unit`, `expiry_date`, `low_stock_threshold` |
+| `grocery_orders` | `id` | `customer_id`, `delivery_boy_id` → `auth.users`; `store_id` → `grocery_stores` RESTRICT | Same patterns as food orders |
+| `grocery_order_items` | `id` | `order_id` → `grocery_orders` CASCADE; `grocery_item_id` → `grocery_items` RESTRICT | Line items |
+
+#### Rides and packages
+
+| Table | Primary key | Main foreign keys | Purpose |
+| --- | --- | --- | --- |
+| `rides` | `id` | `customer_id`, `rider_id` → `auth.users` | Pickup/drop addresses and coords, `vehicle_type`, `fare_estimate`, `ride_status`, live rider location |
+| `package_deliveries` | `id` | `customer_id`, `rider_id` → `auth.users` | Package size, receiver contact, same status/location model as rides |
+
+#### Platform, chat, reviews
+
+| Table | Primary key | Relations | Purpose |
+| --- | --- | --- | --- |
+| `chat_messages` | `id` | `sender_id` → `auth.users`; logical link via `service_kind` + `service_id` | In-job chat (customer ↔ rider/delivery partner) |
+| `order_reviews` | `id` | `user_id` → `auth.users`; UNIQUE (`user_id`, `service_kind`, `service_id`) | 1–5 star rating per completed service |
+| `platform_settings` | `key` (text) | — | JSON config (e.g. `commissions`, `catalog_radius_km`) |
+| `audit_events` | `id` | `actor_id` → `auth.users` SET NULL | Admin audit log (`action`, `target_type`, `metadata` JSONB) |
+
+### How services connect to users
+
+| Service | Customer | Assigned partner | Merchant |
+| --- | --- | --- | --- |
+| Food delivery | `food_orders.customer_id` | `food_orders.delivery_boy_id` | `restaurants.manager_id` |
+| Grocery delivery | `grocery_orders.customer_id` | `grocery_orders.delivery_boy_id` | `grocery_stores.manager_id` |
+| Ride | `rides.customer_id` | `rides.rider_id` | — |
+| Package | `package_deliveries.customer_id` | `package_deliveries.rider_id` | — |
+
+Unassigned jobs are visible to partners with the matching role when `delivery_boy_id` / `rider_id` IS NULL (enforced in RLS).
+
+### Row Level Security (RLS)
+
+RLS is enabled on all `public` tables. Typical rules:
+
+- **Profiles / addresses / push tokens**: users read/write their own rows; admins can read more where noted.
+- **Catalog** (`restaurants`, `menu_items`, `grocery_stores`, `grocery_items`): public read; managers update their own venue; admins full control.
+- **Orders / rides / packages**: customers see own rows; assigned partners see assigned rows; partners see unassigned pool; merchants see orders for their venue; admins see all.
+- **Chat**: only participants on that service (plus admin).
+- **Platform settings / audit**: admin only.
+
+The Node backend often uses the user’s JWT for REST calls, so RLS applies. Some flows (token upsert, admin broadcasts) use the **service role** key from the server only — never expose it to the client.
+
+### Realtime (Supabase)
+
+These tables are added to the `supabase_realtime` publication for live updates:
+
+- `rides`, `package_deliveries`, `food_orders`, `grocery_orders`
+- `chat_messages`, `order_reviews`
+
+The web app still polls in several places; Realtime can be subscribed for lower latency.
+
+### Migration files (order)
+
+| File | Summary |
+| --- | --- |
+| `20260430163946_*.sql` | Core schema: enums, profiles, roles, restaurants, grocery, orders, rides, packages, RLS |
+| `20260430164012_*.sql` | Security hardening on helper functions |
+| `20260501054502_*.sql` | Menu `is_veg`; hotel manager restaurant insert |
+| `20260501055338_*.sql` | Realtime on `rides` |
+| `20260502004437_*.sql` | Grocery manager self-insert store |
+| `20260503034022_*.sql` | Ride `vehicle_type` |
+| `20260503034920_*.sql` | Live rider location columns + realtime on order tables |
+| `20260504090000_add_location_fields.sql` | Town/pincode on profiles and venues |
+| `20260511120000_add_chat_messages.sql` | `chat_messages` + RLS + realtime |
+| `20260511123000_store_signup_phone.sql` | Phone on signup; `email_for_phone_login` RPC |
+| `20260514103000_user_friendly_flows.sql` | `role_requests`, `saved_addresses`, `audit_events`, pickup/cancel fields |
+| `20260515100000_partner_operations_inventory.sql` | Grocery stock, menu prep/modifiers |
+| `20260516120000_complete_platform_features.sql` | `platform_settings`, delivery PIN/ETA, `order_reviews` |
+| `20260528135000_add_user_push_tokens.sql` | FCM `user_push_tokens` |
+
+### User roles (`app_role`)
+
+| Role | Typical use |
+| --- | --- |
+| `customer` | Browse catalog, place orders, book rides/packages, track and chat |
+| `delivery_boy` | Accept and deliver food/grocery orders |
+| `rider` | Accept and complete rides and package deliveries |
+| `hotel_manager` | Own one restaurant, menu, and order workflow |
+| `grocery_manager` | Own one grocery store, inventory, and orders |
+| `admin` | Users, venues, analytics, commissions, catalog radius, role approvals |
+
+Users can hold **multiple roles** (e.g. `customer` + `rider`). Extra business roles are usually requested via `role_requests` and granted by an admin.
 
 ## User-Friendly Updates To Prioritize
 
@@ -577,6 +855,8 @@ After checking the codebase, these are the highest-impact improvements to make t
 - Show inline field errors, not only toast messages
 - Add phone number handling beyond hard-coded `+91` if the app should support more countries
 
+Note: Indian phone numbers (`+91`) are supported today with Twilio Verify for OTP flows.
+
 ### 7. Improve Accessibility
 
 - Check keyboard navigation for maps, sidebars, dialogs, carts, and admin tables
@@ -602,9 +882,12 @@ After checking the codebase, these are the highest-impact improvements to make t
 ## Current Gaps To Know
 
 - E2E tests need a running server and `npm run seed:demo` against your Supabase project
+- Password reset and phone login require Twilio Verify in production (or explicit dev bypass)
 - Backend request validation is mostly manual and route-specific beyond shared Zod schemas
 - Realtime chat/tracking uses polling rather than Supabase Realtime subscriptions everywhere
 - Production readiness depends on correct Supabase RLS policies, environment variables, and seeded data
+- Android app is not on the Play Store yet; set `VITE_ANDROID_APP_URL` when you have a public download link
+- iOS app is not included; the mobile download prompt targets Android phones only
 
 ## Build For Production
 

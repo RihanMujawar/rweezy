@@ -338,9 +338,7 @@ function AdminRestaurants() {
             );
           })}
           <div className="flex items-center justify-between rounded-xl border bg-card p-3">
-            <div className="text-sm text-muted-foreground">
-              Page {page} (20 per request)
-            </div>
+            <div className="text-sm text-muted-foreground">Page {page} (20 per request)</div>
             <div className="flex gap-2">
               <Button
                 variant="outline"

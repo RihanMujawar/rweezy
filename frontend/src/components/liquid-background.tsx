@@ -4,13 +4,14 @@ export function LiquidBackground() {
   return (
     <div className="fixed inset-0 -z-50 overflow-hidden pointer-events-none select-none w-screen h-screen">
       {/* Dynamic Background Base */}
-      <div 
+      <div
         className="absolute inset-0 transition-colors duration-700 ease-in-out"
         style={{
-          background: "radial-gradient(circle at 50% 50%, var(--bg-radial-start, oklch(0.99 0.003 240)), var(--bg-radial-end, oklch(0.96 0.008 240)))",
+          background:
+            "radial-gradient(circle at 50% 50%, var(--bg-radial-start, oklch(0.99 0.003 240)), var(--bg-radial-end, oklch(0.96 0.008 240)))",
         }}
       />
-      
+
       {/* Light & Dark theme variable support for base */}
       <style>{`
         :root {

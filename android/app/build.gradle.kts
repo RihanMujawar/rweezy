@@ -51,7 +51,7 @@ kotlin {
 
 dependencies {
   implementation(platform(libs.firebase.bom))
-  implementation(libs.firebase.messaging.ktx)
+  implementation(libs.firebase.messaging)
 
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)

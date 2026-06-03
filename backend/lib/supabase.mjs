@@ -185,7 +185,7 @@ export async function createSessionForEmail(email) {
     },
   });
 
-  const tokenHash = link?.properties?.hashed_token;
+  const tokenHash = link?.hashed_token ?? link?.properties?.hashed_token;
   if (!tokenHash) {
     throw new HttpError(500, "Unable to start a phone login session");
   }
@@ -230,6 +230,13 @@ export async function updatePasswordWithAccessToken(accessToken, password) {
   return authRequest("/user", {
     method: "PUT",
     token: accessToken,
+    body: { password },
+  });
+}
+
+export async function updateUserPassword(userId, password) {
+  return adminAuthRequest(`/users/${encodeURIComponent(userId)}`, {
+    method: "PUT",
     body: { password },
   });
 }

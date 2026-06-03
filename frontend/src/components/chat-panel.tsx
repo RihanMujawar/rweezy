@@ -3,6 +3,7 @@ import { MessageCircle, Send } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { setActiveChat } from "@/lib/active-chat";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }:
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const lastMessageCountRef = useRef(0);
 
   const load = useCallback(
     async (showLoading = false) => {
@@ -38,7 +40,24 @@ export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }:
       if (showLoading) setLoading(true);
       try {
         const data = await api.chat.get(kind, serviceId);
-        setMessages((data.messages as ChatMessage[]) ?? []);
+        const nextMessages = (data.messages as ChatMessage[]) ?? [];
+        const previousCount = lastMessageCountRef.current;
+        const latest = nextMessages[nextMessages.length - 1];
+
+        if (
+          !showLoading &&
+          latest &&
+          latest.sender_id !== user.id &&
+          nextMessages.length > previousCount &&
+          document.hidden
+        ) {
+          toast.info("New chat message", {
+            description: latest.body.length > 100 ? `${latest.body.slice(0, 97)}...` : latest.body,
+          });
+        }
+
+        lastMessageCountRef.current = nextMessages.length;
+        setMessages(nextMessages);
         setError(null);
       } catch (error) {
         setError(error instanceof Error ? error.message : "Failed to load chat");
@@ -48,6 +67,16 @@ export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }:
     },
     [disabled, kind, serviceId, user],
   );
+
+  useEffect(() => {
+    if (!user || disabled) {
+      setActiveChat(null);
+      return;
+    }
+
+    setActiveChat({ kind, serviceId });
+    return () => setActiveChat(null);
+  }, [disabled, kind, serviceId, user]);
 
   useEffect(() => {
     if (!user || disabled) {

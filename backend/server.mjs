@@ -24,19 +24,24 @@ import {
   resendSignupConfirmation,
   restRequest,
   revokeSession,
-  sendPasswordRecoveryEmail,
   serviceRoleRestRequest,
   signInWithPassword,
   signUpWithPassword,
-  updatePasswordWithAccessToken,
-  verifyRecoveryToken,
+  updateUserPassword,
 } from "./lib/supabase.mjs";
+import {
+  sendPasswordResetEmailOtp,
+  verifyPasswordResetEmailOtp,
+} from "./lib/email-otp.mjs";
 import { checkRateLimit } from "./lib/rate-limit.mjs";
 import {
   createPhoneVerificationToken,
   verifyPhoneVerificationToken,
 } from "./lib/phone-verification.mjs";
-import { sendPhoneVerificationCode, verifyPhoneVerificationCode } from "./lib/twilio.mjs";
+import {
+  sendPhoneVerificationCode,
+  verifyPhoneVerificationCode,
+} from "./lib/twilio.mjs";
 import {
   assertStatusAdvance,
   estimateDeliveryAt,
@@ -691,6 +696,13 @@ async function assertPhoneAvailable(phone) {
   }
 }
 
+async function assertEmailAvailable(email) {
+  const existingUser = await findUserByEmail(email);
+  if (existingUser?.id) {
+    throw new HttpError(409, "This email address is already registered");
+  }
+}
+
 async function completeUserRegistration({
   email,
   fullName,
@@ -702,6 +714,7 @@ async function completeUserRegistration({
   roleMessage,
 }) {
   verifyPhoneVerificationToken(phoneVerificationToken, phone);
+  await assertEmailAvailable(email);
   await assertPhoneAvailable(phone);
 
   const role = "customer";
@@ -1031,10 +1044,12 @@ const routes = [
     }
 
     await sendPhoneVerificationCode(phone);
+
     return {
       ok: true,
       purpose,
-      message: "Verification code sent by SMS",
+      provider: "twilio",
+      message: "Verification code sent to your phone",
     };
   }),
   route("POST", /^\/api\/auth\/phone\/verify-otp$/, async ({ body }) => {
@@ -1045,8 +1060,8 @@ const routes = [
     if (!phone || !/^\+\d{10,15}$/.test(phone)) {
       throw new HttpError(400, "Enter a valid phone number with country code");
     }
-    if (!code) {
-      throw new HttpError(400, "Verification code is required");
+    if (!/^\d{4,10}$/.test(code)) {
+      throw new HttpError(400, "Enter the verification code");
     }
 
     await verifyPhoneVerificationCode(phone, code);
@@ -1089,28 +1104,19 @@ const routes = [
 
     const account = await resolveAccountForPasswordReset(email);
     if (account) {
-      try {
-        await sendPasswordRecoveryEmail(email);
-      } catch (error) {
-        if (error instanceof HttpError && error.status === 429) {
-          throw error;
-        }
-        console.warn(
-          `Password reset email failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
+      await sendPasswordResetEmailOtp(account.email);
     }
 
     return {
       ok: true,
       message:
-        "If an account exists for this email, we sent a password reset link. Check your inbox and spam folder.",
+        "If an account exists for this email, we sent a 6-digit reset code. Check your inbox and spam folder.",
       phoneHint: account?.phone ? maskPhoneHint(account.phone) : null,
     };
   }),
   route("POST", /^\/api\/auth\/password-reset\/complete$/, async ({ body }) => {
     const email = cleanText(body.email)?.toLowerCase();
-    const tokenHash = cleanText(body.token_hash);
+    const emailOtp = cleanText(body.email_otp);
     const phone = normalizeIndianPhone(body.phone);
     const phoneVerificationToken = cleanText(body.phone_verification_token);
     const password = typeof body.password === "string" ? body.password : "";
@@ -1118,8 +1124,8 @@ const routes = [
     if (!email) {
       throw new HttpError(400, "Email is required");
     }
-    if (!tokenHash) {
-      throw new HttpError(400, "Email reset link is required. Open the link from your email.");
+    if (!/^\d{6}$/.test(emailOtp)) {
+      throw new HttpError(400, "Enter the 6-digit email OTP");
     }
     if (!phone || !/^\+\d{10,15}$/.test(phone)) {
       throw new HttpError(400, "Enter a valid phone number with country code");
@@ -1137,30 +1143,15 @@ const routes = [
     }
 
     verifyPhoneVerificationToken(phoneVerificationToken, phone);
+    verifyPasswordResetEmailOtp(email, emailOtp);
 
-    let session;
-    try {
-      session = await verifyRecoveryToken(tokenHash);
-    } catch (error) {
-      if (error instanceof HttpError) {
-        throw new HttpError(
-          400,
-          "Email reset link is invalid or expired. Request a new reset email and try again.",
-        );
-      }
-      throw error;
-    }
+    await updateUserPassword(account.userId, password);
 
+    const session = await createSessionForEmail(account.email);
     const normalized = normalizeAuthSession(session);
-    if (!normalized.user?.id || normalized.user.id !== account.userId) {
-      throw new HttpError(400, "Email reset link does not match this account");
+    if (!normalized.accessToken || !normalized.user?.id) {
+      throw new HttpError(500, "Password updated, but sign-in session could not be created");
     }
-    if (!normalized.accessToken) {
-      throw new HttpError(400, "Email verification failed. Request a new reset email.");
-    }
-
-    await updatePasswordWithAccessToken(normalized.accessToken, password);
-
     const roles = await getRoles(normalized.accessToken, normalized.user.id);
 
     return {
@@ -1191,14 +1182,15 @@ const routes = [
     let identifier = { email };
 
     if (phone) {
-      throw new HttpError(
-        400,
-        "Phone sign-in uses OTP. Request a code from /api/auth/phone/send-otp and verify it.",
-      );
+      const resolvedEmail = await resolveEmailForPhone(phone);
+      if (!resolvedEmail) {
+        throw new HttpError(404, "No account found for this phone number");
+      }
+      identifier = { email: resolvedEmail };
     }
 
     if (!identifier.email) {
-      throw new HttpError(400, "Email is required");
+      throw new HttpError(400, "Phone number is required");
     }
 
     let session;

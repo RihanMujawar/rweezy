@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { fieldErrors, registerSchema } from "@/lib/validation";
+import { fieldErrors, phoneSchema, registerSchema } from "@/lib/validation";
+import { PhoneOtpVerification } from "@/components/phone-otp-verification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,12 +34,18 @@ function PartnerRegisterPage() {
     useState<(typeof roleOptions)[number]["value"]>("rider");
   const [businessName, setBusinessName] = useState("");
   const [roleMessage, setRoleMessage] = useState("");
+  const [phoneVerificationToken, setPhoneVerificationToken] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
+  const fullPhone = `${countryCode}${phoneSuffix.replace(/\D/g, "")}`;
+
+  useEffect(() => {
+    setPhoneVerificationToken("");
+  }, [fullPhone]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const fullPhone = `${countryCode}${phoneSuffix.replace(/\D/g, "")}`;
     const parsed = registerSchema.safeParse({
       fullName,
       email,
@@ -57,6 +64,11 @@ function PartnerRegisterPage() {
       return;
     }
 
+    if (!phoneVerificationToken) {
+      toast.error("Verify your phone number with the OTP code before signing up");
+      return;
+    }
+
     setErrors({});
     setLoading(true);
     try {
@@ -65,10 +77,17 @@ function PartnerRegisterPage() {
         email: parsed.data.email.toLowerCase(),
         phone: parsed.data.phone,
         password,
+        phone_verification_token: phoneVerificationToken,
         requested_role: parsed.data.requestedRole,
         business_name: parsed.data.businessName,
         role_message: parsed.data.roleMessage,
       });
+
+      if (result.emailVerificationRequired) {
+        toast.success("Account created! Verify your email, then sign in.");
+        navigate({ to: "/login" });
+        return;
+      }
 
       if (result.authenticated) {
         await refreshAuth();
@@ -91,15 +110,15 @@ function PartnerRegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-transparent px-4 py-12 animate-fade-in-up">
       <div className="w-full max-w-lg rounded-2xl border bg-card/60 p-8 shadow-2xl backdrop-blur-xl">
-        <Link 
-          to="/" 
+        <Link
+          to="/"
           className="text-2xl font-extrabold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent hover:opacity-90 transition-opacity"
         >
           Rweezy
         </Link>
         <h1 className="mt-6 text-2xl font-bold tracking-tight">Create a partner account</h1>
         <p className="text-sm text-muted-foreground">
-          Use this page for rider, delivery partner, restaurant manager, or grocery manager access.
+          Verify your phone with SMS OTP. An email verification link is sent after signup.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -147,6 +166,13 @@ function PartnerRegisterPage() {
             </div>
             {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
           </div>
+
+          <PhoneOtpVerification
+            phone={fullPhone}
+            purpose="register"
+            onVerified={setPhoneVerificationToken}
+            disabled={!phoneSchema.safeParse(fullPhone).success}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="requestedRole">Choose role</Label>
@@ -219,7 +245,7 @@ function PartnerRegisterPage() {
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading || !phoneVerificationToken}>
             {loading ? "Creating account..." : "Request access"}
           </Button>
         </form>

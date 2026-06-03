@@ -131,38 +131,51 @@ function ItemCarousel({
             items.map((item) => {
               const placeName =
                 item.restaurants?.name || item.grocery_stores?.name || "Rweezy Partner";
-              const imageUrl = item.image_url || (to === "/app/food"
-                ? "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80"
-                : "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=700&q=80");
-              const linkParams = to === "/app/food"
-                ? { restaurantId: item.restaurant_id || "" }
-                : { storeId: item.store_id || "" };
-              const linkTo = to === "/app/food"
-                ? "/app/food/$restaurantId"
-                : "/app/grocery/$storeId";
+              const imageUrl =
+                item.image_url ||
+                (to === "/app/food"
+                  ? "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80"
+                  : "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=700&q=80");
+              const linkClassName =
+                "block overflow-hidden rounded-xl border bg-card/60 backdrop-blur-md shadow-sm transition-all duration-300 hover:border-primary/50 hover:scale-[1.02] hover:shadow-md";
+              const cardBody = (
+                <>
+                  <div className="aspect-square bg-muted sm:aspect-[4/3]">
+                    <img src={imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                  </div>
+                  <div className="p-3 sm:p-4">
+                    <div>
+                      <h3 className="line-clamp-2 text-sm font-semibold leading-tight sm:text-base">
+                        {item.name}
+                      </h3>
+                      <p className="mt-1 truncate text-xs text-muted-foreground sm:text-sm">
+                        {placeName}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold">₹{item.price}</p>
+                  </div>
+                </>
+              );
 
               return (
                 <CarouselItem key={item.id} className="basis-[46%] sm:basis-1/2 lg:basis-1/4">
-                  <Link
-                    to={linkTo as any}
-                    params={linkParams as any}
-                    className="block overflow-hidden rounded-xl border bg-card/60 backdrop-blur-md shadow-sm transition-all duration-300 hover:border-primary/50 hover:scale-[1.02] hover:shadow-md"
-                  >
-                    <div className="aspect-square bg-muted sm:aspect-[4/3]">
-                      <img src={imageUrl} alt={item.name} className="h-full w-full object-cover" />
-                    </div>
-                    <div className="p-3 sm:p-4">
-                      <div>
-                        <h3 className="line-clamp-2 text-sm font-semibold leading-tight sm:text-base">
-                          {item.name}
-                        </h3>
-                        <p className="mt-1 truncate text-xs text-muted-foreground sm:text-sm">
-                          {placeName}
-                        </p>
-                      </div>
-                      <p className="mt-2 text-sm font-semibold">₹{item.price}</p>
-                    </div>
-                  </Link>
+                  {to === "/app/food" ? (
+                    <Link
+                      to="/app/food/$restaurantId"
+                      params={{ restaurantId: item.restaurant_id || "" }}
+                      className={linkClassName}
+                    >
+                      {cardBody}
+                    </Link>
+                  ) : (
+                    <Link
+                      to="/app/grocery/$storeId"
+                      params={{ storeId: item.store_id || "" }}
+                      className={linkClassName}
+                    >
+                      {cardBody}
+                    </Link>
+                  )}
                 </CarouselItem>
               );
             })
@@ -188,14 +201,16 @@ function AppHome() {
   const [loadingGrocery, setLoadingGrocery] = useState(true);
 
   useEffect(() => {
-    api.catalog.getPopularFoodItems()
+    api.catalog
+      .getPopularFoodItems()
       .then(({ items }) => {
         setFoodItems(items || []);
       })
       .catch((err) => console.error("Error fetching popular food:", err))
       .finally(() => setLoadingFood(false));
 
-    api.catalog.getPopularGroceryItems()
+    api.catalog
+      .getPopularGroceryItems()
       .then(({ items }) => {
         setGroceryItems(items || []);
       })
@@ -235,7 +250,10 @@ function AppHome() {
                 </p>
               </div>
             </div>
-            <Button asChild className="min-h-11 shrink-0 btn-interactive shadow-md shadow-primary/10">
+            <Button
+              asChild
+              className="min-h-11 shrink-0 btn-interactive shadow-md shadow-primary/10"
+            >
               <Link
                 to="/app/track"
                 search={{ id: latestActiveOrder.id, kind: latestActiveOrder.kind }}
@@ -250,7 +268,9 @@ function AppHome() {
       <section>
         <div className="mb-3 flex items-center gap-2 md:mb-4">
           <Sparkles className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold tracking-tight md:text-xl">Book anything from one place</h2>
+          <h2 className="text-lg font-bold tracking-tight md:text-xl">
+            Book anything from one place
+          </h2>
         </div>
         <div className="grid grid-cols-4 gap-2 md:auto-rows-[180px] md:grid-cols-4 md:gap-4">
           {bentoActions.map((s) => (

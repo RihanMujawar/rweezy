@@ -41,8 +41,8 @@ function Landing() {
     <div className="min-h-screen bg-transparent">
       <header className="border-b border-white/10 backdrop-blur-md sticky top-0 z-40">
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent hover:opacity-90 transition-opacity"
           >
             Rweezy
@@ -54,7 +54,11 @@ function Landing() {
               </Button>
             ) : (
               <>
-                <Button variant="ghost" asChild className="btn-interactive hover:bg-white/10 dark:hover:bg-white/5">
+                <Button
+                  variant="ghost"
+                  asChild
+                  className="btn-interactive hover:bg-white/10 dark:hover:bg-white/5"
+                >
                   <Link to="/login">Login</Link>
                 </Button>
                 <Button asChild className="btn-interactive shadow-lg shadow-primary/20">
@@ -78,7 +82,11 @@ function Landing() {
             Food, rides, packages and groceries — all in one app. Built for your city.
           </p>
           <div className="mt-10 flex justify-center gap-3">
-            <Button size="lg" asChild className="btn-interactive h-12 px-8 text-base shadow-xl shadow-primary/25">
+            <Button
+              size="lg"
+              asChild
+              className="btn-interactive h-12 px-8 text-base shadow-xl shadow-primary/25"
+            >
               <Link to={user ? "/app" : "/register"}>
                 Get started <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
@@ -93,7 +101,9 @@ function Landing() {
                 key={s.title}
                 className="liquid-glass-card p-6 flex flex-col items-start relative group"
               >
-                <div className={`absolute top-0 right-0 w-28 h-28 rounded-full bg-gradient-to-br ${s.color} blur-[30px] opacity-60 group-hover:scale-125 transition-transform duration-500`} />
+                <div
+                  className={`absolute top-0 right-0 w-28 h-28 rounded-full bg-gradient-to-br ${s.color} blur-[30px] opacity-60 group-hover:scale-125 transition-transform duration-500`}
+                />
                 <div className="relative z-10 flex flex-col h-full justify-between">
                   <div>
                     <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 dark:bg-black/20 border border-white/20 backdrop-blur-sm shadow-inner group-hover:scale-110 transition-transform duration-300">
@@ -110,7 +120,7 @@ function Landing() {
       </main>
 
       <footer className="border-t border-white/10 py-8 text-center text-sm text-muted-foreground">
-        © {new Date().getFullYear()} Rweezy. Built with Lovable.
+        © {new Date().getFullYear()} Rweezy
       </footer>
     </div>
   );

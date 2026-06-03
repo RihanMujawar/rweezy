@@ -5,14 +5,41 @@ export const phoneSchema = z
   .trim()
   .regex(/^\+\d{10,15}$/, "Use a country code, for example +919876543210");
 
-export const loginEmailSchema = z.object({
-  email: z.string().trim().email("Enter a valid email"),
+export const loginPhonePasswordSchema = z.object({
+  phone: phoneSchema,
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 export const loginPhoneSchema = z.object({
   phone: phoneSchema,
-  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export const passwordResetRequestSchema = z.object({
+  email: z.string().trim().email("Enter a valid email"),
+});
+
+export const passwordResetCompleteSchema = z
+  .object({
+    email: z.string().trim().email("Enter a valid email"),
+    phone: phoneSchema,
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string().min(6, "Confirm your password"),
+    emailOtp: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, "Enter the 6-digit code sent to your email"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords do not match",
+  });
+
+export const phoneOtpCodeSchema = z.object({
+  phone: phoneSchema,
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{4,8}$/, "Enter the verification code sent to your phone"),
 });
 
 export const registerSchema = z
@@ -20,8 +47,12 @@ export const registerSchema = z
     fullName: z.string().trim().min(2, "Enter your full name").max(120),
     email: z.string().trim().email("Enter a valid email"),
     phone: phoneSchema,
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    confirmPassword: z.string().min(6, "Confirm your password"),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .regex(/[A-Za-z]/, "Password must include at least one letter")
+      .regex(/\d/, "Password must include at least one number"),
+    confirmPassword: z.string().min(8, "Confirm your password"),
     requestedRole: z.enum([
       "customer",
       "rider",

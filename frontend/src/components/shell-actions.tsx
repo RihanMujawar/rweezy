@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { MessageCircle, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { useFoodCart } from "@/lib/food-cart";
 import { useGroceryCart } from "@/lib/grocery-cart";
 import { useOrderSummary } from "@/hooks/use-order-summary";
@@ -18,7 +17,6 @@ export function ShellActions() {
 
   return (
     <div className="ml-auto flex items-center gap-2">
-      <ThemeToggle />
       {activeOrders.length > 0 && (
         <Button
           asChild
