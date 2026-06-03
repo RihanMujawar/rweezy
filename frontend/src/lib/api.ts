@@ -48,11 +48,65 @@ export const api = {
           body: payload,
         },
       ),
+    sendPhoneOtp: (payload: {
+      phone: string;
+      purpose: "login" | "register" | "reset_password";
+      email?: string;
+    }) =>
+      apiRequest<{ ok: true; message: string }>("/api/auth/phone/send-otp", {
+        method: "POST",
+        body: payload,
+      }),
+    verifyPhoneOtp: (payload: {
+      phone: string;
+      code: string;
+      purpose: "login" | "register" | "reset_password";
+      email?: string;
+    }) =>
+      apiRequest<{
+        ok?: true;
+        phoneVerificationToken?: string;
+        user?: { id: string; email?: string | null };
+        roles?: string[];
+      }>("/api/auth/phone/verify-otp", {
+        method: "POST",
+        body: payload,
+      }),
+    resendEmailVerification: (payload: { email: string }) =>
+      apiRequest<{ ok: true; message: string }>("/api/auth/email/resend-verification", {
+        method: "POST",
+        body: payload,
+      }),
+    requestPasswordReset: (payload: { email: string }) =>
+      apiRequest<{ ok: true; message: string; phoneHint?: string | null }>(
+        "/api/auth/password-reset/request",
+        {
+          method: "POST",
+          body: payload,
+        },
+      ),
+    completePasswordReset: (payload: {
+      email: string;
+      phone: string;
+      phone_verification_token: string;
+      email_otp: string;
+      password: string;
+    }) =>
+      apiRequest<{
+        ok: true;
+        message: string;
+        user: { id: string; email?: string | null };
+        roles: string[];
+      }>("/api/auth/password-reset/complete", {
+        method: "POST",
+        body: payload,
+      }),
     register: (payload: {
       full_name: string;
       email: string;
       phone: string;
       password: string;
+      phone_verification_token: string;
       role?: string;
       requested_role?: string;
       business_name?: string;
@@ -62,6 +116,7 @@ export const api = {
         user: { id: string; email?: string | null } | null;
         roles: string[];
         authenticated: boolean;
+        emailVerificationRequired?: boolean;
         roleRequestPending?: boolean;
         roleRequestWarning?: string | null;
       }>("/api/auth/register", {
@@ -114,7 +169,11 @@ export const api = {
       platform?: "web" | "android" | "ios";
       user_agent?: string;
       device_label?: string;
-    }) => apiRequest<{ pushToken: unknown }>("/api/notifications/token", { method: "POST", body: payload }),
+    }) =>
+      apiRequest<{ pushToken: unknown }>("/api/notifications/token", {
+        method: "POST",
+        body: payload,
+      }),
     sendTest: (payload: {
       token?: string;
       user_id?: string;
@@ -157,10 +216,8 @@ export const api = {
     getStores: () => apiRequest<{ stores: unknown[]; location: null }>("/api/catalog/stores"),
     getStore: (storeId: string) =>
       apiRequest<{ store: unknown | null; items: unknown[] }>(`/api/catalog/stores/${storeId}`),
-    getPopularFoodItems: () =>
-      apiRequest<{ items: any[] }>("/api/catalog/items/food"),
-    getPopularGroceryItems: () =>
-      apiRequest<{ items: any[] }>("/api/catalog/items/grocery"),
+    getPopularFoodItems: () => apiRequest<{ items: unknown[] }>("/api/catalog/items/food"),
+    getPopularGroceryItems: () => apiRequest<{ items: unknown[] }>("/api/catalog/items/grocery"),
   },
 
   orders: {

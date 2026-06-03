@@ -1,1 +1,4 @@
 /build
+
+# Replace with your Firebase config from the console (see google-services.json.example).
+google-services.json

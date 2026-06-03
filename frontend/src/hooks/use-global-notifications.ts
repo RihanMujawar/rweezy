@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { hasRole, useAuth } from "@/lib/auth-context";
+import { isActiveChat } from "@/lib/active-chat";
 import { useAlertsPreference } from "@/hooks/use-alerts-preference";
 import { useLiveAlerts } from "@/hooks/use-live-alerts";
 
@@ -9,6 +10,44 @@ const DEFAULT_POLL_MS = 12000;
 const RIDER_POLL_MS = 4000;
 
 type IdItem = { id: string };
+type ChatKind = "ride" | "package" | "food" | "grocery";
+type ChatTarget = { kind: ChatKind; serviceId: string };
+
+const isActiveOrderStatus = (status: string) =>
+  status !== "delivered" && status !== "completed" && status !== "cancelled";
+
+function previewChatBody(body: string) {
+  return body.length > 100 ? `${body.slice(0, 97)}...` : body;
+}
+
+async function pollChatNotifications(
+  userId: string,
+  chats: ChatTarget[],
+  snapshot: Map<string, string>,
+) {
+  for (const chat of chats) {
+    if (isActiveChat(chat.kind, chat.serviceId)) continue;
+
+    const key = `${chat.kind}:${chat.serviceId}`;
+    try {
+      const data = await api.chat.get(chat.kind, chat.serviceId);
+      const messages = (data.messages as { id: string; sender_id: string; body: string }[]) ?? [];
+      const latest = messages[messages.length - 1];
+      if (!latest) continue;
+
+      const previousId = snapshot.get(key);
+      snapshot.set(key, latest.id);
+
+      if (previousId && previousId !== latest.id && latest.sender_id !== userId) {
+        toast.info("New chat message", {
+          description: previewChatBody(latest.body),
+        });
+      }
+    } catch {
+      // Ignore chat fetch errors during background polling.
+    }
+  }
+}
 
 /**
  * Polls role-relevant APIs from the protected shell so alerts fire on every page,
@@ -30,21 +69,37 @@ export function useGlobalNotifications() {
     groceryOrdersNeedingAttention: number;
     readyFoodWithoutRider: number;
   } | null>(null);
+  const chatMessageSnapshot = useRef<Map<string, string>>(new Map());
 
   const poll = useCallback(async () => {
     if (!user || !enabled) return;
 
     const tasks: Promise<void>[] = [];
+    const chatTargets: ChatTarget[] = [];
 
     if (hasRole(roles, "delivery_boy")) {
       tasks.push(
         api.delivery
           .getAvailable()
           .then(({ food, grocery }) => {
-            setDeliveryJobs([
-              ...((food as IdItem[]) ?? []),
-              ...((grocery as IdItem[]) ?? []),
-            ]);
+            setDeliveryJobs([...((food as IdItem[]) ?? []), ...((grocery as IdItem[]) ?? [])]);
+          })
+          .catch(() => {}),
+      );
+      tasks.push(
+        api.delivery
+          .getActive()
+          .then(({ food, grocery }) => {
+            for (const order of (food as { id: string; status: string }[]) ?? []) {
+              if (isActiveOrderStatus(order.status)) {
+                chatTargets.push({ kind: "food", serviceId: order.id });
+              }
+            }
+            for (const order of (grocery as { id: string; status: string }[]) ?? []) {
+              if (isActiveOrderStatus(order.status)) {
+                chatTargets.push({ kind: "grocery", serviceId: order.id });
+              }
+            }
           })
           .catch(() => {}),
       );
@@ -55,10 +110,20 @@ export function useGlobalNotifications() {
         api.rider
           .getJobs()
           .then(({ rides, packages }) => {
-            setRiderJobs([
-              ...((rides as IdItem[]) ?? []),
-              ...((packages as IdItem[]) ?? []),
-            ]);
+            setRiderJobs([...((rides as IdItem[]) ?? []), ...((packages as IdItem[]) ?? [])]);
+          })
+          .catch(() => {}),
+      );
+      tasks.push(
+        api.rider
+          .getActive()
+          .then(({ job, table }) => {
+            const activeJob = job as { id: string; status: string } | null;
+            if (!activeJob || !isActiveOrderStatus(activeJob.status)) return;
+            chatTargets.push({
+              kind: table === "package_deliveries" ? "package" : "ride",
+              serviceId: activeJob.id,
+            });
           })
           .catch(() => {}),
       );
@@ -99,18 +164,18 @@ export function useGlobalNotifications() {
           .then((data) => {
             const nextSnapshot = new Map<string, string>();
             const entries: Array<[string, string, string]> = [
-              ...((data.food as { id: string; status: string }[]) ?? []).map(
-                (order) => [`food:${order.id}`, order.status, "Food order"] as const,
-              ),
-              ...((data.grocery as { id: string; status: string }[]) ?? []).map(
-                (order) => [`grocery:${order.id}`, order.status, "Grocery order"] as const,
-              ),
-              ...((data.rides as { id: string; status: string }[]) ?? []).map(
-                (order) => [`ride:${order.id}`, order.status, "Ride"] as const,
-              ),
-              ...((data.packages as { id: string; status: string }[]) ?? []).map(
-                (order) => [`package:${order.id}`, order.status, "Package"] as const,
-              ),
+              ...(
+                (data.food as { id: string; status: string; rider_id?: string | null }[]) ?? []
+              ).map((order) => [`food:${order.id}`, order.status, "Food order"] as const),
+              ...(
+                (data.grocery as { id: string; status: string; rider_id?: string | null }[]) ?? []
+              ).map((order) => [`grocery:${order.id}`, order.status, "Grocery order"] as const),
+              ...(
+                (data.rides as { id: string; status: string; rider_id?: string | null }[]) ?? []
+              ).map((order) => [`ride:${order.id}`, order.status, "Ride"] as const),
+              ...(
+                (data.packages as { id: string; status: string; rider_id?: string | null }[]) ?? []
+              ).map((order) => [`package:${order.id}`, order.status, "Package"] as const),
             ];
 
             for (const [key, status, label] of entries) {
@@ -121,6 +186,43 @@ export function useGlobalNotifications() {
               }
             }
             orderStatusSnapshot.current = nextSnapshot;
+
+            for (const order of (data.food as {
+              id: string;
+              status: string;
+              rider_id?: string | null;
+            }[]) ?? []) {
+              if (isActiveOrderStatus(order.status) && order.rider_id) {
+                chatTargets.push({ kind: "food", serviceId: order.id });
+              }
+            }
+            for (const order of (data.grocery as {
+              id: string;
+              status: string;
+              rider_id?: string | null;
+            }[]) ?? []) {
+              if (isActiveOrderStatus(order.status) && order.rider_id) {
+                chatTargets.push({ kind: "grocery", serviceId: order.id });
+              }
+            }
+            for (const order of (data.rides as {
+              id: string;
+              status: string;
+              rider_id?: string | null;
+            }[]) ?? []) {
+              if (isActiveOrderStatus(order.status) && order.rider_id) {
+                chatTargets.push({ kind: "ride", serviceId: order.id });
+              }
+            }
+            for (const order of (data.packages as {
+              id: string;
+              status: string;
+              rider_id?: string | null;
+            }[]) ?? []) {
+              if (isActiveOrderStatus(order.status) && order.rider_id) {
+                chatTargets.push({ kind: "package", serviceId: order.id });
+              }
+            }
           })
           .catch(() => {}),
       );
@@ -157,6 +259,10 @@ export function useGlobalNotifications() {
     }
 
     await Promise.all(tasks);
+
+    if (chatTargets.length > 0) {
+      await pollChatNotifications(user.id, chatTargets, chatMessageSnapshot.current);
+    }
   }, [enabled, roles, user]);
 
   useEffect(() => {

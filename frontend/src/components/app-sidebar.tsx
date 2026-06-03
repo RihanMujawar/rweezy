@@ -105,7 +105,10 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <Link to="/" className="px-2 py-2 text-lg font-extrabold tracking-tight bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+        <Link
+          to="/"
+          className="px-2 py-2 text-lg font-extrabold tracking-tight bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent"
+        >
           Rweezy
         </Link>
         {hasBusinessMode && (

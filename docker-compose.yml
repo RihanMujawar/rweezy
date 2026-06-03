@@ -1,18 +1,102 @@
+version: '3.8'
+
 services:
-  rweezy:
+  api-gateway:
     build:
       context: .
-      args:
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-${SUPABASE_URL:-}}
-        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
-        VITE_SUPABASE_PROJECT_ID: ${VITE_SUPABASE_PROJECT_ID:-}
-        VITE_MAPBOX_ACCESS_TOKEN: ${VITE_MAPBOX_ACCESS_TOKEN:-${MAPBOX_ACCESS_TOKEN:-}}
-    image: rweezy-fullstack:latest
-    env_file:
-      - .env
-    environment:
-      BACKEND_HOST: 0.0.0.0
-      BACKEND_PORT: 4000
+      dockerfile: services/api-gateway/Dockerfile
     ports:
-      - "4000:4000"
-    restart: unless-stopped
+      - "3000:3000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+    depends_on:
+      - auth-service
+      - food-service
+      - grocery-service
+      - ride-service
+      - package-service
+      - chat-service
+      - notification-service
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+
+  food-service:
+    build:
+      context: .
+      dockerfile: services/food-service/Dockerfile
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+
+  grocery-service:
+    build:
+      context: .
+      dockerfile: services/grocery-service/Dockerfile
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+
+  ride-service:
+    build:
+      context: .
+      dockerfile: services/ride-service/Dockerfile
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - FIREBASE_CONFIG=${FIREBASE_CONFIG}
+      - FIREBASE_DATABASE_URL=${FIREBASE_DATABASE_URL}
+
+  package-service:
+    build:
+      context: .
+      dockerfile: services/package-service/Dockerfile
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - FIREBASE_CONFIG=${FIREBASE_CONFIG}
+      - FIREBASE_DATABASE_URL=${FIREBASE_DATABASE_URL}
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: services/chat-service/Dockerfile
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - MONGO_URI=${MONGO_URI}
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    depends_on:
+      - rabbitmq
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - FCM_SERVER_KEY=${FCM_SERVER_KEY}
+    depends_on:
+      - rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"

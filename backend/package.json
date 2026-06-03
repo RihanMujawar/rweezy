@@ -6,5 +6,6 @@
     "dev": "node --watch server.mjs",
     "start": "node server.mjs",
     "build": "node --check server.mjs"
-  }
+  },
+  "dependencies": {}
 }

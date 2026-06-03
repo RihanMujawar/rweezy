@@ -3,6 +3,7 @@ package com.example.rweezy.ui
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.os.Build
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -69,6 +70,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import com.example.rweezy.data.SharedPreferencesServerConfigRepository
+import com.example.rweezy.messaging.RweezyAndroidBridge
 
 private fun normalizeServerUrl(raw: String): String {
     var normalized = raw.trim()
@@ -173,10 +175,27 @@ fun WebViewScreen(modifier: Modifier = Modifier) {
                     settings.allowContentAccess = true
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
 
+                    // Let the website's CSS dark mode follow the system color scheme.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        settings.isAlgorithmicDarkeningAllowed = false
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        settings.forceDark = WebSettings.FORCE_DARK_OFF
+                    }
+
                     // Keep auth/session cookies working across modern Android WebView versions.
                     val cookieManager = CookieManager.getInstance()
                     cookieManager.setAcceptCookie(true)
                     cookieManager.setAcceptThirdPartyCookies(this, true)
+
+                    val androidBridge = RweezyAndroidBridge(context) {
+                        post {
+                            evaluateJavascript(
+                                "window.dispatchEvent(new CustomEvent('rweezy:fcm-token-updated'))",
+                                null,
+                            )
+                        }
+                    }
+                    addJavascriptInterface(androidBridge, "RweezyAndroidBridge")
                     
                     // Allow hardware acceleration
                     setLayerType(WebView.LAYER_TYPE_HARDWARE, null)

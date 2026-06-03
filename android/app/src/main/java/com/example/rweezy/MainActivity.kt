@@ -14,6 +14,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.google.firebase.messaging.FirebaseMessaging
+import com.example.rweezy.messaging.RweezyAndroidBridge
+import com.example.rweezy.messaging.RweezyFirebaseMessagingService
 import com.example.rweezy.theme.RweezyTheme
 import com.example.rweezy.ui.WebViewScreen
 
@@ -24,6 +26,7 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
+    RweezyFirebaseMessagingService.createNotificationChannel(this)
     requestNotificationPermissionIfNeeded()
     fetchAndCacheFcmToken()
 
@@ -48,9 +51,9 @@ class MainActivity : ComponentActivity() {
 
   private fun fetchAndCacheFcmToken() {
     FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-      getSharedPreferences("rweezy_app", MODE_PRIVATE)
+      getSharedPreferences(RweezyAndroidBridge.PREFS_NAME, MODE_PRIVATE)
         .edit()
-        .putString("fcm_token", token)
+        .putString(RweezyAndroidBridge.KEY_FCM_TOKEN, token)
         .apply()
     }
   }
