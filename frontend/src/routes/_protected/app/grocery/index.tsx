@@ -19,6 +19,9 @@ type Store = {
   pincode: string | null;
   image_url: string | null;
   is_open: boolean;
+  discount_pct?: number;
+  discount_flat?: number;
+  is_bogo_active?: boolean;
 };
 
 type Location = {
@@ -146,6 +149,25 @@ function GroceryStores() {
                     {s.is_open ? "Open" : "Closed"}
                   </span>
                 </div>
+                {(s.discount_pct || s.discount_flat || s.is_bogo_active) && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        {s.discount_pct && (
+                            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400 text-[10px] font-bold rounded-full">
+                                {s.discount_pct}% OFF
+                            </span>
+                        )}
+                        {s.discount_flat && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 text-[10px] font-bold rounded-full">
+                                FLAT ₹{s.discount_flat} OFF
+                            </span>
+                        )}
+                        {s.is_bogo_active && (
+                            <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400 text-[10px] font-bold rounded-full">
+                                B1G1 FREE
+                            </span>
+                        )}
+                    </div>
+                )}
                 {s.address && <p className="mt-1 text-xs text-muted-foreground">{s.address}</p>}
                 {(s.town_name || s.pincode) && (
                   <p className="mt-1 text-xs text-muted-foreground">
