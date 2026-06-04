@@ -445,11 +445,24 @@ export const api = {
       apiRequest<{
         restaurant: unknown | null;
         stats: { total: number; pending: number; today: number };
+        orders: any[];
       }>("/api/hotel/dashboard"),
     saveRestaurant: (payload: Record<string, unknown>) =>
       apiRequest<{ restaurant: unknown | null }>("/api/hotel/restaurant", {
         method: "PUT",
         body: payload,
+      }),
+    updateSettings: (payload: Record<string, unknown>) =>
+      apiRequest<{ success: boolean }>("/api/hotel/settings", {
+        method: "PATCH",
+        body: payload,
+      }),
+    getDeliveryPartners: () =>
+      apiRequest<{ partners: any[] }>("/api/hotel/delivery-partners"),
+    assignDelivery: (order_id: string, delivery_boy_id: string) =>
+      apiRequest<{ success: boolean }>("/api/hotel/assign-delivery", {
+        method: "POST",
+        body: { order_id, delivery_boy_id },
       }),
     getMenu: () => apiRequest<{ restaurantId: string | null; items: unknown[] }>("/api/hotel/menu"),
     createMenuItem: (payload: Record<string, unknown>) =>
@@ -484,9 +497,22 @@ export const api = {
       apiRequest<{
         store: unknown | null;
         stats: { total: number; pending: number; today: number };
+        orders: any[];
       }>("/api/grocery/dashboard"),
     saveStore: (payload: Record<string, unknown>) =>
       apiRequest<{ store: unknown | null }>("/api/grocery/store", { method: "PUT", body: payload }),
+    updateSettings: (payload: Record<string, unknown>) =>
+      apiRequest<{ success: boolean }>("/api/grocery/settings", {
+        method: "PATCH",
+        body: payload,
+      }),
+    getDeliveryPartners: () =>
+      apiRequest<{ partners: any[] }>("/api/grocery/delivery-partners"),
+    assignDelivery: (order_id: string, delivery_boy_id: string) =>
+      apiRequest<{ success: boolean }>("/api/grocery/assign-delivery", {
+        method: "POST",
+        body: { order_id, delivery_boy_id },
+      }),
     getItems: () => apiRequest<{ storeId: string | null; items: unknown[] }>("/api/grocery/items"),
     createItem: (payload: Record<string, unknown>) =>
       apiRequest<{ item: unknown }>("/api/grocery/items", { method: "POST", body: payload }),
