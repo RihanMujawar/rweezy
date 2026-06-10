@@ -106,4 +106,7 @@ export const env = {
   smtpPass: process.env.SMTP_PASS || "",
   smtpFrom: process.env.SMTP_FROM || process.env.SMTP_USER || "",
   authRequireEmailVerification: process.env.AUTH_REQUIRE_EMAIL_VERIFICATION !== "false",
+  jwtSecret: process.env.JWT_SECRET || "rweezy-secret-key-123",
+  refreshSecret: process.env.REFRESH_SECRET || "rweezy-refresh-key-123",
+  databaseUrl: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/rweezy",
 };

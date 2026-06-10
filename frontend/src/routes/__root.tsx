@@ -81,7 +81,6 @@ function RootComponent() {
     <AuthProvider>
       <SystemThemeSync />
       <AndroidAppDownloadPrompt />
-      <LiquidBackground />
       <Outlet />
       <Toaster richColors position="top-right" />
     </AuthProvider>

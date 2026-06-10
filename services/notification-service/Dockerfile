@@ -1,8 +1,11 @@
 FROM node:20-slim
+RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app
-COPY shared /app/shared
-COPY services/notification-service /app/services/notification-service
-WORKDIR /app/services/notification-service
+COPY package.json package-lock.json ./
+COPY prisma ./prisma/
+COPY shared ./shared
+COPY services/notification-service ./services/notification-service
 RUN npm install
-EXPOSE 3007
+RUN npx prisma generate
+WORKDIR /app/services/notification-service
 CMD ["node", "index.js"]

@@ -45,3 +45,5 @@ playwright/.cache/
 *.sln
 *.sw?
 .env
+
+/generated/prisma

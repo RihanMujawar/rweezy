@@ -1,6 +1,30 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-rweezy}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  db-setup:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rweezy}
+    command: ["sh", "/app/scripts/db-setup.sh"]
+    volumes:
+      - ./scripts/db-setup.sh:/app/scripts/db-setup.sh
+    depends_on:
+      - db
+
   api-gateway:
     build:
       context: .
@@ -8,74 +32,86 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rweezy}
+      - JWT_SECRET=${JWT_SECRET:-rweezy-secret-key-123}
+      - REFRESH_SECRET=${REFRESH_SECRET:-rweezy-refresh-key-123}
     depends_on:
-      - auth-service
-      - food-service
-      - grocery-service
-      - ride-service
-      - package-service
-      - chat-service
-      - notification-service
+      - db
+      - db-setup
 
   auth-service:
     build:
       context: .
       dockerfile: services/auth-service/Dockerfile
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rweezy}
+      - JWT_SECRET=${JWT_SECRET:-rweezy-secret-key-123}
+      - REFRESH_SECRET=${REFRESH_SECRET:-rweezy-refresh-key-123}
+    depends_on:
+      - db
+      - db-setup
 
   food-service:
     build:
       context: .
       dockerfile: services/food-service/Dockerfile
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rweezy}
+      - JWT_SECRET=${JWT_SECRET:-rweezy-secret-key-123}
+    depends_on:
+      - db
+      - db-setup
 
   grocery-service:
     build:
       context: .
       dockerfile: services/grocery-service/Dockerfile
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rweezy}
+      - JWT_SECRET=${JWT_SECRET:-rweezy-secret-key-123}
+    depends_on:
+      - db
+      - db-setup
 
   ride-service:
     build:
       context: .
       dockerfile: services/ride-service/Dockerfile
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rweezy}
+      - JWT_SECRET=${JWT_SECRET:-rweezy-secret-key-123}
+      - REDIS_URL=redis://redis:6379
       - FIREBASE_CONFIG=${FIREBASE_CONFIG}
       - FIREBASE_DATABASE_URL=${FIREBASE_DATABASE_URL}
+    depends_on:
+      - db
+      - db-setup
+      - redis
 
   package-service:
     build:
       context: .
       dockerfile: services/package-service/Dockerfile
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rweezy}
+      - JWT_SECRET=${JWT_SECRET:-rweezy-secret-key-123}
       - FIREBASE_CONFIG=${FIREBASE_CONFIG}
       - FIREBASE_DATABASE_URL=${FIREBASE_DATABASE_URL}
+    depends_on:
+      - db
+      - db-setup
 
   chat-service:
     build:
       context: .
       dockerfile: services/chat-service/Dockerfile
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
-      - MONGO_URI=${MONGO_URI}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rweezy}
+      - JWT_SECRET=${JWT_SECRET:-rweezy-secret-key-123}
       - RABBITMQ_URL=amqp://rabbitmq:5672
     depends_on:
+      - db
+      - db-setup
       - rabbitmq
 
   notification-service:
@@ -83,11 +119,13 @@ services:
       context: .
       dockerfile: services/notification-service/Dockerfile
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-rweezy}
+      - JWT_SECRET=${JWT_SECRET:-rweezy-secret-key-123}
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - FCM_SERVER_KEY=${FCM_SERVER_KEY}
     depends_on:
+      - db
+      - db-setup
       - rabbitmq
 
   rabbitmq:
@@ -100,3 +138,6 @@ services:
     image: redis:alpine
     ports:
       - "6379:6379"
+
+volumes:
+  postgres_data:

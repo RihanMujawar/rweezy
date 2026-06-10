@@ -133,6 +133,12 @@
 
   body {
     background-color: var(--color-background);
+    background-image:
+      radial-gradient(at 0% 0%, oklch(0.58 0.22 260 / 5%) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, oklch(0.7 0.15 260 / 5%) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, oklch(0.6 0.2 25 / 5%) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, oklch(0.58 0.22 260 / 5%) 0px, transparent 50%);
+    background-attachment: fixed;
     color: var(--color-foreground);
     min-height: 100vh;
     font-family: 'Outfit', 'Inter', sans-serif;
@@ -199,12 +205,12 @@
 .liquid-glass-card {
   position: relative;
   background: var(--color-card);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
   border: 1px solid var(--color-border);
   border-radius: 2rem;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.04);
-  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   isolation: isolate;
 }
