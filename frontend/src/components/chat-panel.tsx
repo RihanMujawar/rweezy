@@ -133,12 +133,18 @@ export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }:
         ) : loading ? (
           <div className="m-auto flex flex-col items-center gap-2">
             <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Loading chat...</p>
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-widest">
+              Loading chat...
+            </p>
           </div>
         ) : error ? (
-          <p className="m-auto text-center text-sm text-red-600 bg-red-500/10 p-4 rounded-2xl">{error}</p>
+          <p className="m-auto text-center text-sm text-red-600 bg-red-500/10 p-4 rounded-2xl">
+            {error}
+          </p>
         ) : messages.length === 0 ? (
-          <p className="m-auto text-center text-sm font-medium text-muted-foreground opacity-50 uppercase tracking-widest">No messages yet.</p>
+          <p className="m-auto text-center text-sm font-medium text-muted-foreground opacity-50 uppercase tracking-widest">
+            No messages yet.
+          </p>
         ) : (
           <AnimatePresence initial={false}>
             {messages.map((message) => {

@@ -118,15 +118,16 @@ export function MobileBottomNav() {
         <AnimatePresence mode="popLayout">
           {items.map((item, idx) => {
             const Icon = item.icon;
-            const active = item.type === "link" ? isActive(pathname, item.to) : mode === "business" && item.title === "Mode";
+            const active =
+              item.type === "link"
+                ? isActive(pathname, item.to)
+                : mode === "business" && item.title === "Mode";
             const key = item.type === "link" ? item.to : `action-${idx}-${item.title}`;
 
             const commonClass = cn(
               "relative flex h-14 flex-col items-center justify-center gap-1 rounded-[2rem] px-1 transition-all duration-300",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-90",
-              active
-                ? "text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
+              active ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground",
             );
 
             const content = (

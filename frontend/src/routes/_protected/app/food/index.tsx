@@ -152,23 +152,23 @@ function FoodList() {
                   </span>
                 </div>
                 {(r.discount_pct || r.discount_flat || r.is_bogo_active) && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        {r.discount_pct && (
-                            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400 text-[10px] font-bold rounded-full">
-                                {r.discount_pct}% OFF
-                            </span>
-                        )}
-                        {r.discount_flat && (
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 text-[10px] font-bold rounded-full">
-                                FLAT ₹{r.discount_flat} OFF
-                            </span>
-                        )}
-                        {r.is_bogo_active && (
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400 text-[10px] font-bold rounded-full">
-                                B1G1 FREE
-                            </span>
-                        )}
-                    </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {r.discount_pct && (
+                      <span className="px-2 py-0.5 bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400 text-[10px] font-bold rounded-full">
+                        {r.discount_pct}% OFF
+                      </span>
+                    )}
+                    {r.discount_flat && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 text-[10px] font-bold rounded-full">
+                        FLAT ₹{r.discount_flat} OFF
+                      </span>
+                    )}
+                    {r.is_bogo_active && (
+                      <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400 text-[10px] font-bold rounded-full">
+                        B1G1 FREE
+                      </span>
+                    )}
+                  </div>
                 )}
                 {r.address && <p className="mt-1 text-xs text-muted-foreground">{r.address}</p>}
                 {(r.town_name || r.pincode) && (

@@ -87,14 +87,14 @@ const container = {
   show: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1
-    }
-  }
+      staggerChildren: 0.1,
+    },
+  },
 };
 
 const itemAnim = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 }
+  show: { opacity: 1, y: 0 },
 };
 
 function ItemCarousel({
@@ -157,7 +157,11 @@ function ItemCarousel({
               const cardBody = (
                 <>
                   <div className="aspect-square overflow-hidden bg-muted sm:aspect-[4/3]">
-                    <img src={imageUrl} alt={item.name} className="h-full w-full object-cover transition-transform duration-700 hover:scale-110" />
+                    <img
+                      src={imageUrl}
+                      alt={item.name}
+                      className="h-full w-full object-cover transition-transform duration-700 hover:scale-110"
+                    />
                   </div>
                   <div className="p-5">
                     <div>
@@ -257,7 +261,10 @@ function AppHome() {
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {roles.map((r) => (
-            <span key={r} className="rounded-full bg-white/10 border border-white/5 px-4 py-1 text-xs font-bold uppercase tracking-widest text-muted-foreground backdrop-blur-md">
+            <span
+              key={r}
+              className="rounded-full bg-white/10 border border-white/5 px-4 py-1 text-xs font-bold uppercase tracking-widest text-muted-foreground backdrop-blur-md"
+            >
               {r.replace("_", " ")}
             </span>
           ))}
@@ -279,7 +286,8 @@ function AppHome() {
               <div>
                 <h2 className="text-xl font-black">Your order is on the way!</h2>
                 <p className="text-primary/70 font-medium">
-                  {latestActiveOrder.label} is currently <span className="font-black uppercase">{latestActiveOrder.status}</span>.
+                  {latestActiveOrder.label} is currently{" "}
+                  <span className="font-black uppercase">{latestActiveOrder.status}</span>.
                 </p>
               </div>
             </div>
@@ -303,9 +311,7 @@ function AppHome() {
           <div className="h-10 w-10 rounded-2xl bg-amber-500/10 flex items-center justify-center backdrop-blur-md border border-amber-500/20">
             <Sparkles className="h-6 w-6 text-amber-500" />
           </div>
-          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
-            Everything you need
-          </h2>
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">Everything you need</h2>
         </div>
 
         <motion.div

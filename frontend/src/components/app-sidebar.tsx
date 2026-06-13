@@ -116,7 +116,7 @@ export function AppSidebar() {
               variant={mode === "customer" ? "secondary" : "ghost"}
               className={cn(
                 "h-10 rounded-xl text-xs font-semibold transition-all",
-                mode === "customer" && "shadow-sm"
+                mode === "customer" && "shadow-sm",
               )}
               onClick={() => setMode("customer")}
             >
@@ -129,7 +129,7 @@ export function AppSidebar() {
               variant={mode === "business" ? "secondary" : "ghost"}
               className={cn(
                 "h-10 rounded-xl text-xs font-semibold transition-all",
-                mode === "business" && "shadow-sm"
+                mode === "business" && "shadow-sm",
               )}
               onClick={() => setMode("business")}
             >
@@ -158,7 +158,12 @@ export function AppSidebar() {
                               transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
                             />
                           )}
-                          <item.icon className={cn("transition-transform duration-300", active && "scale-110")} />
+                          <item.icon
+                            className={cn(
+                              "transition-transform duration-300",
+                              active && "scale-110",
+                            )}
+                          />
                           <span>{item.title}</span>
                         </Link>
                       </SidebarMenuButton>

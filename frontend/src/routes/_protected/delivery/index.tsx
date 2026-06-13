@@ -37,8 +37,8 @@ function DeliveryAvailable() {
   const { user, roles } = useAuth();
   const [food, setFood] = useState<FoodOrder[]>([]);
   const [grocery, setGrocery] = useState<GroceryOrder[]>([]);
-  const [activeFood, setActiveFood] = useState<any[]>([]);
-  const [activeGrocery, setActiveGrocery] = useState<any[]>([]);
+  const [activeFood, setActiveFood] = useState<unknown[]>([]);
+  const [activeGrocery, setActiveGrocery] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(true);
   const { alertsEnabled, setAlertsEnabled } = useAlertsPreference();
   const [selectedFood, setSelectedFood] = useState<Set<string>>(new Set());
@@ -48,8 +48,8 @@ function DeliveryAvailable() {
 
   const load = useCallback(async () => {
     const [{ food: f, grocery: g }, { food: af, grocery: ag }] = await Promise.all([
-        api.delivery.getAvailable(),
-        api.delivery.getActive()
+      api.delivery.getAvailable(),
+      api.delivery.getActive(),
     ]);
     setFood((f as FoodOrder[]) ?? []);
     setGrocery((g as GroceryOrder[]) ?? []);
@@ -158,40 +158,53 @@ function DeliveryAvailable() {
 
         {/* Active Orders Section */}
         {(activeFood.length > 0 || activeGrocery.length > 0) && (
-            <div className="mt-8 space-y-4">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                    My Active Deliveries
-                </h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                    {[...activeFood, ...activeGrocery].map((o: any) => (
-                        <div key={o.id} className="p-5 rounded-3xl border bg-primary/5 border-primary/20 shadow-sm flex flex-col justify-between">
-                            <div>
-                                <div className="flex justify-between items-start">
-                                    <div className="font-bold text-lg">
-                                        {o.restaurants ? '🍽️ ' + o.restaurants.name : '🛒 ' + o.grocery_stores?.name}
-                                    </div>
-                                    <div className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider">
-                                        {o.status}
-                                    </div>
-                                </div>
-                                <div className="text-sm text-muted-foreground mt-2 line-clamp-1">📍 {o.delivery_address}</div>
-                            </div>
-                            <div className="mt-6 flex items-center justify-between">
-                                <div className="font-bold text-xl">₹{Number(o.total).toFixed(0)}</div>
-                                <Button size="sm" className="rounded-xl px-6" onClick={() => window.location.href = '/delivery/active'}>
-                                    CONTINUE
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
+          <div className="mt-8 space-y-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              My Active Deliveries
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              {[...activeFood, ...activeGrocery].map((o: unknown) => (
+                <div
+                  key={o.id}
+                  className="p-5 rounded-3xl border bg-primary/5 border-primary/20 shadow-sm flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <div className="font-bold text-lg">
+                        {o.restaurants
+                          ? "🍽️ " + o.restaurants.name
+                          : "🛒 " + o.grocery_stores?.name}
+                      </div>
+                      <div className="px-3 py-1 rounded-full bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider">
+                        {o.status}
+                      </div>
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-2 line-clamp-1">
+                      📍 {o.delivery_address}
+                    </div>
+                  </div>
+                  <div className="mt-6 flex items-center justify-between">
+                    <div className="font-bold text-xl">₹{Number(o.total).toFixed(0)}</div>
+                    <Button
+                      size="sm"
+                      className="rounded-xl px-6"
+                      onClick={() => (window.location.href = "/delivery/active")}
+                    >
+                      CONTINUE
+                    </Button>
+                  </div>
                 </div>
+              ))}
             </div>
+          </div>
         )}
 
         <div className="mt-12 mb-6 flex items-center justify-between">
-            <h2 className="text-xl font-bold">Available for Pickup</h2>
-            <div className="text-xs font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">Refreshes in 12s</div>
+          <h2 className="text-xl font-bold">Available for Pickup</h2>
+          <div className="text-xs font-medium text-muted-foreground bg-muted px-3 py-1 rounded-full">
+            Refreshes in 12s
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 rounded-2xl border bg-card/50 backdrop-blur-md p-4 sm:grid-cols-[1fr_auto_auto] shadow-sm">

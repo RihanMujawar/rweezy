@@ -445,7 +445,7 @@ export const api = {
       apiRequest<{
         restaurant: unknown | null;
         stats: { total: number; pending: number; today: number };
-        orders: any[];
+        orders: unknown[];
       }>("/api/hotel/dashboard"),
     saveRestaurant: (payload: Record<string, unknown>) =>
       apiRequest<{ restaurant: unknown | null }>("/api/hotel/restaurant", {
@@ -457,8 +457,7 @@ export const api = {
         method: "PATCH",
         body: payload,
       }),
-    getDeliveryPartners: () =>
-      apiRequest<{ partners: any[] }>("/api/hotel/delivery-partners"),
+    getDeliveryPartners: () => apiRequest<{ partners: unknown[] }>("/api/hotel/delivery-partners"),
     assignDelivery: (order_id: string, delivery_boy_id: string) =>
       apiRequest<{ success: boolean }>("/api/hotel/assign-delivery", {
         method: "POST",
@@ -497,7 +496,7 @@ export const api = {
       apiRequest<{
         store: unknown | null;
         stats: { total: number; pending: number; today: number };
-        orders: any[];
+        orders: unknown[];
       }>("/api/grocery/dashboard"),
     saveStore: (payload: Record<string, unknown>) =>
       apiRequest<{ store: unknown | null }>("/api/grocery/store", { method: "PUT", body: payload }),
@@ -507,7 +506,7 @@ export const api = {
         body: payload,
       }),
     getDeliveryPartners: () =>
-      apiRequest<{ partners: any[] }>("/api/grocery/delivery-partners"),
+      apiRequest<{ partners: unknown[] }>("/api/grocery/delivery-partners"),
     assignDelivery: (order_id: string, delivery_boy_id: string) =>
       apiRequest<{ success: boolean }>("/api/grocery/assign-delivery", {
         method: "POST",
