@@ -63,6 +63,8 @@ function maskPhoneHint(phone) {
 
 // --- Routes ---
 
+app.get("/api/health", (req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
+
 app.post("/api/auth/login", async (req, res, next) => {
   try {
     const { email, phone, password } = req.body;

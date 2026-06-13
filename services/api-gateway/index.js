@@ -6,13 +6,13 @@ import { getCorsHeaders } from "../../shared/lib/http.mjs";
 const proxy = httpProxy.createProxyServer({});
 
 const SERVICES = {
-  auth: "http://auth-service:3001",
-  food: "http://food-service:3002",
-  grocery: "http://grocery-service:3003",
-  ride: "http://ride-service:3004",
-  package: "http://package-service:3005",
-  chat: "http://chat-service:3006",
-  notification: "http://notification-service:3007",
+  auth: process.env.AUTH_SERVICE_URL || "http://127.0.0.1:3001",
+  food: process.env.FOOD_SERVICE_URL || "http://127.0.0.1:3002",
+  grocery: process.env.GROCERY_SERVICE_URL || "http://127.0.0.1:3003",
+  ride: process.env.RIDE_SERVICE_URL || "http://127.0.0.1:3004",
+  package: process.env.PACKAGE_SERVICE_URL || "http://127.0.0.1:3005",
+  chat: process.env.CHAT_SERVICE_URL || "http://127.0.0.1:3006",
+  notification: process.env.NOTIFICATION_SERVICE_URL || "http://127.0.0.1:3007",
 };
 
 function resolveCorsOrigin(requestOrigin) {
@@ -44,7 +44,7 @@ const server = http.createServer((req, res) => {
   let target;
   const path = url.pathname;
 
-  if (path.startsWith("/api/auth") || path.startsWith("/api/profile") || path.startsWith("/api/role-requests") || path.startsWith("/api/admin/users") || path.startsWith("/api/admin/stats") || path.startsWith("/api/admin/health")) {
+  if (path === "/api/health" || path.startsWith("/api/auth") || path.startsWith("/api/profile") || path.startsWith("/api/role-requests") || path.startsWith("/api/admin/users") || path.startsWith("/api/admin/stats") || path.startsWith("/api/admin/health")) {
     target = SERVICES.auth;
   } else if (path.startsWith("/api/catalog/restaurants") || path.startsWith("/api/catalog/items/food") || path.startsWith("/api/orders/food") || path.startsWith("/api/hotel") || path.startsWith("/api/admin/restaurants")) {
     target = SERVICES.food;
@@ -79,5 +79,5 @@ const server = http.createServer((req, res) => {
   }
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => console.log(`API Gateway listening on port ${PORT}`));

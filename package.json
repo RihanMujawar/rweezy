@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:frontend": "npm --prefix frontend run dev",
-    "dev:backend": "npm --prefix backend run dev",
-    "start": "npm --prefix backend run start",
+    "dev:backend": "node scripts/dev.mjs",
+    "start": "node scripts/dev.mjs",
     "build": "npm run build:backend && npm run build:frontend",
     "build:frontend": "npm --prefix frontend run build",
     "build:backend": "npm --prefix backend run build",
@@ -19,7 +19,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
-    "prisma": "^7.8.0",
+    "dotenv": "^17.4.2",
+    "prisma": "^6.4.1",
     "supabase": "^2.98.2"
   },
   "prisma": {
@@ -43,8 +44,16 @@
   },
   "homepage": "https://github.com/RihanMujawar/rweezy#readme",
   "dependencies": {
-    "@prisma/client": "^7.8.0",
+    "@prisma/client": "^6.4.1",
+    "amqplib": "^2.0.1",
     "bcryptjs": "^3.0.3",
-    "jsonwebtoken": "^9.0.3"
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "firebase-admin": "^14.0.0",
+    "http-proxy": "^1.18.1",
+    "ioredis": "^5.11.1",
+    "jsonwebtoken": "^9.0.3",
+    "zod": "^4.4.3"
   }
 }

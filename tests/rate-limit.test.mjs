@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkRateLimit } from "../backend/lib/rate-limit.mjs";
+import { checkRateLimit } from "../shared/lib/rate-limit.mjs";
 
 test("rate limit allows requests under cap", () => {
   const ip = `test-${Date.now()}`;

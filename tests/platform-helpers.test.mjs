@@ -8,7 +8,7 @@ import {
   estimateDeliveryMinutes,
   generateDeliveryPin,
   sanitizeComment,
-} from "../backend/lib/platform-helpers.mjs";
+} from "../shared/lib/platform-helpers.mjs";
 
 test("generateDeliveryPin returns 4 digits", () => {
   const pin = generateDeliveryPin();

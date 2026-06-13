@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum AppRole {
@@ -105,15 +106,15 @@ model Restaurant {
   lng                 Float?
   imageUrl            String?
   isOpen              Boolean     @default(true)
-  freeDeliveryThreshold Float?    @default(0)
-  deliveryFee         Float?      @default(0)
-  packagingFee        Float?      @default(0)
-  rainFee             Float?      @default(0)
+  deliveryFee         Decimal     @default(0) @db.Decimal(10, 2)
+  packagingFee        Decimal     @default(0) @db.Decimal(10, 2)
+  rainFee             Decimal     @default(0) @db.Decimal(10, 2)
   isRaining           Boolean     @default(false)
-  discountPct         Float?      @default(0)
-  discountFlat        Float?      @default(0)
+  freeDeliveryThreshold Decimal   @default(0) @db.Decimal(10, 2)
+  discountPct         Decimal     @default(0) @db.Decimal(10, 2)
+  discountFlat        Decimal     @default(0) @db.Decimal(10, 2)
   isBogoActive        Boolean     @default(false)
-  serviceTaxPct       Float?      @default(0)
+  serviceTaxPct       Decimal     @default(5.0) @db.Decimal(10, 2)
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
@@ -124,23 +125,23 @@ model Restaurant {
 }
 
 model MenuItem {
-  id               String   @id @default(uuid())
-  restaurantId     String
-  restaurant       Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  name             String
-  description      String?
-  price            Float
-  imageUrl         String?
-  category         String?
-  isAvailable      Boolean  @default(true)
-  isVeg            Boolean  @default(true)
-  prepTimeMinutes  Int      @default(15)
-  isSpecial        Boolean  @default(false)
-  modifiers        Json?    @default("[]")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String   @id @default(uuid())
+  restaurantId      String
+  restaurant        Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  price             Float
+  imageUrl          String?
+  category          String?
+  isAvailable       Boolean  @default(true)
+  isVeg             Boolean  @default(true)
+  prepTimeMinutes   Int      @default(15)
+  isSpecial         Boolean  @default(false)
+  modifiers         Json     @default("[]")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  foodOrderItems   FoodOrderItem[]
+  foodOrderItems    FoodOrderItem[]
 
   @@map("menu_items")
 }
@@ -154,12 +155,12 @@ model GroceryStore {
   address     String?
   townName    String?
   pincode     String?
-  lat         Float?
-  lng         Float?
-  imageUrl    String?
-  isOpen      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  lat                 Float?
+  lng                 Float?
+  imageUrl            String?
+  isOpen              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   groceryItems GroceryItem[]
   groceryOrders GroceryOrder[]

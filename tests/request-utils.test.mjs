@@ -4,7 +4,7 @@ import {
   cleanText,
   isPublicApiRoute,
   normalizeIndianPhone,
-} from "../backend/lib/request-utils.mjs";
+} from "../shared/lib/request-utils.mjs";
 
 test("normalizeIndianPhone formats 10-digit numbers", () => {
   assert.equal(normalizeIndianPhone("9876543210"), "+919876543210");

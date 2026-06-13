@@ -17,7 +17,7 @@ if (env.firebaseConfig) {
         console.warn("Firebase initialization failed:", e.message);
     }
 }
-const fb = admin.apps.length > 0 ? admin.database() : null;
+const fb = admin.apps?.length > 0 ? admin.database() : null;
 const redis = new Redis(env.redisUrl || "redis://localhost:6379");
 
 const app = express();
