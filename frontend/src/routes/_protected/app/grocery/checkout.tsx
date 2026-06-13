@@ -19,8 +19,21 @@ export const Route = createFileRoute("/_protected/app/grocery/checkout")({
   component: GroceryCheckout,
 });
 
+type StoreDetails = {
+    id: string;
+    free_delivery_threshold: number;
+    delivery_fee: number;
+    packaging_fee: number;
+    service_tax_pct: number;
+    is_raining: boolean;
+    rain_fee: number;
+    discount_pct: number;
+    discount_flat: number;
+};
+
 function GroceryCheckout() {
   const cart = useGroceryCart();
+  const [details, setDetails] = useState<StoreDetails | null>(null);
   const { user } = useAuth();
   const [address, setAddress] = useState("");
   const [deliveryLocation, setDeliveryLocation] = useState<LatLng | null>(null);
@@ -38,7 +51,13 @@ function GroceryCheckout() {
       .getAddresses()
       .then((data) => setAddresses((data.addresses as typeof addresses) ?? []))
       .catch(() => setAddresses([]));
-  }, []);
+
+    if (cart.storeId) {
+        api.catalog.getStore(cart.storeId).then(({ store }) => {
+            setDetails(store as StoreDetails);
+        });
+    }
+  }, [cart.storeId]);
 
   if (receipt) {
     return <OrderReceipt receipt={receipt} />;
@@ -66,12 +85,38 @@ function GroceryCheckout() {
     }
     setErrors({});
     setPlacing(true);
-    const total = cart.total();
-    const deliveryFee = Math.max(20, Math.round(total * 0.08));
-    const lines = cart.items.map((i) => ({
-      label: `${i.quantity} × ${i.name}`,
-      amount: i.price * i.quantity,
-    }));
+
+    const subtotal = cart.total();
+    const isFree = details && subtotal >= details.free_delivery_threshold;
+    const dFee = isFree ? 0 : (details?.delivery_fee || 0);
+    const pFee = details?.packaging_fee || 0;
+    const rFee = details?.is_raining ? (details?.rain_fee || 0) : 0;
+    let disc = (subtotal * ((details?.discount_pct || 0) / 100)) + (details?.discount_flat || 0);
+
+    if (details?.is_bogo_active) {
+        cart.items.forEach(item => {
+            if (item.quantity >= 2) {
+                disc += item.price * Math.floor(item.quantity / 2);
+            }
+        });
+    }
+
+    const tax = (subtotal - disc) * ((details?.service_tax_pct || 0) / 100);
+    const platformFee = 10;
+    const total = subtotal + dFee + pFee + rFee + tax + platformFee - disc;
+
+    const lines = [
+        ...cart.items.map((i) => ({
+            label: `${i.quantity} × ${i.name}`,
+            amount: i.price * i.quantity,
+        })),
+        { label: "Delivery Fee", amount: dFee },
+        { label: "Packaging Fee", amount: pFee },
+        { label: "Rain Fee", amount: rFee },
+        { label: "Service Tax", amount: tax },
+        { label: "Platform Fee", amount: platformFee },
+        { label: "Discount", amount: -disc },
+    ];
     try {
       const { order } = await api.orders.placeGrocery({
         store_id: cart.storeId,
@@ -190,22 +235,16 @@ function GroceryCheckout() {
         </div>
         <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} />
         <PriceBreakdown
-          lines={[
-            ...cart.items.map((i) => ({
-              label: `${i.quantity} × ${i.name}`,
-              amount: i.price * i.quantity,
-            })),
-            { label: "Delivery fee (demo)", amount: Math.max(20, Math.round(cart.total() * 0.08)) },
-          ]}
-          total={cart.total() + Math.max(20, Math.round(cart.total() * 0.08))}
+          lines={lines}
+          total={total}
           paymentMethod={paymentMethod}
         />
         <Button
           onClick={placeOrder}
           disabled={placing}
-          className="sticky bottom-4 w-full shadow-lg"
+          className="sticky bottom-4 w-full shadow-lg rounded-2xl h-14 font-bold text-lg"
         >
-          {placing ? "Placing order..." : `Place order — ₹${cart.total().toFixed(0)}`}
+          {placing ? "Placing order..." : `Place order`}
         </Button>
       </div>
     </div>

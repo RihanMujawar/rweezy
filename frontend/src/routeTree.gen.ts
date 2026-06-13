@@ -9,9 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RegisterPartnerRouteImport } from './routes/register-partner'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProtectedRiderIndexRouteImport } from './routes/_protected/rider/index'
@@ -42,6 +44,11 @@ import { Route as ProtectedAppGroceryStoreIdRouteImport } from './routes/_protec
 import { Route as ProtectedAppFoodCheckoutRouteImport } from './routes/_protected/app/food/checkout'
 import { Route as ProtectedAppFoodRestaurantIdRouteImport } from './routes/_protected/app/food/$restaurantId'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterPartnerRoute = RegisterPartnerRouteImport.update({
   id: '/register-partner',
   path: '/register-partner',
@@ -55,6 +62,11 @@ const RegisterRoute = RegisterRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProtectedRoute = ProtectedRouteImport.update({
@@ -214,9 +226,11 @@ const ProtectedAppFoodRestaurantIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/register-partner': typeof RegisterPartnerRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/admin/grocery-stores': typeof ProtectedAdminGroceryStoresRoute
   '/admin/restaurants': typeof ProtectedAdminRestaurantsRoute
   '/admin/users': typeof ProtectedAdminUsersRoute
@@ -247,9 +261,11 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/register-partner': typeof RegisterPartnerRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/admin/grocery-stores': typeof ProtectedAdminGroceryStoresRoute
   '/admin/restaurants': typeof ProtectedAdminRestaurantsRoute
   '/admin/users': typeof ProtectedAdminUsersRoute
@@ -282,9 +298,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_protected': typeof ProtectedRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/register-partner': typeof RegisterPartnerRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/_protected/admin/grocery-stores': typeof ProtectedAdminGroceryStoresRoute
   '/_protected/admin/restaurants': typeof ProtectedAdminRestaurantsRoute
   '/_protected/admin/users': typeof ProtectedAdminUsersRoute
@@ -317,9 +335,11 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/forgot-password'
     | '/login'
     | '/register'
     | '/register-partner'
+    | '/reset-password'
     | '/admin/grocery-stores'
     | '/admin/restaurants'
     | '/admin/users'
@@ -350,9 +370,11 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/forgot-password'
     | '/login'
     | '/register'
     | '/register-partner'
+    | '/reset-password'
     | '/admin/grocery-stores'
     | '/admin/restaurants'
     | '/admin/users'
@@ -384,9 +406,11 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_protected'
+    | '/forgot-password'
     | '/login'
     | '/register'
     | '/register-partner'
+    | '/reset-password'
     | '/_protected/admin/grocery-stores'
     | '/_protected/admin/restaurants'
     | '/_protected/admin/users'
@@ -419,13 +443,22 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ProtectedRoute: typeof ProtectedRouteWithChildren
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   RegisterPartnerRoute: typeof RegisterPartnerRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register-partner': {
       id: '/register-partner'
       path: '/register-partner'
@@ -445,6 +478,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_protected': {
@@ -720,9 +760,11 @@ const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ProtectedRoute: ProtectedRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   RegisterPartnerRoute: RegisterPartnerRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

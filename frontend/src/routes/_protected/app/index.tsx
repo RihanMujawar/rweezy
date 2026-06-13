@@ -22,6 +22,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import { motion } from "framer-motion";
 
 export const Route = createFileRoute("/_protected/app/")({
   component: AppHome,
@@ -81,6 +82,21 @@ interface CatalogItem {
   grocery_stores?: { name: string } | null;
 }
 
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemAnim = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 }
+};
+
 function ItemCarousel({
   title,
   subtitle,
@@ -95,15 +111,15 @@ function ItemCarousel({
   loading: boolean;
 }) {
   return (
-    <section className="mt-8 md:mt-10">
-      <div className="mb-3 flex items-end justify-between gap-3 md:mb-4">
+    <section className="mt-12">
+      <div className="mb-6 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold md:text-xl">{title}</h2>
+          <h2 className="text-xl font-bold tracking-tight md:text-2xl">{title}</h2>
           <p className="hidden text-sm text-muted-foreground sm:block">{subtitle}</p>
         </div>
-        <Button asChild variant="outline" size="sm" className="shrink-0">
+        <Button asChild variant="glass" size="sm" className="shrink-0 rounded-full">
           <Link to={to}>
-            View <ArrowRight className="ml-1 h-4 w-4" />
+            View all <ArrowRight className="ml-1 h-4 w-4" />
           </Link>
         </Button>
       </div>
@@ -112,57 +128,75 @@ function ItemCarousel({
         <CarouselContent>
           {loading ? (
             Array.from({ length: 4 }).map((_, index) => (
-              <CarouselItem key={index} className="basis-[46%] sm:basis-1/2 lg:basis-1/4">
-                <div className="overflow-hidden rounded-lg border bg-card p-3 sm:p-4">
-                  <div className="aspect-square bg-muted sm:aspect-[4/3] animate-pulse rounded" />
-                  <div className="mt-3 space-y-2">
-                    <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
-                    <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
-                    <div className="h-4 bg-muted animate-pulse rounded w-1/4 mt-2" />
+              <CarouselItem key={index} className="basis-[70%] sm:basis-1/2 lg:basis-1/4">
+                <div className="overflow-hidden rounded-[2rem] border bg-card/40 p-4 backdrop-blur-md">
+                  <div className="aspect-square bg-muted/50 animate-pulse rounded-2xl" />
+                  <div className="mt-4 space-y-2">
+                    <div className="h-5 bg-muted/50 animate-pulse rounded-full w-3/4" />
+                    <div className="h-4 bg-muted/50 animate-pulse rounded-full w-1/2" />
+                    <div className="h-6 bg-muted/50 animate-pulse rounded-full w-1/4 mt-4" />
                   </div>
                 </div>
               </CarouselItem>
             ))
           ) : items.length === 0 ? (
-            <div className="w-full py-10 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
+            <div className="w-full py-16 text-center text-sm text-muted-foreground border border-dashed rounded-[2rem] border-white/10 bg-white/5 backdrop-blur-sm">
               No items available right now.
             </div>
           ) : (
             items.map((item) => {
               const placeName =
                 item.restaurants?.name || item.grocery_stores?.name || "Rweezy Partner";
-              const imageUrl = item.image_url || (to === "/app/food"
-                ? "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80"
-                : "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=700&q=80");
-              const linkParams = to === "/app/food"
-                ? { restaurantId: item.restaurant_id || "" }
-                : { storeId: item.store_id || "" };
-              const linkTo = to === "/app/food"
-                ? "/app/food/$restaurantId"
-                : "/app/grocery/$storeId";
+              const imageUrl =
+                item.image_url ||
+                (to === "/app/food"
+                  ? "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=700&q=80"
+                  : "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=700&q=80");
+              const linkClassName =
+                "block overflow-hidden rounded-[2rem] border border-white/10 bg-card/40 backdrop-blur-xl shadow-lg transition-all duration-500 hover:border-primary/40 hover:-translate-y-2 hover:shadow-primary/10";
+              const cardBody = (
+                <>
+                  <div className="aspect-square overflow-hidden bg-muted sm:aspect-[4/3]">
+                    <img src={imageUrl} alt={item.name} className="h-full w-full object-cover transition-transform duration-700 hover:scale-110" />
+                  </div>
+                  <div className="p-5">
+                    <div>
+                      <h3 className="line-clamp-1 text-base font-bold tracking-tight">
+                        {item.name}
+                      </h3>
+                      <p className="mt-1 truncate text-xs font-medium text-muted-foreground uppercase tracking-widest">
+                        {placeName}
+                      </p>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between">
+                      <p className="text-lg font-black text-primary">₹{item.price}</p>
+                      <span className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <ArrowRight className="h-4 w-4 text-primary" />
+                      </span>
+                    </div>
+                  </div>
+                </>
+              );
 
               return (
-                <CarouselItem key={item.id} className="basis-[46%] sm:basis-1/2 lg:basis-1/4">
-                  <Link
-                    to={linkTo as any}
-                    params={linkParams as any}
-                    className="block overflow-hidden rounded-xl border bg-card/60 backdrop-blur-md shadow-sm transition-all duration-300 hover:border-primary/50 hover:scale-[1.02] hover:shadow-md"
-                  >
-                    <div className="aspect-square bg-muted sm:aspect-[4/3]">
-                      <img src={imageUrl} alt={item.name} className="h-full w-full object-cover" />
-                    </div>
-                    <div className="p-3 sm:p-4">
-                      <div>
-                        <h3 className="line-clamp-2 text-sm font-semibold leading-tight sm:text-base">
-                          {item.name}
-                        </h3>
-                        <p className="mt-1 truncate text-xs text-muted-foreground sm:text-sm">
-                          {placeName}
-                        </p>
-                      </div>
-                      <p className="mt-2 text-sm font-semibold">₹{item.price}</p>
-                    </div>
-                  </Link>
+                <CarouselItem key={item.id} className="basis-[70%] sm:basis-1/2 lg:basis-1/4 pb-4">
+                  {to === "/app/food" ? (
+                    <Link
+                      to="/app/food/$restaurantId"
+                      params={{ restaurantId: item.restaurant_id || "" }}
+                      className={linkClassName}
+                    >
+                      {cardBody}
+                    </Link>
+                  ) : (
+                    <Link
+                      to="/app/grocery/$storeId"
+                      params={{ storeId: item.store_id || "" }}
+                      className={linkClassName}
+                    >
+                      {cardBody}
+                    </Link>
+                  )}
                 </CarouselItem>
               );
             })
@@ -170,8 +204,8 @@ function ItemCarousel({
         </CarouselContent>
         {!loading && items.length > 0 && (
           <>
-            <CarouselPrevious className="left-2 hidden bg-background/90 sm:inline-flex" />
-            <CarouselNext className="right-2 hidden bg-background/90 sm:inline-flex" />
+            <CarouselPrevious className="left-2 hidden bg-white/10 border-white/10 backdrop-blur-xl hover:bg-white/20 sm:inline-flex" />
+            <CarouselNext className="right-2 hidden bg-white/10 border-white/10 backdrop-blur-xl hover:bg-white/20 sm:inline-flex" />
           </>
         )}
       </Carousel>
@@ -188,14 +222,16 @@ function AppHome() {
   const [loadingGrocery, setLoadingGrocery] = useState(true);
 
   useEffect(() => {
-    api.catalog.getPopularFoodItems()
+    api.catalog
+      .getPopularFoodItems()
       .then(({ items }) => {
         setFoodItems(items || []);
       })
       .catch((err) => console.error("Error fetching popular food:", err))
       .finally(() => setLoadingFood(false));
 
-    api.catalog.getPopularGroceryItems()
+    api.catalog
+      .getPopularGroceryItems()
       .then(({ items }) => {
         setGroceryItems(items || []);
       })
@@ -204,100 +240,128 @@ function AppHome() {
   }, []);
 
   return (
-    <div className="container mx-auto px-4 py-5 md:py-8">
+    <div className="container mx-auto px-4 py-8 md:py-12 max-w-7xl">
       {user?.id && <OnboardingDialog userId={user.id} email={user.email} />}
-      <div className="mb-5 md:mb-8">
-        <h1 className="text-2xl font-bold md:text-3xl">Hello {user?.email?.split("@")[0]} 👋</h1>
-        <p className="mt-1 text-sm text-muted-foreground md:text-base">
-          What would you like to do today?
+
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="mb-10"
+      >
+        <h1 className="text-4xl font-black tracking-tight md:text-5xl lg:text-6xl">
+          Hello {user?.email?.split("@")[0]} 👋
+        </h1>
+        <p className="mt-4 text-lg font-medium text-muted-foreground md:text-xl">
+          Experience the future of delivery, today.
         </p>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           {roles.map((r) => (
-            <span key={r} className="rounded-full bg-secondary px-3 py-1 text-xs">
+            <span key={r} className="rounded-full bg-white/10 border border-white/5 px-4 py-1 text-xs font-bold uppercase tracking-widest text-muted-foreground backdrop-blur-md">
               {r.replace("_", " ")}
             </span>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {latestActiveOrder && (
-        <section className="mb-6 rounded-xl border bg-primary/10 border-primary/20 backdrop-blur-md p-4 shadow-lg shadow-primary/5 relative overflow-hidden animate-pulse">
-          <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/20 rounded-full blur-[40px] pointer-events-none" />
-          <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/20">
-                <MapPin className="h-5 w-5 text-primary" />
+        <motion.section
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mb-12 rounded-[2.5rem] border border-primary/30 bg-primary/10 backdrop-blur-2xl p-6 shadow-2xl shadow-primary/20 relative overflow-hidden"
+        >
+          <div className="absolute -top-10 -right-10 w-48 h-48 bg-primary/30 rounded-full blur-[60px] pointer-events-none" />
+          <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-5">
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.5rem] bg-primary text-white shadow-xl shadow-primary/40">
+                <MapPin className="h-8 w-8" />
               </span>
               <div>
-                <h2 className="font-semibold">Track your active order</h2>
-                <p className="text-sm text-muted-foreground">
-                  {latestActiveOrder.label} is currently {latestActiveOrder.status}.
+                <h2 className="text-xl font-black">Your order is on the way!</h2>
+                <p className="text-primary/70 font-medium">
+                  {latestActiveOrder.label} is currently <span className="font-black uppercase">{latestActiveOrder.status}</span>.
                 </p>
               </div>
             </div>
-            <Button asChild className="min-h-11 shrink-0 btn-interactive shadow-md shadow-primary/10">
+            <Button
+              asChild
+              className="h-14 px-8 rounded-2xl bg-primary text-primary-foreground font-bold shadow-xl shadow-primary/40 hover:scale-105 active:scale-95 transition-all"
+            >
               <Link
                 to="/app/track"
                 search={{ id: latestActiveOrder.id, kind: latestActiveOrder.kind }}
               >
-                Track order <ArrowRight className="ml-2 h-4 w-4" />
+                Track live progress <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
           </div>
-        </section>
+        </motion.section>
       )}
 
       <section>
-        <div className="mb-3 flex items-center gap-2 md:mb-4">
-          <Sparkles className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold tracking-tight md:text-xl">Book anything from one place</h2>
+        <div className="mb-8 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-2xl bg-amber-500/10 flex items-center justify-center backdrop-blur-md border border-amber-500/20">
+            <Sparkles className="h-6 w-6 text-amber-500" />
+          </div>
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+            Everything you need
+          </h2>
         </div>
-        <div className="grid grid-cols-4 gap-2 md:auto-rows-[180px] md:grid-cols-4 md:gap-4">
+
+        <motion.div
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-2 gap-3 md:auto-rows-[240px] md:grid-cols-4 md:gap-6"
+        >
           {bentoActions.map((s) => (
-            <Link
-              key={s.to}
-              to={s.to}
-              className={`group relative min-h-20 overflow-hidden rounded-xl liquid-glass-card p-2 md:min-h-0 md:p-5 ${s.className}`}
-            >
-              <img
-                src={s.image}
-                alt={`${s.title} service`}
-                className="hidden absolute inset-0 h-full w-full object-cover opacity-25 transition duration-500 group-hover:scale-105 group-hover:opacity-40 md:block"
-              />
-              <div className="hidden absolute inset-0 bg-gradient-to-t from-background/90 via-background/60 to-background/10 md:block" />
-              <div className="relative z-10 flex h-full flex-col items-center justify-center gap-2 text-center md:items-stretch md:justify-between md:text-left w-full">
-                <div className="flex items-center justify-center md:justify-between gap-3 w-full">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 dark:bg-black/20 border border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-300">
-                    <s.icon className="h-5 w-5 text-foreground" />
-                  </span>
-                  <span className="hidden rounded-md bg-white/10 dark:bg-black/20 border border-white/5 px-2 py-1 text-xs font-semibold md:inline-flex text-muted-foreground">
-                    {s.meta}
-                  </span>
+            <motion.div key={s.to} variants={itemAnim} className={s.className}>
+              <Link
+                to={s.to}
+                className="group relative h-full w-full flex flex-col overflow-hidden rounded-[2.5rem] liquid-glass-card p-6"
+              >
+                <img
+                  src={s.image}
+                  alt={`${s.title} service`}
+                  className="absolute inset-0 h-full w-full object-cover opacity-10 transition duration-700 group-hover:scale-110 group-hover:opacity-30"
+                />
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent dark:from-black/5 dark:to-transparent pointer-events-none" />
+
+                <div className="relative z-10 flex h-full flex-col justify-between w-full">
+                  <div className="flex items-start justify-between w-full">
+                    <span className="inline-flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-white/10 dark:bg-black/20 border border-white/20 dark:border-white/10 backdrop-blur-xl shadow-2xl group-hover:scale-110 transition-transform duration-500">
+                      <s.icon className="h-7 w-7 text-foreground" />
+                    </span>
+                    <span className="rounded-full bg-white/10 border border-white/10 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground backdrop-blur-md hidden lg:inline-block">
+                      {s.meta}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="text-2xl font-black leading-tight group-hover:translate-x-2 transition-transform duration-500 md:text-3xl">
+                      {s.title}
+                    </h3>
+                    <p className="mt-2 hidden max-w-[200px] text-sm font-medium text-muted-foreground leading-relaxed md:block opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                      {s.desc}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xs font-bold leading-none md:text-2xl md:leading-normal group-hover:translate-x-1 transition-transform duration-300">
-                    {s.title}
-                  </h3>
-                  <p className="mt-1 hidden max-w-sm text-sm text-muted-foreground md:block">
-                    {s.desc}
-                  </p>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </section>
 
       <ItemCarousel
-        title="Popular food items"
-        subtitle="Quick picks for lunch, dinner, and cravings."
+        title="Popular now"
+        subtitle="The most loved dishes by our community."
         to="/app/food"
         items={foodItems}
         loading={loadingFood}
       />
       <ItemCarousel
-        title="Grocery picks"
-        subtitle="Fresh items and home essentials for fast delivery."
+        title="Freshly stocked"
+        subtitle="Daily essentials delivered in minutes."
         to="/app/grocery"
         items={groceryItems}
         loading={loadingGrocery}

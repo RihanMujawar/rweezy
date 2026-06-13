@@ -2,6 +2,8 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth, type AppRole } from "@/lib/auth-context";
 import { useAppMode } from "@/lib/app-mode-context";
 import { useMemo } from "react";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -90,12 +92,6 @@ export function AppSidebar() {
     return next;
   }, [roles]);
   const hasBusinessMode = businessGroups.length > 0;
-  const pathSuggestsBusiness =
-    path.startsWith("/hotel") ||
-    path.startsWith("/grocery-admin") ||
-    path.startsWith("/delivery") ||
-    path.startsWith("/rider") ||
-    path.startsWith("/admin");
 
   const groups: { label: string; items: NavItem[] }[] =
     mode === "business" && hasBusinessMode
@@ -103,61 +99,97 @@ export function AppSidebar() {
       : [{ label: "Customer", items: customerNav }];
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" variant="floating">
       <SidebarHeader>
-        <Link to="/" className="px-2 py-2 text-lg font-extrabold tracking-tight bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-          Rweezy
+        <Link
+          to="/"
+          className="px-4 py-6 text-2xl font-black tracking-tighter bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:text-center"
+        >
+          <span className="group-data-[collapsible=icon]:hidden">Rweezy</span>
+          <span className="hidden group-data-[collapsible=icon]:inline">R.</span>
         </Link>
         {hasBusinessMode && (
-          <div className="mx-2 grid grid-cols-2 rounded-lg bg-muted p-1">
+          <div className="mx-2 grid grid-cols-2 rounded-2xl bg-white/5 p-1 backdrop-blur-md group-data-[collapsible=icon]:grid-cols-1">
             <Button
               type="button"
               size="sm"
-              variant={mode === "customer" ? "default" : "ghost"}
-              className="h-9 px-2 text-xs"
+              variant={mode === "customer" ? "secondary" : "ghost"}
+              className={cn(
+                "h-10 rounded-xl text-xs font-semibold transition-all",
+                mode === "customer" && "shadow-sm"
+              )}
               onClick={() => setMode("customer")}
             >
-              <User className="mr-1 h-3.5 w-3.5" />
-              Customer
+              <User className="h-4 w-4 md:mr-1.5" />
+              <span className="group-data-[collapsible=icon]:hidden">Customer</span>
             </Button>
             <Button
               type="button"
               size="sm"
-              variant={mode === "business" ? "default" : "ghost"}
-              className="h-9 px-2 text-xs"
+              variant={mode === "business" ? "secondary" : "ghost"}
+              className={cn(
+                "h-10 rounded-xl text-xs font-semibold transition-all",
+                mode === "business" && "shadow-sm"
+              )}
               onClick={() => setMode("business")}
             >
-              <BriefcaseBusiness className="mr-1 h-3.5 w-3.5" />
-              Business
+              <BriefcaseBusiness className="h-4 w-4 md:mr-1.5" />
+              <span className="group-data-[collapsible=icon]:hidden">Business</span>
             </Button>
           </div>
         )}
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="px-2">
         {groups.map((g) => (
           <SidebarGroup key={g.label}>
-            <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
+            <SidebarGroupLabel className="px-4">{g.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {g.items.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                      <Link to={item.url} className="flex items-center gap-2">
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {g.items.map((item) => {
+                  const active = isActive(item.url);
+                  return (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
+                        <Link to={item.url} className="relative overflow-hidden">
+                          {active && (
+                            <motion.div
+                              layoutId="sidebar-active"
+                              className="absolute inset-0 bg-primary/10 rounded-xl -z-10"
+                              transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
+                            />
+                          )}
+                          <item.icon className={cn("transition-transform duration-300", active && "scale-110")} />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter>
-        <div className="px-2 py-2 text-xs text-muted-foreground truncate">{user?.email}</div>
-        <Button variant="ghost" size="sm" onClick={signOut} className="justify-start">
-          <LogOut className="mr-2 h-4 w-4" /> Sign out
+      <SidebarFooter className="p-4">
+        <div className="mb-4 rounded-2xl bg-white/5 p-3 backdrop-blur-sm group-data-[collapsible=icon]:hidden">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold shadow-lg">
+              {user?.email?.[0].toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold truncate">{user?.email?.split("@")[0]}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{user?.email}</p>
+            </div>
+          </div>
+        </div>
+        <Button
+          variant="glass"
+          size="sm"
+          onClick={signOut}
+          className="w-full justify-start rounded-xl group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+        >
+          <LogOut className="mr-2 h-4 w-4 group-data-[collapsible=icon]:mr-0" />
+          <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
         </Button>
       </SidebarFooter>
     </Sidebar>

@@ -2,7 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { fieldErrors, registerSchema } from "@/lib/validation";
+import { fieldErrors, phoneSchema, registerSchema } from "@/lib/validation";
+import { PhoneOtpVerification } from "@/components/phone-otp-verification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,8 +22,15 @@ function RegisterPage() {
   const [phoneSuffix, setPhoneSuffix] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [phoneVerificationToken, setPhoneVerificationToken] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  const fullPhone = `${countryCode}${phoneSuffix.replace(/\D/g, "")}`;
+
+  useEffect(() => {
+    setPhoneVerificationToken("");
+  }, [fullPhone]);
 
   useEffect(() => {
     const hasStarted = fullName || email || phoneSuffix || password || confirmPassword;
@@ -30,17 +38,16 @@ function RegisterPage() {
     const parsed = registerSchema.safeParse({
       fullName,
       email,
-      phone: `${countryCode}${phoneSuffix.replace(/\D/g, "")}`,
+      phone: fullPhone,
       password,
       confirmPassword,
       requestedRole: "customer",
     });
     setErrors(parsed.success ? {} : fieldErrors(parsed.error));
-  }, [confirmPassword, countryCode, email, fullName, password, phoneSuffix]);
+  }, [confirmPassword, countryCode, email, fullName, fullPhone, password, phoneSuffix]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const fullPhone = `${countryCode}${phoneSuffix.replace(/\D/g, "")}`;
     const parsed = registerSchema.safeParse({
       fullName,
       email,
@@ -57,6 +64,11 @@ function RegisterPage() {
       return;
     }
 
+    if (!phoneVerificationToken) {
+      toast.error("Verify your phone number with the OTP code before signing up");
+      return;
+    }
+
     setErrors({});
     setLoading(true);
     try {
@@ -65,7 +77,14 @@ function RegisterPage() {
         email: parsed.data.email.toLowerCase(),
         phone: parsed.data.phone,
         password,
+        phone_verification_token: phoneVerificationToken,
       });
+
+      if (result.emailVerificationRequired) {
+        toast.success("Account created! Check your email to verify your Gmail/email address.");
+        navigate({ to: "/login" });
+        return;
+      }
 
       if (result.authenticated) {
         await refreshAuth();
@@ -85,15 +104,15 @@ function RegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-transparent px-4 py-12 animate-fade-in-up">
       <div className="w-full max-w-lg rounded-2xl border bg-card/60 p-8 shadow-2xl backdrop-blur-xl">
-        <Link 
-          to="/" 
+        <Link
+          to="/"
           className="text-2xl font-extrabold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent hover:opacity-90 transition-opacity"
         >
           Rweezy
         </Link>
         <h1 className="mt-6 text-2xl font-bold tracking-tight">Create your customer account</h1>
         <p className="text-sm text-muted-foreground">
-          Use this page for a normal customer account. Other roles have a separate signup path.
+          Verify your phone with SMS OTP and confirm your email after signup.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -146,6 +165,13 @@ function RegisterPage() {
             {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
           </div>
 
+          <PhoneOtpVerification
+            phone={fullPhone}
+            purpose="register"
+            onVerified={setPhoneVerificationToken}
+            disabled={!phoneSchema.safeParse(fullPhone).success}
+          />
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -173,7 +199,7 @@ function RegisterPage() {
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading || !phoneVerificationToken}>
             {loading ? "Creating account..." : "Sign up"}
           </Button>
         </form>

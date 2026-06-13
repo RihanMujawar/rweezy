@@ -1,0 +1,457 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AppRole {
+  customer
+  admin
+  hotel_manager
+  grocery_manager
+  delivery_boy
+  rider
+}
+
+enum OrderStatus {
+  pending
+  accepted
+  preparing
+  ready
+  picked_up
+  delivered
+  cancelled
+}
+
+enum RideStatus {
+  requested
+  accepted
+  started
+  completed
+  cancelled
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile       Profile?
+  roles         UserRole[]
+
+  // Relations to services
+  managedRestaurants   Restaurant[]
+  managedGroceryStores GroceryStore[]
+
+  foodOrders           FoodOrder[]          @relation("CustomerFoodOrders")
+  assignedFoodOrders   FoodOrder[]          @relation("DeliveryBoyFoodOrders")
+
+  groceryOrders        GroceryOrder[]       @relation("CustomerGroceryOrders")
+  assignedGroceryOrders GroceryOrder[]      @relation("DeliveryBoyGroceryOrders")
+
+  rides                Ride[]               @relation("CustomerRides")
+  assignedRides        Ride[]               @relation("RiderRides")
+
+  packages             PackageDelivery[]    @relation("CustomerPackages")
+  assignedPackages     PackageDelivery[]    @relation("RiderPackages")
+
+  orderReviews         OrderReview[]
+  roleRequests         RoleRequest[]
+  savedAddresses       SavedAddress[]
+  pushTokens           UserPushToken[]
+  auditEvents          AuditEvent[]
+  chatMessages         ChatMessage[]
+}
+
+model Profile {
+  id         String   @id
+  user       User     @relation(fields: [id], references: [id], onDelete: Cascade)
+  fullName   String?
+  phone      String?
+  avatarUrl  String?
+  townName   String?
+  pincode    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      AppRole
+  createdAt DateTime @default(now())
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model Restaurant {
+  id                  String      @id @default(uuid())
+  managerId           String?
+  manager             User?       @relation(fields: [managerId], references: [id], onDelete: SetNull)
+  name                String
+  description         String?
+  address             String?
+  townName            String?
+  pincode             String?
+  lat                 Float?
+  lng                 Float?
+  imageUrl            String?
+  isOpen              Boolean     @default(true)
+  freeDeliveryThreshold Float?    @default(0)
+  deliveryFee         Float?      @default(0)
+  packagingFee        Float?      @default(0)
+  rainFee             Float?      @default(0)
+  isRaining           Boolean     @default(false)
+  discountPct         Float?      @default(0)
+  discountFlat        Float?      @default(0)
+  isBogoActive        Boolean     @default(false)
+  serviceTaxPct       Float?      @default(0)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  menuItems           MenuItem[]
+  foodOrders          FoodOrder[]
+
+  @@map("restaurants")
+}
+
+model MenuItem {
+  id               String   @id @default(uuid())
+  restaurantId     String
+  restaurant       Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  price            Float
+  imageUrl         String?
+  category         String?
+  isAvailable      Boolean  @default(true)
+  isVeg            Boolean  @default(true)
+  prepTimeMinutes  Int      @default(15)
+  isSpecial        Boolean  @default(false)
+  modifiers        Json?    @default("[]")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  foodOrderItems   FoodOrderItem[]
+
+  @@map("menu_items")
+}
+
+model GroceryStore {
+  id          String   @id @default(uuid())
+  managerId   String?
+  manager     User?    @relation(fields: [managerId], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+  address     String?
+  townName    String?
+  pincode     String?
+  lat         Float?
+  lng         Float?
+  imageUrl    String?
+  isOpen      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  groceryItems GroceryItem[]
+  groceryOrders GroceryOrder[]
+
+  @@map("grocery_stores")
+}
+
+model GroceryItem {
+  id                String   @id @default(uuid())
+  storeId           String
+  store             GroceryStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  price             Float
+  imageUrl          String?
+  category          String?
+  isAvailable       Boolean  @default(true)
+  stockQuantity     Int      @default(0)
+  lowStockThreshold Int      @default(5)
+  expiryDate        DateTime?
+  aisleLocation     String?
+  unit              String   @default("pcs")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  groceryOrderItems GroceryOrderItem[]
+
+  @@map("grocery_items")
+}
+
+model FoodOrder {
+  id                  String      @id @default(uuid())
+  customerId          String
+  customer            User        @relation("CustomerFoodOrders", fields: [customerId], references: [id], onDelete: Cascade)
+  restaurantId        String
+  restaurant          Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  deliveryBoyId       String?
+  deliveryBoy         User?       @relation("DeliveryBoyFoodOrders", fields: [deliveryBoyId], references: [id], onDelete: SetNull)
+  status              OrderStatus @default(pending)
+  subtotal            Float       @default(0)
+  deliveryFeeApplied  Float       @default(0)
+  packagingFeeApplied Float       @default(0)
+  rainFeeApplied      Float       @default(0)
+  platformFeeApplied  Float       @default(0)
+  serviceTaxApplied   Float       @default(0)
+  discountAmount      Float       @default(0)
+  total               Float       @default(0)
+  deliveryAddress     String
+  deliveryLat         Float?
+  deliveryLng         Float?
+  pickupAddress       String?
+  pickupLat           Float?
+  pickupLng           Float?
+  notes               String?
+  paymentMethod       String      @default("cash")
+  paymentStatus       String      @default("pending")
+  deliveryPin         String?     @db.Char(4)
+  estimatedDeliveryAt DateTime?
+  contactlessDelivery Boolean     @default(false)
+  riderLat            Float?
+  riderLng            Float?
+  riderLocationUpdatedAt DateTime?
+  cancellationReason  String?
+  cancelledAt         DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  items               FoodOrderItem[]
+
+  @@map("food_orders")
+}
+
+model FoodOrderItem {
+  id         String    @id @default(uuid())
+  orderId    String
+  order      FoodOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  name       String
+  price      Float
+  quantity   Int
+  createdAt  DateTime  @default(now())
+
+  @@map("food_order_items")
+}
+
+model GroceryOrder {
+  id                  String      @id @default(uuid())
+  customerId          String
+  customer            User        @relation("CustomerGroceryOrders", fields: [customerId], references: [id], onDelete: Cascade)
+  storeId             String
+  store               GroceryStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  deliveryBoyId       String?
+  deliveryBoy         User?       @relation("DeliveryBoyGroceryOrders", fields: [deliveryBoyId], references: [id], onDelete: SetNull)
+  status              OrderStatus @default(pending)
+  subtotal            Float       @default(0)
+  deliveryFeeApplied  Float       @default(0)
+  packagingFeeApplied Float       @default(0)
+  rainFeeApplied      Float       @default(0)
+  platformFeeApplied  Float       @default(0)
+  serviceTaxApplied   Float       @default(0)
+  discountAmount      Float       @default(0)
+  total               Float       @default(0)
+  deliveryAddress     String
+  deliveryLat         Float?
+  deliveryLng         Float?
+  pickupAddress       String?
+  pickupLat           Float?
+  pickupLng           Float?
+  notes               String?
+  paymentMethod       String      @default("cash")
+  paymentStatus       String      @default("pending")
+  deliveryPin         String?     @db.Char(4)
+  estimatedDeliveryAt DateTime?
+  contactlessDelivery Boolean     @default(false)
+  riderLat            Float?
+  riderLng            Float?
+  riderLocationUpdatedAt DateTime?
+  cancellationReason  String?
+  cancelledAt         DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  items               GroceryOrderItem[]
+
+  @@map("grocery_orders")
+}
+
+model GroceryOrderItem {
+  id            String      @id @default(uuid())
+  orderId       String
+  order         GroceryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  groceryItemId String
+  groceryItem   GroceryItem  @relation(fields: [groceryItemId], references: [id], onDelete: Restrict)
+  name          String
+  price         Float
+  quantity      Int
+  createdAt     DateTime    @default(now())
+
+  @@map("grocery_order_items")
+}
+
+model Ride {
+  id                  String      @id @default(uuid())
+  customerId          String
+  customer            User        @relation("CustomerRides", fields: [customerId], references: [id], onDelete: Cascade)
+  riderId             String?
+  rider               User?       @relation("RiderRides", fields: [riderId], references: [id], onDelete: SetNull)
+  pickupAddress       String
+  pickupLat           Float
+  pickupLng           Float
+  dropAddress         String
+  dropLat             Float
+  dropLng             Float
+  status              RideStatus  @default(requested)
+  fareEstimate        Float?
+  notes               String?
+  vehicleType         String?
+  paymentMethod       String      @default("cash")
+  paymentStatus       String      @default("pending")
+  deliveryPin         String?     @db.Char(4)
+  estimatedArrivalAt  DateTime?
+  riderLat            Float?
+  riderLng            Float?
+  riderLocationUpdatedAt DateTime?
+  cancellationReason  String?
+  cancelledAt         DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@map("rides")
+}
+
+model PackageDelivery {
+  id                  String      @id @default(uuid())
+  customerId          String
+  customer            User        @relation("CustomerPackages", fields: [customerId], references: [id], onDelete: Cascade)
+  riderId             String?
+  rider               User?       @relation("RiderPackages", fields: [riderId], references: [id], onDelete: SetNull)
+  pickupAddress       String
+  pickupLat           Float
+  pickupLng           Float
+  dropAddress         String
+  dropLat             Float
+  dropLng             Float
+  packageSize         String      @default("small")
+  receiverName        String?
+  receiverPhone       String?
+  notes               String?
+  status              RideStatus  @default(requested)
+  fareEstimate        Float?
+  paymentMethod       String      @default("cash")
+  paymentStatus       String      @default("pending")
+  deliveryPin         String?     @db.Char(4)
+  estimatedDeliveryAt DateTime?
+  riderLat            Float?
+  riderLng            Float?
+  riderLocationUpdatedAt DateTime?
+  cancellationReason  String?
+  cancelledAt         DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@map("package_deliveries")
+}
+
+model ChatMessage {
+  id          String   @id @default(uuid())
+  serviceKind String
+  serviceId   String
+  senderId    String
+  sender      User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body        String
+  createdAt   DateTime @default(now())
+
+  @@map("chat_messages")
+}
+
+model OrderReview {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceKind String
+  serviceId   String
+  rating      Int
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, serviceKind, serviceId])
+  @@map("order_reviews")
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     Json     @default("{}")
+  updatedAt DateTime @default(now())
+
+  @@map("platform_settings")
+}
+
+model SavedAddress {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String?
+  address   String
+  lat       Float?
+  lng       Float?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("saved_addresses")
+}
+
+model UserPushToken {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String   @unique
+  platform    String
+  deviceLabel String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_push_tokens")
+}
+
+model RoleRequest {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedRole AppRole
+  businessName  String?
+  message       String?
+  status        String   @default("pending") // pending, approved, rejected
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  @@map("role_requests")
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String
+  targetId   String?
+  message    String?
+  metadata   Json?    @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@map("audit_events")
+}

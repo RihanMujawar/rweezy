@@ -19,6 +19,32 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
+    "prisma": "^7.8.0",
     "supabase": "^2.98.2"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
+  },
+  "version": "1.0.0",
+  "description": "Rweezy is a full-stack delivery marketplace for food delivery, grocery delivery, ride booking, and package transfer. The project includes role-based experiences for customers, riders, delivery partners, restaurant managers, grocery store managers, and admins.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RihanMujawar/rweezy.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/RihanMujawar/rweezy/issues"
+  },
+  "homepage": "https://github.com/RihanMujawar/rweezy#readme",
+  "dependencies": {
+    "@prisma/client": "^7.8.0",
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "^9.0.3"
   }
 }

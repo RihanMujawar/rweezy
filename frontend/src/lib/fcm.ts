@@ -1,16 +1,25 @@
-import { getApp, getApps, initializeApp } from "firebase/app";
-import { getMessaging, getToken, isSupported, onMessage, type MessagePayload } from "firebase/messaging";
+import {
+  getMessaging,
+  getToken,
+  isSupported,
+  onMessage,
+  type MessagePayload,
+} from "firebase/messaging";
 import { api } from "@/lib/api";
+import { isActiveChat } from "@/lib/active-chat";
+import { firebaseConfig, getFirebaseApp } from "@/lib/firebase";
 import { toast } from "sonner";
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string | undefined,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string | undefined,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID as string | undefined,
-};
+declare global {
+  interface Window {
+    RweezyAndroidBridge?: {
+      getFcmToken?: () => string;
+      refreshFcmToken?: () => void;
+    };
+  }
+}
+
+const ANDROID_TOKEN_CACHE_KEY = "rweezy:android-fcm-token";
 
 const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
 let foregroundBound = false;
@@ -23,10 +32,6 @@ function isWebPushConfigured() {
     Boolean(firebaseConfig.appId) &&
     Boolean(vapidKey)
   );
-}
-
-function getFirebaseApp() {
-  return getApps().length ? getApp() : initializeApp(firebaseConfig);
 }
 
 function buildServiceWorkerUrl() {
@@ -45,21 +50,95 @@ function bindForegroundListener() {
   if (foregroundBound) return;
   const messaging = getMessaging(getFirebaseApp());
   onMessage(messaging, (payload: MessagePayload) => {
-    toast(payload.notification?.title || "Rweezy", {
-      description: payload.notification?.body || "You have a new update.",
-    });
+    const data = payload.data ?? {};
+    if (
+      data.type === "chat" &&
+      data.service_kind &&
+      data.service_id &&
+      isActiveChat(data.service_kind, data.service_id)
+    ) {
+      return;
+    }
+
+    const title = payload.notification?.title || data.title || "Rweezy";
+    const description = payload.notification?.body || data.body || "You have a new update.";
+    toast(title, { description });
   });
   foregroundBound = true;
 }
 
 /** Bind FCM foreground handler app-wide (safe to call on every protected page). */
 export function ensureForegroundMessageListener() {
-  if (typeof window === "undefined" || !isWebPushConfigured()) return;
+  if (typeof window === "undefined" || window.RweezyAndroidBridge || !isWebPushConfigured()) return;
   bindForegroundListener();
+}
+
+function waitForAndroidFcmToken(): Promise<string> {
+  const bridge = window.RweezyAndroidBridge;
+  if (!bridge?.getFcmToken) return Promise.resolve("");
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("rweezy:fcm-token-updated", onUpdated);
+      window.clearTimeout(timeoutId);
+      resolve(bridge.getFcmToken?.() ?? "");
+    };
+
+    const onUpdated = () => finish();
+    const timeoutId = window.setTimeout(finish, 5000);
+    window.addEventListener("rweezy:fcm-token-updated", onUpdated);
+    bridge.refreshFcmToken?.();
+  });
+}
+
+async function registerAndroidNativePush() {
+  const bridge = window.RweezyAndroidBridge;
+  if (!bridge?.getFcmToken) return;
+
+  let token = bridge.getFcmToken();
+  if (!token) {
+    token = await waitForAndroidFcmToken();
+  }
+  if (!token) return;
+
+  const previous = window.localStorage.getItem(ANDROID_TOKEN_CACHE_KEY);
+  if (previous === token) return;
+
+  await api.notifications.saveToken({
+    token,
+    platform: "android",
+    user_agent: navigator.userAgent,
+  });
+  window.localStorage.setItem(ANDROID_TOKEN_CACHE_KEY, token);
+}
+
+function bindAndroidTokenRefresh() {
+  if (
+    !window.RweezyAndroidBridge ||
+    (window as Window & { __rweezyAndroidTokenBound?: boolean }).__rweezyAndroidTokenBound
+  ) {
+    return;
+  }
+
+  (window as Window & { __rweezyAndroidTokenBound?: boolean }).__rweezyAndroidTokenBound = true;
+  window.addEventListener("rweezy:fcm-token-updated", () => {
+    window.localStorage.removeItem(ANDROID_TOKEN_CACHE_KEY);
+    registerAndroidNativePush().catch(() => {});
+  });
 }
 
 export async function registerWebPushForUser() {
   if (typeof window === "undefined") return;
+
+  if (window.RweezyAndroidBridge) {
+    bindAndroidTokenRefresh();
+    await registerAndroidNativePush();
+    return;
+  }
+
   if (!isWebPushConfigured()) return;
   if (!(await isSupported())) return;
   if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
