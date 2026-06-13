@@ -1,5 +1,5 @@
-import { env } from "../backend/lib/env.mjs";
-import { serviceRoleRestRequest } from "../backend/lib/supabase.mjs";
+import { prisma } from "../backend/lib/prisma.mjs";
+import { hashPassword } from "../backend/lib/auth.mjs";
 
 const password = process.env.DEMO_PASSWORD || "Demo123456";
 
@@ -27,81 +27,43 @@ const demoUsers = [
   { email: "demo.admin@rweezy.test", fullName: "Demo Admin", phone: "+919000000006", role: "admin" },
 ];
 
-async function adminAuth(path, options = {}) {
-  if (!env.supabaseServiceRoleKey) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for demo seeding");
+async function seed() {
+  const passwordHash = await hashPassword(password);
+
+  for (const demoUser of demoUsers) {
+    try {
+      const user = await prisma.user.upsert({
+        where: { email: demoUser.email },
+        update: {
+            passwordHash,
+        },
+        create: {
+            email: demoUser.email,
+            passwordHash,
+            profile: {
+                create: {
+                    fullName: demoUser.fullName,
+                    phone: demoUser.phone,
+                }
+            },
+            roles: {
+                create: {
+                    role: demoUser.role
+                }
+            }
+        }
+      });
+      console.log(`Seeded: ${demoUser.email} / ${password} -> ${demoUser.role}`);
+    } catch (error) {
+      console.error(`Failed to seed ${demoUser.email}:`, error.message);
+    }
   }
-
-  const response = await fetch(`${env.supabaseUrl}/auth/v1/admin${path}`, {
-    method: options.method || "GET",
-    headers: {
-      apikey: env.supabaseServiceRoleKey,
-      Authorization: `Bearer ${env.supabaseServiceRoleKey}`,
-      "Content-Type": "application/json",
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    throw new Error(payload?.message || payload?.error || `Auth admin request failed: ${response.status}`);
-  }
-  return payload;
 }
 
-async function findUserByEmail(email) {
-  for (let page = 1; page <= 10; page += 1) {
-    const payload = await adminAuth(`/users?page=${page}&per_page=100`);
-    const users = Array.isArray(payload?.users) ? payload.users : [];
-    const found = users.find((user) => user.email === email);
-    if (found) return found;
-    if (users.length < 100) return null;
-  }
-  return null;
-}
-
-async function ensureUser(demoUser) {
-  const existing = await findUserByEmail(demoUser.email);
-  if (existing) return existing;
-
-  return adminAuth("/users", {
-    method: "POST",
-    body: {
-      email: demoUser.email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: demoUser.fullName,
-        phone: demoUser.phone,
-        role: demoUser.role,
-      },
-    },
+seed()
+  .then(() => prisma.$disconnect())
+  .catch((e) => {
+    console.error(e);
+    prisma.$disconnect();
+    process.exit(1);
   });
-}
-
-for (const demoUser of demoUsers) {
-  const user = await ensureUser(demoUser);
-  const userId = user.id || user.user?.id;
-  if (!userId) throw new Error(`No user id returned for ${demoUser.email}`);
-
-  await serviceRoleRestRequest("/profiles?on_conflict=id", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates" },
-    body: {
-      id: userId,
-      full_name: demoUser.fullName,
-      phone: demoUser.phone,
-    },
-  });
-
-  await serviceRoleRestRequest("/user_roles?on_conflict=user_id,role", {
-    method: "POST",
-    headers: { Prefer: "resolution=ignore-duplicates" },
-    body: {
-      user_id: userId,
-      role: demoUser.role,
-    },
-  });
-
-  console.log(`${demoUser.email} / ${password} -> ${demoUser.role}`);
-}

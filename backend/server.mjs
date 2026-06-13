@@ -28,7 +28,7 @@ import {
   signInWithPassword,
   signUpWithPassword,
   updateUserPassword,
-} from "./lib/supabase.mjs";
+} from "./lib/prisma-shim.mjs";
 import {
   sendPasswordResetEmailOtp,
   verifyPasswordResetEmailOtp,

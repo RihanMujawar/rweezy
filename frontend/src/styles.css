@@ -141,7 +141,7 @@
     background-attachment: fixed;
     color: var(--color-foreground);
     min-height: 100vh;
-    font-family: 'Outfit', 'Inter', sans-serif;
+    font-family: "Outfit", "Inter", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -191,11 +191,7 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(
-    circle at center,
-    rgba(255, 255, 255, 0.08) 0%,
-    transparent 70%
-  );
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.08) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
   transform: rotate(30deg);
@@ -216,7 +212,7 @@
 }
 
 .liquid-glass-card::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(
@@ -254,7 +250,8 @@
 /* UI Overrides */
 
 /* Glassy Modals */
-[role="dialog"], .dialog-content {
+[role="dialog"],
+.dialog-content {
   border-radius: 2.5rem !important;
   border: 1px solid var(--color-border) !important;
   background: var(--color-popover) !important;
@@ -264,7 +261,8 @@
 }
 
 /* Floating Sidebar */
-aside, [data-sidebar="sidebar"] {
+aside,
+[data-sidebar="sidebar"] {
   backdrop-filter: blur(24px) saturate(150%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
   background-color: var(--color-sidebar) !important;
@@ -273,8 +271,13 @@ aside, [data-sidebar="sidebar"] {
 
 /* Animations */
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 .animate-float {

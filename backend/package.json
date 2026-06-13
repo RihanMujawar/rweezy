@@ -7,5 +7,9 @@
     "start": "node server.mjs",
     "build": "node --check server.mjs"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@prisma/client": "^5.10.2",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  }
 }

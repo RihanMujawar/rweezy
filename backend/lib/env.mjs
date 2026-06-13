@@ -83,9 +83,6 @@ export const env = {
   host: process.env.BACKEND_HOST || "127.0.0.1",
   port: Number(process.env.BACKEND_PORT || 4000),
   frontendDevUrl: process.env.FRONTEND_DEV_URL || "http://127.0.0.1:3000",
-  supabaseUrl: required("SUPABASE_URL"),
-  supabasePublishableKey: required("SUPABASE_PUBLISHABLE_KEY"),
-  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   mapboxAccessToken: process.env.MAPBOX_ACCESS_TOKEN || process.env.VITE_MAPBOX_ACCESS_TOKEN || "",
   corsAllowAll: process.env.CORS_ALLOW_ALL === "true" || process.env.NODE_ENV !== "production",
   corsAllowedOrigins: parseCsv(process.env.CORS_ALLOWED_ORIGINS),
@@ -106,4 +103,7 @@ export const env = {
   smtpPass: process.env.SMTP_PASS || "",
   smtpFrom: process.env.SMTP_FROM || process.env.SMTP_USER || "",
   authRequireEmailVerification: process.env.AUTH_REQUIRE_EMAIL_VERIFICATION !== "false",
+  jwtSecret: process.env.JWT_SECRET || "rweezy-secret-key-123",
+  refreshSecret: process.env.REFRESH_SECRET || "rweezy-refresh-key-123",
+  databaseUrl: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/rweezy",
 };

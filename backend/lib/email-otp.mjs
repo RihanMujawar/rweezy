@@ -8,7 +8,7 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
 function signingSecret() {
-  return env.emailOtpSecret || env.supabaseServiceRoleKey || "dev-email-otp-secret";
+  return env.emailOtpSecret || "dev-email-otp-secret";
 }
 
 function hashOtp(email, code) {

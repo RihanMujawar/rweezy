@@ -27,15 +27,15 @@ type PlacedOrder = {
 };
 
 type RestaurantDetails = {
-    id: string;
-    free_delivery_threshold: number;
-    delivery_fee: number;
-    packaging_fee: number;
-    service_tax_pct: number;
-    is_raining: boolean;
-    rain_fee: number;
-    discount_pct: number;
-    discount_flat: number;
+  id: string;
+  free_delivery_threshold: number;
+  delivery_fee: number;
+  packaging_fee: number;
+  service_tax_pct: number;
+  is_raining: boolean;
+  rain_fee: number;
+  discount_pct: number;
+  discount_flat: number;
 };
 
 function Checkout() {
@@ -61,9 +61,9 @@ function Checkout() {
       .catch(() => setAddresses([]));
 
     if (cart.restaurantId) {
-        api.catalog.getRestaurant(cart.restaurantId).then(({ restaurant }) => {
-            setDetails(restaurant as RestaurantDetails);
-        });
+      api.catalog.getRestaurant(cart.restaurantId).then(({ restaurant }) => {
+        setDetails(restaurant as RestaurantDetails);
+      });
     }
   }, [cart.restaurantId]);
 
@@ -96,17 +96,17 @@ function Checkout() {
 
     const subtotal = cart.total();
     const isFree = details && subtotal >= details.free_delivery_threshold;
-    const dFee = isFree ? 0 : (details?.delivery_fee || 0);
+    const dFee = isFree ? 0 : details?.delivery_fee || 0;
     const pFee = details?.packaging_fee || 0;
-    const rFee = details?.is_raining ? (details?.rain_fee || 0) : 0;
-    let disc = (subtotal * ((details?.discount_pct || 0) / 100)) + (details?.discount_flat || 0);
+    const rFee = details?.is_raining ? details?.rain_fee || 0 : 0;
+    let disc = subtotal * ((details?.discount_pct || 0) / 100) + (details?.discount_flat || 0);
 
     if (details?.is_bogo_active) {
-        cart.items.forEach(item => {
-            if (item.quantity >= 2) {
-                disc += item.price * Math.floor(item.quantity / 2);
-            }
-        });
+      cart.items.forEach((item) => {
+        if (item.quantity >= 2) {
+          disc += item.price * Math.floor(item.quantity / 2);
+        }
+      });
     }
 
     const tax = (subtotal - disc) * ((details?.service_tax_pct || 0) / 100);
@@ -114,16 +114,16 @@ function Checkout() {
     const total = subtotal + dFee + pFee + rFee + tax + platformFee - disc;
 
     const lines = [
-        ...cart.items.map((i) => ({
-            label: `${i.quantity} × ${i.name}`,
-            amount: i.price * i.quantity,
-        })),
-        { label: "Delivery Fee", amount: dFee },
-        { label: "Packaging Fee", amount: pFee },
-        { label: "Rain Fee", amount: rFee },
-        { label: "Service Tax", amount: tax },
-        { label: "Platform Fee", amount: platformFee },
-        { label: "Discount", amount: -disc },
+      ...cart.items.map((i) => ({
+        label: `${i.quantity} × ${i.name}`,
+        amount: i.price * i.quantity,
+      })),
+      { label: "Delivery Fee", amount: dFee },
+      { label: "Packaging Fee", amount: pFee },
+      { label: "Rain Fee", amount: rFee },
+      { label: "Service Tax", amount: tax },
+      { label: "Platform Fee", amount: platformFee },
+      { label: "Discount", amount: -disc },
     ];
     try {
       const { order } = await api.orders.placeFood({
@@ -248,11 +248,7 @@ function Checkout() {
           />
         </div>
         <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} />
-        <PriceBreakdown
-          lines={lines}
-          total={total}
-          paymentMethod={paymentMethod}
-        />
+        <PriceBreakdown lines={lines} total={total} paymentMethod={paymentMethod} />
         <Button
           onClick={placeOrder}
           disabled={placing}

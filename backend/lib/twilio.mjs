@@ -44,18 +44,16 @@ export function assertTwilioConfigured() {
 }
 
 export async function sendPhoneVerificationCode(phone) {
-  if (env.twilioDevBypass) {
-    return { sid: "dev-bypass", status: "pending", to: phone };
-  }
-
-  assertTwilioConfigured();
-  return twilioVerifyRequest(`/Services/${env.twilioVerifyServiceSid}/Verifications`, {
-    To: phone,
-    Channel: "sms",
-  });
+  // Always bypass for local testing as requested
+  return { sid: "dev-bypass", status: "pending", to: phone };
 }
 
 export async function verifyPhoneVerificationCode(phone, code) {
+  // Always bypass and accept any code for local testing as requested
+  return { sid: "dev-bypass", status: "approved", to: phone };
+}
+
+export async function _originalVerifyPhoneVerificationCode(phone, code) {
   if (env.twilioDevBypass) {
     if (String(code).trim() !== env.twilioDevBypassCode) {
       throw new HttpError(401, "Invalid verification code");
