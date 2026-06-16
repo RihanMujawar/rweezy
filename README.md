@@ -2,9 +2,8 @@
 
 Rweezy is a full-stack delivery marketplace for food delivery, grocery delivery, ride booking, and package transfer. The project includes role-based experiences for customers, riders, delivery partners, restaurant managers, grocery store managers, and admins.
 
-The platform consists of three main components:
+The platform consists of:
 - **Web Application**: React 19 frontend with TypeScript, Vite, TanStack Router, TanStack Query, Tailwind CSS 4
-- **Android Application**: Native Kotlin app with Jetpack Compose UI
 - **Backend**: Node.js ESM server with Supabase Auth/Postgres, Mapbox maps and routing
 - **Docker**: Production packaging for the web platform
 
@@ -13,7 +12,6 @@ The platform consists of three main components:
 | Area | Tools |
 | --- | --- |
 | Web Frontend | React 19, TypeScript, Vite, TanStack Router, TanStack Query |
-| Mobile App | Kotlin, Jetpack Compose, Android Jetpack, Material Design 3 |
 | UI (Web) | Tailwind CSS 4, Radix UI primitives, lucide-react, sonner, shadcn/ui components |
 | Maps | Mapbox GL, Mapbox Geocoding, Mapbox Directions |
 | Forms | React Hook Form, Zod validation |
@@ -21,7 +19,7 @@ The platform consists of three main components:
 | Database/Auth | Supabase Auth, Supabase Postgres, Supabase REST |
 | Phone OTP | Twilio Verify (SMS) |
 | State | React context, Zustand for cart management |
-| Testing | Node test runner, Playwright for E2E, JUnit for Android |
+| Testing | Node test runner |
 | Deployment | Docker, Docker Compose |
 
 ## What The Project Currently Includes
@@ -78,35 +76,16 @@ The platform consists of three main components:
 - Supabase REST access wrapped behind backend routes
 - Mapbox geocoding, route display, and browser geolocation support
 - Chat messages between customers and assigned riders/delivery partners
-- Web and Android push notifications (Firebase Cloud Messaging) with device token storage
-- Android native FCM for background notifications when the app is closed or minimized
-- System dark/light theme on web and Android (follows OS setting; no manual theme toggle)
-- Android app download prompt on mobile browsers (Android phones only; hidden inside the native app)
+- Web push notifications (Firebase Cloud Messaging) with device token storage
+- System dark/light theme on web (follows OS setting; no manual theme toggle)
 - Global in-app alerts on every protected page (role-based polling + toast/sound)
 - Rate limiting on sensitive endpoints (auth, password reset, chat, orders, live location)
 - Docker image and Docker Compose setup
-- Supabase migrations in `backend/supabase/migrations`
 
 ## Project Structure
 
 ```text
 .
-├── android/                      # Native Android application
-│   ├── app/
-│   │   ├── src/
-│   │   │   ├── androidTest/     # Instrumented UI tests
-│   │   │   ├── main/
-│   │   │   │   ├── java/com/example/rweezy/
-│   │   │   │   │   ├── data/        # Repositories
-│   │   │   │   │   ├── messaging/   # FCM service + WebView JS bridge
-│   │   │   │   │   ├── theme/       # Material Design 3 theme (system dark/light)
-│   │   │   │   │   └── ui/          # Compose UI screens
-│   │   │   │   └── res/         # App resources
-│   │   │   └── test/            # Local unit tests
-│   │   └── build.gradle.kts
-│   ├── gradle/
-│   │   └── libs.versions.toml
-│   └── build.gradle.kts
 ├── backend/
 │   ├── lib/
 │   │   ├── env.mjs
@@ -119,15 +98,11 @@ The platform consists of three main components:
 │   │   ├── supabase.mjs
 │   │   └── twilio.mjs
 │   ├── server.mjs
-│   ├── supabase/
-│   │   ├── config.toml
-│   │   └── migrations/
 │   └── package.json
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── ui/                          # shadcn/ui components
-│   │   │   ├── android-app-download-prompt.tsx
 │   │   │   ├── global-notification-watcher.tsx
 │   │   │   ├── phone-otp-verification.tsx
 │   │   │   ├── system-theme-sync.tsx
@@ -156,7 +131,6 @@ The platform consists of three main components:
 │   │   └── styles.css
 │   ├── package.json
 │   └── vite.config.ts
-├── e2e/                     # Playwright E2E tests
 ├── tests/                   # Node unit tests
 ├── scripts/
 │   ├── dev.mjs
@@ -172,20 +146,11 @@ The platform consists of three main components:
 
 ### Prerequisites
 
-**For Web Platform:**
 - Node.js 20+ recommended. The Docker image uses Node 22.
 - npm
 - Supabase project
 - Mapbox public token for maps, geocoding, and routing
 - Twilio Verify service for phone OTP during registration, phone login, and password reset
-- Supabase CLI if you want to push migrations from this repo
-
-**For Android App:**
-- Android Studio (latest version)
-- JDK 21
-- Android SDK 36 (compileSdk), minSdk 24
-- Kotlin 2.3.20
-- Firebase project with `google-services.json` for the Android app package `com.example.rweezy`
 
 ### Install Dependencies
 
@@ -218,7 +183,6 @@ VITE_FIREBASE_STORAGE_BUCKET="your-project-id.appspot.com"
 VITE_FIREBASE_MESSAGING_SENDER_ID="your-firebase-messaging-sender-id"
 VITE_FIREBASE_APP_ID="your-firebase-web-app-id"
 VITE_FIREBASE_VAPID_KEY="your-web-push-vapid-public-key"
-VITE_ANDROID_APP_URL=""
 FCM_SERVER_KEY="your-firebase-server-key"
 
 # Twilio Verify phone OTP.
@@ -250,19 +214,7 @@ CORS_ALLOWED_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
 COOKIE_SECURE="true"
 ```
 
-Optional for Supabase CLI migrations:
-
-```env
-SUPABASE_DB_URL="postgresql://postgres:[YOUR-PASSWORD]@db.your-project-ref.supabase.co:5432/postgres"
-```
-
 > **Important security note:** Keep `SUPABASE_SERVICE_ROLE_KEY` backend-only. Never expose it as a `VITE_` variable.
-
-**Optional frontend variables:**
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_ANDROID_APP_URL` | Play Store or direct APK link shown in the Android download popup on mobile browsers. Leave empty to show the message without a download button. |
 
 **Optional backend variables:**
 
@@ -285,38 +237,11 @@ In **Supabase Dashboard → Authentication → URL configuration**, set:
 
 Recovery emails must redirect to `/reset-password` so the app can read `token_hash` from the URL and complete reset after phone OTP verification.
 
-### Theme (Web and Android)
+### Theme
 
-Both the website and Android app follow the **system dark/light setting**. There is no manual theme toggle in the UI.
+The website follows the **system dark/light setting**. There is no manual theme toggle in the UI.
 
 - **Web:** `SystemThemeSync` listens to `prefers-color-scheme` and applies the Tailwind `dark` class.
-- **Android:** Compose uses `isSystemInDarkTheme()`; the WebView disables forced darkening so the website CSS matches the OS theme.
-
-### Android App Download Prompt (Web)
-
-When someone opens the website on an **Android phone browser** (not inside the native app), a popup suggests installing the Android app.
-
-- Shown only on Android phones (not iPhone, iPad, or desktop)
-- Hidden inside the native Android WebView (`RweezyAndroidBridge`)
-- Dismissed permanently when the user chooses **Continue on website**
-- Set `VITE_ANDROID_APP_URL` to enable the **Download Android app** button
-
-### Apply Database Migrations
-
-From the backend Supabase folder:
-
-```bash
-cd backend/supabase
-npx supabase db push
-cd ../..
-```
-
-Or link your Supabase project first if your CLI workflow requires it:
-
-```bash
-npx supabase link --project-ref your-project-ref
-npx supabase db push
-```
 
 ### Run Web Platform Locally
 
@@ -336,34 +261,6 @@ Open:
 http://127.0.0.1:3000
 ```
 
-### Run Android App
-
-1. Open the `android/` directory in Android Studio
-2. Add Firebase config (see below)
-3. Sync the project with Gradle files
-4. Run on an emulator or physical device
-
-**Firebase / `google-services.json` (required to build):**
-
-- Create a Firebase project and add an Android app with package id `com.example.rweezy`
-- Download `google-services.json` from Firebase Console
-- Place it at `android/app/google-services.json`
-- A template is included at `android/app/google-services.json.example` for reference
-- The real `google-services.json` is gitignored; each developer must add their own copy from Firebase
-
-**Firebase Cloud Messaging (FCM) setup (Android):**
-
-- In Firebase Console, enable Cloud Messaging
-- For Android 13+, allow notification permission on first app launch
-- Log in inside the app so the native FCM token is registered with the backend
-- Send a test notification from Firebase Console or `POST /api/admin/notifications/test`
-
-**Connecting to Development Server:**
-
-- For Android Emulator (default): Use `http://10.0.2.2:4000` to connect to the backend.
-- For Physical Device: Use your computer's local IP address (e.g., `http://192.168.1.x:3000`)
-- The app includes a settings dialog (FAB button) to configure the server URL at runtime
-
 ### Push Notifications (FCM)
 
 **Web (browser):**
@@ -371,14 +268,6 @@ http://127.0.0.1:3000
 - Web push service worker: `frontend/public/firebase-messaging-sw.js`
 - After login, the app requests notification permission, registers the FCM token, and saves it via `POST /api/notifications/token` with `platform: "web"`
 - Foreground FCM messages show as toasts on **any** protected page (`GlobalNotificationWatcher` in `_protected` layout)
-
-**Android (native app):**
-
-- The WebView does not use the browser service worker for push. Instead, `RweezyAndroidBridge` exposes the native FCM token to the website after login.
-- Tokens are saved via `POST /api/notifications/token` with `platform: "android"`
-- `RweezyFirebaseMessagingService` shows notifications when the app is in the **background or closed**
-- Tapping a notification opens the app
-- Notification channel id: `rweezy_updates`
 
 **Shared backend behavior:**
 
@@ -401,8 +290,6 @@ http://127.0.0.1:3000
 | `npm run lint` | Run frontend ESLint |
 | `npm run format` | Format frontend with Prettier |
 | `npm test` | Run Node unit tests (helpers, validation, rate limits) |
-| `npm run test:e2e` | Run Playwright E2E tests (requires build + demo seed) |
-| `npm run test:e2e:full` | Build + seed demo users + run Playwright E2E |
 | `npm run seed:demo` | Create demo users for customer, rider, delivery, merchant, grocery, and admin roles |
 | `npm run start` | Start the backend production server |
 
@@ -437,16 +324,6 @@ npm run dev:backend
 TEST_API_BASE_URL=http://127.0.0.1:4000 npm test
 ```
 
-Playwright (after build and demo seed):
-
-```bash
-npm run build
-npm run seed:demo
-npm run test:e2e
-```
-
-See `TEST_REPORT.md` for production readiness notes.
-
 ## Docker
 
 Run the production container with Docker Compose:
@@ -468,96 +345,15 @@ docker build -t rweezy-fullstack:latest .
 docker run --env-file .env -p 4000:4000 rweezy-fullstack:latest
 ```
 
-## Android Application
-
-The Android app is a native Kotlin application built with Jetpack Compose that wraps the web platform in a WebView, providing a native mobile experience.
-
-### Features
-
-- **WebView-based**: Loads the web application with full feature parity
-- **System theme**: Native shell and website follow OS dark/light mode
-- **Geolocation Support**: Handles location permissions for delivery tracking
-- **File Upload**: Supports image and file uploads through the WebView
-- **Back Navigation**: System back navigates WebView history before exiting the app
-- **Firebase Cloud Messaging**: Native push via `RweezyFirebaseMessagingService` (foreground, background, and app closed)
-- **FCM token bridge**: `RweezyAndroidBridge` registers the native token with the backend after web login
-- **Server Configuration**: Runtime configuration for connecting to different backend servers
-- **Error Recovery**: Premium error UI with retry and server configuration options
-- **Progress Indicator**: Loading progress bar for page loads
-- **Material Design 3**: Modern UI following Android design guidelines
-
-### Android Tech Stack
-
-| Component | Technology |
-| --- | --- |
-| Language | Kotlin 2.3.20 |
-| UI Framework | Jetpack Compose |
-| Navigation | AndroidX Navigation 3 |
-| Architecture | MVVM with ViewModel |
-| Design | Material Design 3 |
-| Testing | JUnit, AndroidX Test, Espresso |
-
-### Building the Android App
-
-```bash
-cd android
-./gradlew build
-```
-
-To build a release APK:
-
-```bash
-./gradlew assembleRelease
-```
-
-### Android Project Structure
-
-```
-android/
-├── app/
-│   ├── google-services.json.example   # Firebase config template (copy to google-services.json)
-│   └── src/main/java/com/example/rweezy/
-│       ├── MainActivity.kt                # Main activity entry point
-│       ├── Navigation.kt                  # Navigation configuration
-│       ├── NavigationKeys.kt              # Navigation route keys
-│       ├── data/
-│       │   ├── DataRepository.kt          # Data layer
-│       │   └── ServerConfigRepository.kt  # Server URL persistence
-│       ├── messaging/
-│       │   ├── RweezyAndroidBridge.kt     # WebView JS bridge for FCM token
-│       │   └── RweezyFirebaseMessagingService.kt
-│       ├── theme/
-│       │   ├── Color.kt                   # Material Design 3 color scheme
-│       │   ├── Theme.kt                   # App theme (system dark/light)
-│       │   └── Type.kt                    # Typography configuration
-│       └── ui/
-│           ├── WebViewScreen.kt           # Main WebView with error handling
-│           └── main/
-│               ├── MainScreen.kt          # Main screen layout
-│               └── MainScreenViewModel.kt # ViewModel
-```
-
-### Android Minimum Requirements
-
-- **minSdk**: 24 (Android 7.0)
-- **targetSdk**: 36
-- **compileSdk**: 36
-- **JVM Target**: Java 21
-
 ## Runtime Architecture
 
 ```text
-Browser / Android WebView
+Browser
   -> React frontend
   -> /api/* requests with cookies
   -> Node backend
   -> Supabase Auth and Supabase REST
   -> Supabase Postgres
-
-Android (background push)
-  -> Firebase Cloud Messaging
-  -> RweezyFirebaseMessagingService
-  -> system notification tray
 ```
 
 In development, Vite serves the frontend and proxies `/api/*` to the backend. In production, `backend/server.mjs` serves the built frontend assets and API from the same origin.
@@ -645,7 +441,7 @@ Defaults and limits in backend:
 
 ## Database
 
-PostgreSQL is hosted on **Supabase**. Auth users live in `auth.users`; application data lives in the `public` schema. Schema changes are applied with SQL migrations in `backend/supabase/migrations` (run `npx supabase db push` from `backend/supabase`).
+PostgreSQL is hosted on **Supabase**. Auth users live in `auth.users`; application data lives in the `public` schema.
 
 ### Enums
 
@@ -768,34 +564,6 @@ RLS is enabled on all `public` tables. Typical rules:
 
 The Node backend often uses the user’s JWT for REST calls, so RLS applies. Some flows (token upsert, admin broadcasts) use the **service role** key from the server only — never expose it to the client.
 
-### Realtime (Supabase)
-
-These tables are added to the `supabase_realtime` publication for live updates:
-
-- `rides`, `package_deliveries`, `food_orders`, `grocery_orders`
-- `chat_messages`, `order_reviews`
-
-The web app still polls in several places; Realtime can be subscribed for lower latency.
-
-### Migration files (order)
-
-| File | Summary |
-| --- | --- |
-| `20260430163946_*.sql` | Core schema: enums, profiles, roles, restaurants, grocery, orders, rides, packages, RLS |
-| `20260430164012_*.sql` | Security hardening on helper functions |
-| `20260501054502_*.sql` | Menu `is_veg`; hotel manager restaurant insert |
-| `20260501055338_*.sql` | Realtime on `rides` |
-| `20260502004437_*.sql` | Grocery manager self-insert store |
-| `20260503034022_*.sql` | Ride `vehicle_type` |
-| `20260503034920_*.sql` | Live rider location columns + realtime on order tables |
-| `20260504090000_add_location_fields.sql` | Town/pincode on profiles and venues |
-| `20260511120000_add_chat_messages.sql` | `chat_messages` + RLS + realtime |
-| `20260511123000_store_signup_phone.sql` | Phone on signup; `email_for_phone_login` RPC |
-| `20260514103000_user_friendly_flows.sql` | `role_requests`, `saved_addresses`, `audit_events`, pickup/cancel fields |
-| `20260515100000_partner_operations_inventory.sql` | Grocery stock, menu prep/modifiers |
-| `20260516120000_complete_platform_features.sql` | `platform_settings`, delivery PIN/ETA, `order_reviews` |
-| `20260528135000_add_user_push_tokens.sql` | FCM `user_push_tokens` |
-
 ### User roles (`app_role`)
 
 | Role | Typical use |
@@ -881,13 +649,9 @@ Note: Indian phone numbers (`+91`) are supported today with Twilio Verify for OT
 
 ## Current Gaps To Know
 
-- E2E tests need a running server and `npm run seed:demo` against your Supabase project
 - Password reset and phone login require Twilio Verify in production (or explicit dev bypass)
 - Backend request validation is mostly manual and route-specific beyond shared Zod schemas
-- Realtime chat/tracking uses polling rather than Supabase Realtime subscriptions everywhere
 - Production readiness depends on correct Supabase RLS policies, environment variables, and seeded data
-- Android app is not on the Play Store yet; set `VITE_ANDROID_APP_URL` when you have a public download link
-- iOS app is not included; the mobile download prompt targets Android phones only
 
 ## Build For Production
 
@@ -907,8 +671,7 @@ Production server behavior:
 
 1. Keep changes scoped to one feature or fix
 2. Run `npm run format`, `npm test`, `npm run lint`, and `npm run build` before opening a pull request
-3. Update Supabase migrations when schema changes are required
-4. Update this README when setup, routes, roles, or workflows change
+3. Update setup, routes, roles, or workflows in this README when they change
 
 ## License
 

@@ -3,7 +3,6 @@ import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "@/components/ui/sonner";
 import { LiquidBackground } from "@/components/liquid-background";
 import { SystemThemeSync } from "@/components/system-theme-sync";
-import { AndroidAppDownloadPrompt } from "@/components/android-app-download-prompt";
 
 import appCss from "../styles.css?url";
 
@@ -80,7 +79,6 @@ function RootComponent() {
   return (
     <AuthProvider>
       <SystemThemeSync />
-      <AndroidAppDownloadPrompt />
       <LiquidBackground />
       <Outlet />
       <Toaster richColors position="top-right" />
