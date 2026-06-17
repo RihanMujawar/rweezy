@@ -19,8 +19,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
-    "dotenv": "^17.4.2",
-    "prisma": "^7.8.0"
+    "dotenv": "^17.4.2"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"
@@ -43,8 +42,9 @@
   },
   "homepage": "https://github.com/RihanMujawar/rweezy#readme",
   "dependencies": {
-    "@prisma/client": "^7.8.0",
+    "@prisma/client": "^6.4.1",
     "bcryptjs": "^3.0.3",
-    "jsonwebtoken": "^9.0.3"
+    "jsonwebtoken": "^9.0.3",
+    "prisma": "^6.4.1"
   }
 }

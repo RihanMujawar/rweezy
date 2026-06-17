@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import http from "node:http";
+import { prisma } from "./lib/prisma.mjs";
 import { fileURLToPath } from "node:url";
 import { ROOT_DIR, env } from "./lib/env.mjs";
 import {
@@ -22,9 +23,9 @@ import {
   getUserFromToken,
   refreshAuthSession,
   resendSignupConfirmation,
-  restRequest,
+
   revokeSession,
-  serviceRoleRestRequest,
+
   signInWithPassword,
   signUpWithPassword,
   updateUserPassword,
@@ -202,13 +203,12 @@ function normalizeCatalogRadius(value) {
   return Math.max(MIN_CATALOG_RADIUS_KM, Math.min(MAX_CATALOG_RADIUS_KM, Math.round(num)));
 }
 
-async function getCatalogRadiusKm(token) {
+async function getCatalogRadiusKm() {
   try {
-    const rows = await restRequest(
-      token,
-      buildPath("/platform_settings", { select: "value", key: "eq.catalog_radius_km", limit: "1" }),
-    );
-    const row = firstRow(rows);
+    const row = await prisma.platformSetting.findUnique({
+      where: { key: "catalog_radius_km" },
+      select: { value: true },
+    });
     return normalizeCatalogRadius(row?.value);
   } catch (error) {
     if (!isMissingTableError(error, "platform_settings")) {
@@ -220,20 +220,12 @@ async function getCatalogRadiusKm(token) {
 
 async function saveCatalogRadiusKm(token, radiusKm) {
   const value = normalizeCatalogRadius(radiusKm);
-  const rows = await restRequest(
-    token,
-    buildPath("/platform_settings", {
-      select: "key,value",
-      key: "eq.catalog_radius_km",
-      limit: "1",
-    }),
-    {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-      body: { key: "catalog_radius_km", value },
-    },
-  );
-  return normalizeCatalogRadius(firstRow(rows)?.value);
+  const row = await prisma.platformSetting.upsert({
+    where: { key: "catalog_radius_km" },
+    update: { value },
+    create: { key: "catalog_radius_km", value },
+  });
+  return normalizeCatalogRadius(row?.value);
 }
 
 function trimToken(value) {
@@ -281,37 +273,26 @@ async function sendFcmNotification({ token, title, body, data = {} }) {
   return payload;
 }
 
-async function getUserCatalogLocation(token, userId) {
-  const [profileRows, addressRows] = await Promise.all([
-    restRequest(
-      token,
-      buildPath("/profiles", {
-        select: "town_name,pincode",
-        id: `eq.${userId}`,
-        limit: "1",
-      }),
-    ),
-    restRequest(
-      token,
-      buildPath("/saved_addresses", {
-        select: "lat,lng,is_default,created_at",
-        user_id: `eq.${userId}`,
-        order: "is_default.desc,created_at.desc",
-        limit: "1",
-      }),
-    ),
+async function getUserCatalogLocation(userId) {
+  const [profile, address] = await Promise.all([
+    prisma.profile.findUnique({
+      where: { id: userId },
+      select: { townName: true, pincode: true },
+    }),
+    prisma.savedAddress.findFirst({
+      where: { userId },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+      select: { lat: true, lng: true },
+    }),
   ]);
 
-  const profile = firstRow(profileRows);
-  const address = firstRow(addressRows);
   return {
-    town_name: profile?.town_name ?? null,
+    town_name: profile?.townName ?? null,
     pincode: profile?.pincode ?? null,
     lat: Number.isFinite(Number(address?.lat)) ? Number(address.lat) : null,
     lng: Number.isFinite(Number(address?.lng)) ? Number(address.lng) : null,
   };
 }
-
 function chatTarget(kind) {
   return {
     ride: { table: "rides", partnerColumn: "rider_id" },
@@ -325,51 +306,42 @@ function isChatParticipant(userId, row, partnerColumn) {
   return row?.customer_id === userId || row?.[partnerColumn] === userId;
 }
 
-async function getChatContext(token, user, kind, serviceId) {
+async function getChatContext(user, kind, serviceId) {
   const normalizedKind = normalizeChatKind(kind);
   if (!normalizedKind) {
     throw new HttpError(400, "Invalid chat type");
   }
 
   const target = chatTarget(normalizedKind);
-  const rows = await restRequest(
-    token,
-    buildPath(`/${target.table}`, {
-      select: `id,customer_id,${target.partnerColumn}`,
-      id: `eq.${serviceId}`,
-      limit: "1",
-    }),
-  );
-  const row = firstRow(rows);
+  const modelName = target.table.replace(/_([a-z])/g, (g) => g[1].toUpperCase()).slice(0, -1).replace(/ies$/, "y");
+  const row = await prisma[modelName].findUnique({
+    where: { id: serviceId },
+    select: { id: true, customerId: true, [target.partnerColumn.replace(/_([a-z])/g, (g) => g[1].toUpperCase())]: true },
+  });
 
   if (!row) {
     throw new HttpError(404, "Chat target not found");
   }
 
-  if (isChatParticipant(user.id, row, target.partnerColumn)) {
-    return { kind: normalizedKind, row, partnerColumn: target.partnerColumn };
+  const prismaPartnerColumn = target.partnerColumn.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+  const normalizedRow = {
+    id: row.id,
+    customer_id: row.customerId,
+    [target.partnerColumn]: row[prismaPartnerColumn]
+  };
+
+  if (isChatParticipant(user.id, normalizedRow, target.partnerColumn)) {
+    return { kind: normalizedKind, row: normalizedRow, partnerColumn: target.partnerColumn };
   }
 
-  const roles = await getRoles(token, user.id);
+  const roles = await getRoles(user.id);
   if (!roles.includes("admin")) {
     throw new HttpError(403, "You do not have access to this chat");
   }
 
-  return { kind: normalizedKind, row, partnerColumn: target.partnerColumn };
+  return { kind: normalizedKind, row: normalizedRow, partnerColumn: target.partnerColumn };
 }
-
-function chatKindLabel(kind) {
-  return (
-    {
-      ride: "Ride chat",
-      package: "Package chat",
-      food: "Food order chat",
-      grocery: "Grocery order chat",
-    }[kind] ?? "Chat"
-  );
-}
-
-function getChatRecipientUserIds(context, senderId) {
+async function getChatRecipientUserIds(context, senderId) {
   const { row, partnerColumn } = context;
   const recipients = [];
   if (row.customer_id && row.customer_id !== senderId) {
@@ -382,32 +354,36 @@ function getChatRecipientUserIds(context, senderId) {
   return recipients;
 }
 
-async function getProfileDisplayName(userId) {
-  const rows = await serviceRoleRestRequest(
-    buildPath("/profiles", {
-      select: "full_name",
-      id: `eq.${userId}`,
-      limit: "1",
-    }),
+function chatKindLabel(kind) {
+  return (
+    {
+      ride: "Ride chat",
+      package: "Package chat",
+      food: "Food order chat",
+      grocery: "Grocery order chat",
+    }[kind] ?? "Chat"
   );
-  return cleanText(firstRow(rows)?.full_name) || "Someone";
+}
+async function getProfileDisplayName(userId) {
+  const profile = await prisma.profile.findUnique({
+    where: { id: userId },
+  });
+  return cleanText(profile?.fullName) || "Someone";
 }
 
 async function getPushTokensForUsers(userIds) {
   const uniqueIds = [...new Set(userIds.filter(Boolean))];
   if (uniqueIds.length === 0) return [];
 
-  const rows = await serviceRoleRestRequest(
-    buildPath("/user_push_tokens", {
-      select: "token,user_id",
-      user_id: `in.(${uniqueIds.join(",")})`,
-      order: "updated_at.desc",
-      limit: "50",
-    }),
-  );
+  const tokens = await prisma.userPushToken.findMany({
+    where: { userId: { in: uniqueIds } },
+    select: { token: true },
+    orderBy: { updatedAt: "desc" },
+    take: 50,
+  });
 
   const seen = new Set();
-  return (rows ?? [])
+  return (tokens ?? [])
     .map((row) => trimToken(row.token))
     .filter((token) => {
       if (!token || seen.has(token)) return false;
@@ -533,13 +509,12 @@ function assertCancellable(row, kind) {
 
 const DEFAULT_COMMISSIONS = { restaurant: 10, grocery: 8, delivery: 12 };
 
-async function getPlatformCommissions(token) {
+async function getPlatformCommissions() {
   try {
-    const rows = await restRequest(
-      token,
-      buildPath("/platform_settings", { select: "value", key: "eq.commissions", limit: "1" }),
-    );
-    const row = firstRow(rows);
+    const row = await prisma.platformSetting.findUnique({
+      where: { key: "commissions" },
+      select: { value: true },
+    });
     if (row?.value && typeof row.value === "object") {
       return { ...DEFAULT_COMMISSIONS, ...row.value };
     }
@@ -551,41 +526,35 @@ async function getPlatformCommissions(token) {
   return DEFAULT_COMMISSIONS;
 }
 
-async function savePlatformCommissions(token, value) {
-  const rows = await restRequest(
-    token,
-    buildPath("/platform_settings", { select: "key,value", key: "eq.commissions", limit: "1" }),
-    {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-      body: { key: "commissions", value },
-    },
-  );
-  return firstRow(rows)?.value ?? value;
+async function savePlatformCommissions(value) {
+  const row = await prisma.platformSetting.upsert({
+    where: { key: "commissions" },
+    update: { value },
+    create: { key: "commissions", value },
+  });
+  return row?.value ?? value;
 }
 
-async function deductGroceryStock(token, storeId, items) {
-  const groceryRows = await restRequest(
-    token,
-    buildPath("/grocery_items", {
-      select: "id,stock_quantity",
-      store_id: `eq.${storeId}`,
-      id: `in.(${items.map((item) => item.id).join(",")})`,
-    }),
-  );
+async function deductGroceryStock(storeId, items) {
+  const groceryItems = await prisma.groceryItem.findMany({
+    where: {
+      storeId,
+      id: { in: items.map((item) => item.id) },
+    },
+    select: { id: true, stockQuantity: true },
+  });
   const stockById = new Map(
-    (groceryRows ?? []).map((row) => [row.id, Number(row.stock_quantity ?? 0)]),
+    (groceryItems ?? []).map((row) => [row.id, Number(row.stockQuantity ?? 0)]),
   );
-
   for (const item of items) {
     const current = stockById.get(item.id);
     if (current === undefined) continue;
     if (current < item.quantity) {
       throw new HttpError(400, `${item.name} only has ${current} in stock`);
     }
-    await restRequest(token, buildPath("/grocery_items", { id: `eq.${item.id}` }), {
-      method: "PATCH",
-      body: { stock_quantity: current - item.quantity },
+    await prisma.groceryItem.update({
+      where: { id: item.id },
+      data: { stockQuantity: current - item.quantity },
     });
   }
 }
@@ -609,22 +578,20 @@ function verifyStatusAdvance(flow, currentStatus, nextStatus) {
 
 async function writeAudit(token, actorId, action, targetType, targetId, message, metadata = {}) {
   try {
-    await restRequest(token, "/audit_events", {
-      method: "POST",
-      body: {
-        actor_id: actorId,
+    await prisma.auditEvent.create({
+      data: {
+        actorId,
         action,
-        target_type: targetType,
-        target_id: targetId,
+        targetType,
+        targetId,
         message,
-        metadata,
+        metadata: metadata || {},
       },
     });
   } catch (error) {
     console.warn(`Audit event failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
-
 function normalizeAuthPurpose(value) {
   if (value === "register") return "register";
   if (value === "reset_password") return "reset_password";
@@ -641,14 +608,11 @@ async function resolveAccountForPasswordReset(email) {
   const user = await findUserByEmail(email);
   if (!user?.id) return null;
 
-  const rows = await serviceRoleRestRequest(
-    buildPath("/profiles", {
-      select: "phone",
-      id: `eq.${user.id}`,
-      limit: "1",
-    }),
-  );
-  const profilePhone = typeof rows?.[0]?.phone === "string" ? rows[0].phone.trim() : "";
+  const profile = await prisma.profile.findUnique({
+    where: { id: user.id },
+    select: { phone: true },
+  });
+  const profilePhone = typeof profile?.phone === "string" ? profile.phone.trim() : "";
   const metadataPhone =
     typeof user?.user_metadata?.phone === "string" ? user.user_metadata.phone.trim() : "";
   const authPhone = typeof user?.phone === "string" ? user.phone.trim() : "";
@@ -662,36 +626,21 @@ async function resolveAccountForPasswordReset(email) {
 }
 
 async function resolveEmailForPhone(phone) {
-  let foundEmail = null;
+  const profile = await prisma.profile.findFirst({
+    where: { phone },
+    select: { id: true },
+  });
 
-  try {
-    const rows = await serviceRoleRestRequest("/rpc/email_for_phone_login", {
-      method: "POST",
-      body: { lookup_phone: phone },
-    });
-    foundEmail = typeof rows === "string" ? rows : null;
-  } catch (error) {
-    if (!(error instanceof HttpError) || error.status !== 404) {
-      throw error;
-    }
-  }
+  if (!profile) return null;
 
-  if (!foundEmail) {
-    foundEmail = await findUserEmailByPhone(phone);
-  }
-
-  return foundEmail;
+  return findUserEmailByPhone(phone);
 }
 
 async function assertPhoneAvailable(phone) {
-  const rows = await serviceRoleRestRequest(
-    buildPath("/profiles", {
-      select: "id",
-      phone: `eq.${phone}`,
-      limit: "1",
-    }),
-  );
-  if (rows?.length) {
+  const count = await prisma.profile.count({
+    where: { phone },
+  });
+  if (count > 0) {
     throw new HttpError(409, "This phone number is already registered");
   }
 }
@@ -744,23 +693,16 @@ async function completeUserRegistration({
     }
   }
 
-  await serviceRoleRestRequest(buildPath("/profiles", { on_conflict: "id" }), {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates" },
-    body: {
-      id: createdUserId,
-      full_name: fullName,
-      phone,
-    },
+  await prisma.profile.upsert({
+    where: { id: createdUserId },
+    update: { fullName, phone },
+    create: { id: createdUserId, fullName, phone },
   });
 
-  await serviceRoleRestRequest(buildPath("/user_roles", { on_conflict: "user_id,role" }), {
-    method: "POST",
-    headers: { Prefer: "resolution=ignore-duplicates" },
-    body: {
-      user_id: createdUserId,
-      role,
-    },
+  await prisma.userRole.upsert({
+    where: { userId_role: { userId: createdUserId, role } },
+    update: {},
+    create: { userId: createdUserId, role },
   });
 
   let roleRequestPending = false;
@@ -768,12 +710,11 @@ async function completeUserRegistration({
 
   if (requestedRole) {
     try {
-      await serviceRoleRestRequest("/role_requests", {
-        method: "POST",
-        body: {
-          user_id: createdUserId,
-          requested_role: requestedRole,
-          business_name: cleanText(businessName) || null,
+      await prisma.roleRequest.create({
+        data: {
+          userId: createdUserId,
+          requestedRole,
+          businessName: cleanText(businessName) || null,
           message: cleanText(roleMessage) || "Requested during registration",
         },
       });
@@ -801,7 +742,7 @@ async function completeUserRegistration({
   const normalized = normalizeAuthSession(session);
   const roles =
     normalized.accessToken && normalized.user
-      ? await getRoles(normalized.accessToken, normalized.user.id)
+      ? await getRoles(normalized.user.id)
       : [role];
 
   return {
@@ -905,16 +846,12 @@ async function getServerEntry() {
   return serverEntryPromise;
 }
 
-async function getRoles(token, userId) {
-  const rows = await restRequest(
-    token,
-    buildPath("/user_roles", {
-      select: "role",
-      user_id: `eq.${userId}`,
-    }),
-  );
-
-  return (rows ?? []).map((row) => row.role);
+async function getRoles(userId) {
+  const roles = await prisma.userRole.findMany({
+    where: { userId },
+    select: { role: true },
+  });
+  return (roles ?? []).map((r) => r.role);
 }
 
 async function jsonBody(req) {
@@ -973,146 +910,54 @@ function route(method, pattern, handler) {
 
 const routes = [
   route("GET", /^\/api\/health$/, async () => ({ ok: true, timestamp: new Date().toISOString() })),
-  route("GET", /^\/api\/admin\/health$/, async ({ token }) => {
+  route("GET", /^\/api\/admin\/health$/, async ({ user }) => {
+    const roles = await getRoles(user.id);
+    if (!roles.includes("admin")) throw new HttpError(403, "Forbidden");
     const [pendingRoles, foodPending, groceryPending, unassignedFood] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/role_requests", { select: "id", status: "eq.pending", limit: "50" }),
-      ).catch(() => []),
-      restRequest(
-        token,
-        buildPath("/food_orders", {
-          select: "id",
-          status: "in.(pending,accepted,preparing)",
-          delivery_boy_id: "is.null",
-          limit: "50",
-        }),
-      ).catch(() => []),
-      restRequest(
-        token,
-        buildPath("/grocery_orders", {
-          select: "id",
-          status: "in.(pending,accepted,preparing)",
-          delivery_boy_id: "is.null",
-          limit: "50",
-        }),
-      ).catch(() => []),
-      restRequest(
-        token,
-        buildPath("/food_orders", {
-          select: "id",
-          status: "eq.ready",
-          delivery_boy_id: "is.null",
-          limit: "50",
-        }),
-      ).catch(() => []),
+      prisma.roleRequest.count({ where: { status: "pending" } }),
+      prisma.foodOrder.count({ where: { status: { in: ["pending", "accepted", "preparing"] }, deliveryBoyId: null } }),
+      prisma.groceryOrder.count({ where: { status: { in: ["pending", "accepted", "preparing"] }, deliveryBoyId: null } }),
+      prisma.foodOrder.count({ where: { status: "ready", deliveryBoyId: null } }),
     ]);
-
-    return {
-      pendingRoleRequests: pendingRoles?.length ?? 0,
-      foodOrdersNeedingAttention: foodPending?.length ?? 0,
-      groceryOrdersNeedingAttention: groceryPending?.length ?? 0,
-      readyFoodWithoutRider: unassignedFood?.length ?? 0,
-    };
+    return { pendingRoleRequests: pendingRoles, foodOrdersNeedingAttention: foodPending, groceryOrdersNeedingAttention: groceryPending, readyFoodWithoutRider: unassignedFood };
   }),
   route("POST", /^\/api\/auth\/phone\/send-otp$/, async ({ body }) => {
     const phone = normalizeIndianPhone(body.phone);
-    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
-      throw new HttpError(400, "Enter a valid phone number with country code");
-    }
-
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) throw new HttpError(400, "Invalid phone");
     const purpose = normalizeAuthPurpose(cleanText(body.purpose));
     if (purpose === "login") {
       const email = await resolveEmailForPhone(phone);
-      if (!email) {
-        throw new HttpError(404, "No account found for this phone number");
-      }
+      if (!email) throw new HttpError(404, "No account found");
     } else if (purpose === "reset_password") {
       const email = cleanText(body.email)?.toLowerCase();
-      if (!email) {
-        throw new HttpError(400, "Email is required for password reset");
-      }
       const account = await resolveAccountForPasswordReset(email);
-      if (!account?.phone) {
-        throw new HttpError(404, "No account found for this email, or no phone on file");
-      }
-      if (account.phone !== phone) {
-        throw new HttpError(400, "Phone number does not match the account for this email");
-      }
+      if (!account?.phone || account.phone !== phone) throw new HttpError(400, "Invalid email/phone combination");
     } else {
       await assertPhoneAvailable(phone);
     }
-
     await sendPhoneVerificationCode(phone);
-
-    return {
-      ok: true,
-      purpose,
-      provider: "twilio",
-      message: "Verification code sent to your phone",
-    };
+    return { ok: true, purpose, provider: "twilio" };
   }),
   route("POST", /^\/api\/auth\/phone\/verify-otp$/, async ({ body }) => {
     const phone = normalizeIndianPhone(body.phone);
     const code = cleanText(body.code);
     const purpose = normalizeAuthPurpose(cleanText(body.purpose));
-
-    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
-      throw new HttpError(400, "Enter a valid phone number with country code");
-    }
-    if (!/^\d{4,10}$/.test(code)) {
-      throw new HttpError(400, "Enter the verification code");
-    }
-
     await verifyPhoneVerificationCode(phone, code);
-
     if (purpose === "register" || purpose === "reset_password") {
-      return {
-        ok: true,
-        phoneVerificationToken: createPhoneVerificationToken(phone),
-      };
+      return { ok: true, phoneVerificationToken: createPhoneVerificationToken(phone) };
     }
-
     const email = await resolveEmailForPhone(phone);
-    if (!email) {
-      throw new HttpError(404, "No account found for this phone number");
-    }
-
+    if (!email) throw new HttpError(404, "No account found");
     const session = await createSessionForEmail(email);
     const normalized = normalizeAuthSession(session);
-    if (!normalized.user) {
-      throw new HttpError(401, "Unable to sign in with this phone number");
-    }
-
-    const roles = normalized.accessToken
-      ? await getRoles(normalized.accessToken, normalized.user.id)
-      : [];
-
-    return {
-      user: normalized.user,
-      roles,
-      __responseHeaders: {
-        "Set-Cookie": buildSessionCookies(session),
-      },
-    };
+    const roles = await getRoles(normalized.user.id);
+    return { user: normalized.user, roles, __responseHeaders: { "Set-Cookie": buildSessionCookies(session) } };
   }),
   route("POST", /^\/api\/auth\/password-reset\/request$/, async ({ body }) => {
     const email = cleanText(body.email)?.toLowerCase();
-    if (!email) {
-      throw new HttpError(400, "Email is required");
-    }
-
     const account = await resolveAccountForPasswordReset(email);
-    if (account) {
-      await sendPasswordResetEmailOtp(account.email);
-    }
-
-    return {
-      ok: true,
-      message:
-        "If an account exists for this email, we sent a 6-digit reset code. Check your inbox and spam folder.",
-      phoneHint: account?.phone ? maskPhoneHint(account.phone) : null,
-    };
+    if (account) await sendPasswordResetEmailOtp(account.email);
+    return { ok: true, phoneHint: account?.phone ? maskPhoneHint(account.phone) : null };
   }),
   route("POST", /^\/api\/auth\/password-reset\/complete$/, async ({ body }) => {
     const email = cleanText(body.email)?.toLowerCase();
@@ -1120,2485 +965,378 @@ const routes = [
     const phone = normalizeIndianPhone(body.phone);
     const phoneVerificationToken = cleanText(body.phone_verification_token);
     const password = typeof body.password === "string" ? body.password : "";
-
-    if (!email) {
-      throw new HttpError(400, "Email is required");
-    }
-    if (!/^\d{6}$/.test(emailOtp)) {
-      throw new HttpError(400, "Enter the 6-digit email OTP");
-    }
-    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
-      throw new HttpError(400, "Enter a valid phone number with country code");
-    }
-    if (password.length < 6) {
-      throw new HttpError(400, "Password must be at least 6 characters");
-    }
-
     const account = await resolveAccountForPasswordReset(email);
-    if (!account?.phone) {
-      throw new HttpError(400, "Unable to reset password for this account");
-    }
-    if (account.phone !== phone) {
-      throw new HttpError(400, "Phone number does not match this account");
-    }
-
+    if (!account || account.phone !== phone) throw new HttpError(400, "Invalid request");
     verifyPhoneVerificationToken(phoneVerificationToken, phone);
     verifyPasswordResetEmailOtp(email, emailOtp);
-
     await updateUserPassword(account.userId, password);
-
     const session = await createSessionForEmail(account.email);
     const normalized = normalizeAuthSession(session);
-    if (!normalized.accessToken || !normalized.user?.id) {
-      throw new HttpError(500, "Password updated, but sign-in session could not be created");
-    }
-    const roles = await getRoles(normalized.accessToken, normalized.user.id);
-
-    return {
-      ok: true,
-      user: normalized.user,
-      roles,
-      message: "Password updated. You are now signed in.",
-      __responseHeaders: {
-        "Set-Cookie": buildSessionCookies(session),
-      },
-    };
+    const roles = await getRoles(normalized.user.id);
+    return { ok: true, user: normalized.user, roles, __responseHeaders: { "Set-Cookie": buildSessionCookies(session) } };
   }),
   route("POST", /^\/api\/auth\/email\/resend-verification$/, async ({ body }) => {
     const email = cleanText(body.email)?.toLowerCase();
-    if (!email) {
-      throw new HttpError(400, "Email is required");
-    }
-
     await resendSignupConfirmation(email);
-    return {
-      ok: true,
-      message: "Verification email sent. Check your inbox and spam folder.",
-    };
+    return { ok: true };
   }),
   route("POST", /^\/api\/auth\/login$/, async ({ body }) => {
     const email = cleanText(body.email);
     const phone = normalizeIndianPhone(body.phone);
     let identifier = { email };
-
     if (phone) {
       const resolvedEmail = await resolveEmailForPhone(phone);
-      if (!resolvedEmail) {
-        throw new HttpError(404, "No account found for this phone number");
-      }
+      if (!resolvedEmail) throw new HttpError(404, "No account found");
       identifier = { email: resolvedEmail };
     }
-
-    if (!identifier.email) {
-      throw new HttpError(400, "Phone number is required");
-    }
-
-    let session;
-    try {
-      session = await signInWithPassword(identifier, body.password);
-    } catch (error) {
-      if (error instanceof HttpError && /confirm/i.test(error.message)) {
-        throw new HttpError(
-          403,
-          "Verify your email before signing in. Check your inbox or request a new verification email.",
-        );
-      }
-      throw error;
-    }
+    const session = await signInWithPassword(identifier, body.password);
     const normalized = normalizeAuthSession(session);
-
-    if (!normalized.user) {
-      throw new HttpError(401, "Unable to sign in");
-    }
-
-    const roles = normalized.accessToken
-      ? await getRoles(normalized.accessToken, normalized.user.id)
-      : [];
-
-    return {
-      user: normalized.user,
-      roles,
-      __responseHeaders: {
-        "Set-Cookie": buildSessionCookies(session),
-      },
-    };
+    const roles = await getRoles(normalized.user.id);
+    return { user: normalized.user, roles, __responseHeaders: { "Set-Cookie": buildSessionCookies(session) } };
   }),
   route("POST", /^\/api\/auth\/register$/, async ({ body }) => {
     const { email, fullName, password, phone } = validateRegistration(body);
     const requestedRole = normalizeBusinessRole(body.requested_role);
     const phoneVerificationToken = cleanText(body.phone_verification_token);
-
-    return completeUserRegistration({
-      email,
-      fullName,
-      password,
-      phone,
-      phoneVerificationToken,
-      requestedRole,
-      businessName: body.business_name,
-      roleMessage: body.role_message,
-    });
+    return completeUserRegistration({ email, fullName, password, phone, phoneVerificationToken, requestedRole, businessName: body.business_name, roleMessage: body.role_message });
   }),
   route("POST", /^\/api\/auth\/logout$/, async ({ req }) => {
     const bearerToken = getBearerToken(req);
     const cookies = parseCookies(req);
     const accessToken = bearerToken || cookies[ACCESS_COOKIE];
-
-    if (accessToken) {
-      await revokeSession(accessToken);
-    }
-
-    return {
-      ok: true,
-      __responseHeaders: {
-        "Set-Cookie": clearSessionCookies(),
-      },
-    };
+    if (accessToken) await revokeSession(accessToken);
+    return { ok: true, __responseHeaders: { "Set-Cookie": clearSessionCookies() } };
   }),
-  route("GET", /^\/api\/auth\/me$/, async ({ token, user }) => {
-    const roles = await getRoles(token, user.id);
+  route("GET", /^\/api\/auth\/me$/, async ({ user }) => {
+    const roles = await getRoles(user.id);
     return { user, roles };
   }),
-  route("POST", /^\/api\/notifications\/token$/, async ({ user, body }) => {
+  route("POST", /^\/api\/auth\/push-token$/, async ({ user, body }) => {
     const token = trimToken(body.token);
-    if (!token) throw new HttpError(400, "token is required");
-
     const platform = cleanText(body.platform) || "web";
-    const deviceLabel = cleanText(body.device_label || body.user_agent || "");
-
-    const rows = await serviceRoleRestRequest(
-      buildPath("/user_push_tokens", {
-        select: "id,user_id,token,platform,device_label,updated_at",
-        on_conflict: "token",
-      }),
-      {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-        body: {
-          user_id: user.id,
-          token,
-          platform,
-          device_label: deviceLabel || null,
-          updated_at: new Date().toISOString(),
-        },
-      },
-    );
-
-    return { pushToken: firstRow(rows) };
+    const deviceLabel = cleanText(body.device_label);
+    if (!token) throw new HttpError(400, "Token required");
+    const pushToken = await prisma.userPushToken.upsert({
+      where: { token },
+      update: { userId: user.id, platform, deviceLabel, updatedAt: new Date() },
+      create: { userId: user.id, token, platform, deviceLabel, updatedAt: new Date() },
+    });
+    return { pushToken: { ...pushToken, user_id: pushToken.userId, device_label: pushToken.deviceLabel, updated_at: pushToken.updatedAt } };
   }),
   route("GET", /^\/api\/map\/route$/, async ({ url }) => {
     const fromLat = url.searchParams.get("fromLat");
     const fromLng = url.searchParams.get("fromLng");
     const toLat = url.searchParams.get("toLat");
     const toLng = url.searchParams.get("toLng");
-
-    if (!fromLat || !fromLng || !toLat || !toLng) {
-      throw new HttpError(400, "Missing route coordinates");
-    }
-
-    if (!env.mapboxAccessToken) {
-      throw new HttpError(500, "Missing MAPBOX_ACCESS_TOKEN");
-    }
-
-    const mapboxUrl = new URL(
-      `https://api.mapbox.com/directions/v5/mapbox/driving/${fromLng},${fromLat};${toLng},${toLat}`,
-    );
+    if (!fromLat || !fromLng || !toLat || !toLng) throw new HttpError(400, "Missing coords");
+    if (!env.mapboxAccessToken) throw new HttpError(500, "Mapbox token missing");
+    const mapboxUrl = new URL(`https://api.mapbox.com/directions/v5/mapbox/driving/${fromLng},${fromLat};${toLng},${toLat}`);
     mapboxUrl.searchParams.set("geometries", "geojson");
     mapboxUrl.searchParams.set("overview", "full");
     mapboxUrl.searchParams.set("access_token", env.mapboxAccessToken);
-
     const response = await fetch(mapboxUrl);
     const payload = await response.json();
-
-    if (!response.ok) {
-      throw new HttpError(502, "Failed to fetch route");
-    }
-
+    if (!response.ok) throw new HttpError(502, "Failed to fetch route");
     const coords = payload?.routes?.[0]?.geometry?.coordinates ?? [];
-    return {
-      route: coords.map(([lng, lat]) => ({ lat, lng })),
-    };
+    return { route: coords.map(([lng, lat]) => ({ lat, lng })) };
   }),
-  route("GET", /^\/api\/profile$/, async ({ token, user }) => {
-    const rows = await restRequest(
-      token,
-      buildPath("/profiles", {
-        select: "*",
-        id: `eq.${user.id}`,
-      }),
-    );
-
-    return { profile: firstRow(rows) };
+  route("GET", /^\/api\/profile$/, async ({ user }) => {
+    const profile = await prisma.profile.findUnique({ where: { id: user.id } });
+    return { profile: { ...profile, full_name: profile.fullName, avatar_url: profile.avatarUrl, town_name: profile.townName, created_at: profile.createdAt, updated_at: profile.updatedAt } };
   }),
-  route("GET", /^\/api\/profile\/addresses$/, async ({ token, user }) => {
-    const rows = await restRequest(
-      token,
-      buildPath("/saved_addresses", {
-        select: "*",
-        user_id: `eq.${user.id}`,
-        order: "is_default.desc,created_at.desc",
-      }),
-    );
-
-    return { addresses: rows ?? [] };
-  }),
-  route("POST", /^\/api\/profile\/addresses$/, async ({ token, user, body }) => {
-    const rows = await restRequest(token, buildPath("/saved_addresses", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        user_id: user.id,
-        label: requireText(body.label || "Saved address", "Address label", 80),
-        address: requireText(body.address, "Address", 300),
-        lat: body.lat == null ? null : requireNumber(body.lat, "Latitude"),
-        lng: body.lng == null ? null : requireNumber(body.lng, "Longitude"),
-        is_default: !!body.is_default,
-      },
+  route("PATCH", /^\/api\/profile$/, async ({ user, body }) => {
+    const profile = await prisma.profile.update({
+      where: { id: user.id },
+      data: { fullName: body.full_name ?? "", phone: body.phone ?? "" },
     });
-
-    return { address: firstRow(rows) };
+    return { profile: { ...profile, full_name: profile.fullName, avatar_url: profile.avatarUrl, town_name: profile.townName, created_at: profile.createdAt, updated_at: profile.updatedAt } };
   }),
-  route("DELETE", /^\/api\/profile\/addresses\/([^/]+)$/, async ({ token, match }) => {
-    const id = decodeURIComponent(match[1]);
-    await restRequest(token, buildPath("/saved_addresses", { id: `eq.${id}` }), {
-      method: "DELETE",
+  route("GET", /^\/api\/profile\/addresses$/, async ({ user }) => {
+    const addresses = await prisma.savedAddress.findMany({ where: { userId: user.id }, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }] });
+    return { addresses };
+  }),
+  route("POST", /^\/api\/profile\/addresses$/, async ({ user, body }) => {
+    const address = await prisma.savedAddress.create({
+      data: { userId: user.id, label: requireText(body.label || "Saved", "Label"), address: requireText(body.address, "Address"), lat: body.lat ? Number(body.lat) : null, lng: body.lng ? Number(body.lng) : null, isDefault: !!body.is_default },
     });
+    return { address };
+  }),
+  route("DELETE", /^\/api\/profile\/addresses\/([^/]+)$/, async ({ match }) => {
+    await prisma.savedAddress.delete({ where: { id: decodeURIComponent(match[1]) } });
     return { ok: true };
   }),
-  route("PUT", /^\/api\/profile$/, async ({ token, user, body }) => {
-    const rows = await restRequest(
-      token,
-      buildPath("/profiles", {
-        id: `eq.${user.id}`,
-        select: "*",
-      }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: {
-          full_name: body.full_name ?? "",
-          phone: body.phone ?? "",
-        },
-      },
-    );
-
-    return { profile: firstRow(rows) };
+  route("GET", /^\/api\/profile\/role-requests$/, async ({ user }) => {
+    const requests = await prisma.roleRequest.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } });
+    return { requests: requests.map(r => ({ ...r, user_id: r.userId, requested_role: r.requestedRole, business_name: r.businessName, created_at: r.createdAt })) };
   }),
-  route("GET", /^\/api\/role-requests$/, async ({ token, user }) => {
-    const rows = await restRequest(
-      token,
-      buildPath("/role_requests", {
-        select: "*",
-        user_id: `eq.${user.id}`,
-        order: "created_at.desc",
-      }),
-    );
-
-    return { requests: rows ?? [] };
-  }),
-  route("POST", /^\/api\/role-requests$/, async ({ token, user, body }) => {
-    const requestedRole = normalizeBusinessRole(body.requested_role);
-    if (!requestedRole) throw new HttpError(400, "Choose a valid role to request");
-
-    const rows = await restRequest(token, buildPath("/role_requests", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        user_id: user.id,
-        requested_role: requestedRole,
-        business_name: cleanText(body.business_name) || null,
-        message: cleanText(body.message) || null,
-      },
+  route("POST", /^\/api\/profile\/role-requests$/, async ({ user, body }) => {
+    const request = await prisma.roleRequest.create({
+      data: { userId: user.id, requestedRole: normalizeBusinessRole(body.requested_role), businessName: body.business_name || null, message: body.message || null },
     });
-
-    return { request: firstRow(rows) };
+    return { request: { ...request, user_id: request.userId, requested_role: request.requestedRole, business_name: request.businessName, created_at: request.createdAt } };
   }),
-  route("POST", /^\/api\/live-location$/, async ({ token, body }) => {
-    const allowedTables = new Set(["rides", "package_deliveries", "food_orders", "grocery_orders"]);
-
-    if (!allowedTables.has(body.table)) {
-      throw new HttpError(400, "Invalid live location target");
-    }
-
-    const rows = await restRequest(
-      token,
-      buildPath(`/${body.table}`, {
-        id: `eq.${body.row_id}`,
-        select: "*",
-      }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: {
-          rider_lat: body.rider_lat,
-          rider_lng: body.rider_lng,
-          rider_location_updated_at: new Date().toISOString(),
-        },
-      },
-    );
-
-    return { row: firstRow(rows) };
+  route("PATCH", /^\/api\/tracking\/location$/, async ({ body }) => {
+    const modelName = body.table.replace(/_([a-z])/g, (g) => g[1].toUpperCase()).slice(0, -1).replace(/ies$/, "y");
+    const row = await prisma[modelName].update({
+      where: { id: body.row_id },
+      data: { riderLat: body.rider_lat, riderLng: body.rider_lng, riderLocationUpdatedAt: new Date() },
+    });
+    return { row: { ...row, rider_lat: row.riderLat, rider_lng: row.riderLng, rider_location_updated_at: row.riderLocationUpdatedAt } };
   }),
-  route("GET", /^\/api\/catalog\/restaurants$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
+  route("GET", /^\/api\/catalog\/restaurants$/, async () => {
+    const restaurants = await prisma.restaurant.findMany({ orderBy: { createdAt: "desc" } });
+    return { restaurants: restaurants.map(r => ({ ...r, town_name: r.townName, is_open: r.isOpen, created_at: r.createdAt })) };
+  }),
+  route("GET", /^\/api\/catalog\/restaurants\/([^/]+)$/, async ({ match }) => {
+    const id = decodeURIComponent(match[1]);
+    const [restaurant, items] = await Promise.all([
+      prisma.restaurant.findUnique({ where: { id } }),
+      prisma.menuItem.findMany({ where: { restaurantId: id, isAvailable: true }, orderBy: { category: "asc" } }),
     ]);
-    const restaurants = await restRequest(
-      token,
-      buildPath("/restaurants", {
-        select: "*",
-        order: "created_at.desc",
-      }),
-    );
-
-    return {
-      restaurants: filterCatalogRowsByLocation(restaurants, location, radiusKm),
-      location: { ...location, radius_km: radiusKm },
-    };
+    const normalizedRestaurant = restaurant ? { ...restaurant, town_name: restaurant.townName, is_open: restaurant.isOpen, created_at: restaurant.createdAt } : null;
+    const normalizedItems = items.map(i => ({ ...i, restaurant_id: i.restaurantId, is_available: i.isAvailable, is_veg: i.isVeg }));
+    return { restaurant: normalizedRestaurant, items: normalizedItems };
   }),
-  route("GET", /^\/api\/catalog\/restaurants\/([^/]+)$/, async ({ token, match }) => {
-    const restaurantId = decodeURIComponent(match[1]);
-    const [restaurantRows, itemRows] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/restaurants", {
-          select: "*",
-          id: `eq.${restaurantId}`,
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/menu_items", {
-          select: "*",
-          restaurant_id: `eq.${restaurantId}`,
-          is_available: "eq.true",
-          order: "category.asc",
-        }),
-      ),
+  route("GET", /^\/api\/catalog\/featured-food$/, async () => {
+    const restaurants = await prisma.restaurant.findMany({ where: { isOpen: true }, select: { id: true } });
+    const restaurantIds = restaurants.map(r => r.id);
+    if (!restaurantIds.length) return { items: [] };
+    const items = await prisma.menuItem.findMany({ where: { isAvailable: true, restaurantId: { in: restaurantIds } }, include: { restaurant: { select: { name: true } } }, take: 12 });
+    return { items: items.map(i => ({ ...i, image_url: i.imageUrl, is_available: i.isAvailable, restaurant_id: i.restaurantId, restaurants: i.restaurant })) };
+  }),
+  route("GET", /^\/api\/catalog\/featured-grocery$/, async () => {
+    const stores = await prisma.groceryStore.findMany({ where: { isOpen: true }, select: { id: true } });
+    const storeIds = stores.map(s => s.id);
+    if (!storeIds.length) return { items: [] };
+    const items = await prisma.groceryItem.findMany({ where: { isAvailable: true, storeId: { in: storeIds } }, include: { store: { select: { name: true } } }, take: 12 });
+    return { items: items.map(i => ({ ...i, image_url: i.imageUrl, is_available: i.isAvailable, store_id: i.storeId, grocery_stores: i.store })) };
+  }),
+  route("GET", /^\/api\/catalog\/stores$/, async () => {
+    const stores = await prisma.groceryStore.findMany({ orderBy: { createdAt: "desc" } });
+    return { stores: stores.map(s => ({ ...s, town_name: s.townName, is_open: s.isOpen })) };
+  }),
+  route("GET", /^\/api\/catalog\/stores\/([^/]+)$/, async ({ match }) => {
+    const id = decodeURIComponent(match[1]);
+    const [store, items] = await Promise.all([
+      prisma.groceryStore.findUnique({ where: { id } }),
+      prisma.groceryItem.findMany({ where: { storeId: id, isAvailable: true }, orderBy: { category: "asc" } }),
     ]);
-
-    return {
-      restaurant: firstRow(restaurantRows),
-      items: itemRows ?? [],
-    };
+    const normalizedStore = store ? { ...store, town_name: store.townName, is_open: store.isOpen } : null;
+    const normalizedItems = items.map(i => ({ ...i, store_id: i.storeId, is_available: i.isAvailable }));
+    return { store: normalizedStore, items: normalizedItems };
   }),
-  route("GET", /^\/api\/catalog\/items\/food$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
-    const restaurants = await restRequest(
-      token,
-      buildPath("/restaurants", {
-        select: "id,town_name,pincode,lat,lng,is_open",
-      }),
-    );
-    const visibleRestaurants = filterCatalogRowsByLocation(restaurants, location, radiusKm).filter(
-      (row) => row?.is_open !== false,
-    );
-    const restaurantIds = visibleRestaurants.map((row) => row.id).filter(Boolean);
-    if (restaurantIds.length === 0) return { items: [] };
-
-    const items = await restRequest(
-      token,
-      buildPath("/menu_items", {
-        select: "id,name,description,price,image_url,category,is_available,restaurant_id,restaurants(name)",
-        is_available: "eq.true",
-        restaurant_id: `in.(${restaurantIds.join(",")})`,
-        limit: "12",
-      }),
-    );
-    return { items: items ?? [] };
-  }),
-  route("GET", /^\/api\/catalog\/items\/grocery$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
-    const stores = await restRequest(
-      token,
-      buildPath("/grocery_stores", {
-        select: "id,town_name,pincode,lat,lng,is_open",
-      }),
-    );
-    const visibleStores = filterCatalogRowsByLocation(stores, location, radiusKm).filter(
-      (row) => row?.is_open !== false,
-    );
-    const storeIds = visibleStores.map((row) => row.id).filter(Boolean);
-    if (storeIds.length === 0) return { items: [] };
-
-    const items = await restRequest(
-      token,
-      buildPath("/grocery_items", {
-        select: "id,name,description,price,image_url,category,is_available,store_id,grocery_stores(name)",
-        is_available: "eq.true",
-        store_id: `in.(${storeIds.join(",")})`,
-        limit: "12",
-      }),
-    );
-    return { items: items ?? [] };
-  }),
-  route("GET", /^\/api\/catalog\/stores$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
-    const stores = await restRequest(
-      token,
-      buildPath("/grocery_stores", {
-        select: "*",
-        order: "created_at.desc",
-      }),
-    );
-
-    return {
-      stores: filterCatalogRowsByLocation(stores, location, radiusKm),
-      location: { ...location, radius_km: radiusKm },
-    };
-  }),
-  route("GET", /^\/api\/catalog\/stores\/([^/]+)$/, async ({ token, match }) => {
-    const storeId = decodeURIComponent(match[1]);
-    const [storeRows, itemRows] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/grocery_stores", {
-          select: "*",
-          id: `eq.${storeId}`,
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/grocery_items", {
-          select: "*",
-          store_id: `eq.${storeId}`,
-          is_available: "eq.true",
-          order: "category.asc",
-        }),
-      ),
-    ]);
-
-    return {
-      store: firstRow(storeRows),
-      items: itemRows ?? [],
-    };
-  }),
-  route("POST", /^\/api\/orders\/food$/, async ({ token, user, body }) => {
+  route("POST", /^\/api\/orders\/food$/, async ({ user, body }) => {
     const items = validateCartItems(body.items);
-    const restaurantRows = await restRequest(
-      token,
-      buildPath("/restaurants", {
-        select: "id,name,address,town_name,pincode,lat,lng,is_open",
-        id: `eq.${body.restaurant_id}`,
-        limit: "1",
-      }),
-    );
-    const restaurant = firstRow(restaurantRows);
-    if (!restaurant || restaurant.is_open === false) {
-      throw new HttpError(400, "This restaurant is not accepting orders right now");
-    }
-
-    const menuRows = await restRequest(
-      token,
-      buildPath("/menu_items", {
-        select: "id,name,price,is_available,prep_time_minutes",
-        restaurant_id: `eq.${body.restaurant_id}`,
-        id: `in.(${items.map((item) => item.id).join(",")})`,
-      }),
-    );
-    const menuById = new Map((menuRows ?? []).map((item) => [item.id, item]));
-    let maxPrep = 15;
+    const restaurant = await prisma.restaurant.findUnique({ where: { id: body.restaurant_id } });
+    if (!restaurant || !restaurant.isOpen) throw new HttpError(400, "Restaurant not available");
+    const menuItems = await prisma.menuItem.findMany({ where: { restaurantId: body.restaurant_id, id: { in: items.map(i => i.id) } } });
+    const menuById = new Map(menuItems.map(m => [m.id, m]));
+    let total = 0;
+    let maxPrep = 0;
     for (const item of items) {
-      const menuItem = menuById.get(item.id);
-      if (!menuItem || menuItem.is_available === false) {
-        throw new HttpError(400, `${item.name} is no longer available`);
-      }
-      if (Number(menuItem.price) !== item.price) {
-        throw new HttpError(400, `Price changed for ${item.name}. Refresh your cart.`);
-      }
-      maxPrep = Math.max(maxPrep, Number(menuItem.prep_time_minutes ?? 15));
+      const m = menuById.get(item.id);
+      if (!m || !m.isAvailable || Number(m.price) !== item.price) throw new HttpError(400, `Item ${item.name} changed`);
+      total += item.price * item.quantity;
+      maxPrep = Math.max(maxPrep, m.prepTimeMinutes || 15);
     }
-
-    const deliveryAddress = requireText(body.delivery_address, "Delivery address", 300);
-    const deliveryLat = requireNumber(body.delivery_lat, "Delivery latitude");
-    const deliveryLng = requireNumber(body.delivery_lng, "Delivery longitude");
-    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const deliveryPin = generateDeliveryPin();
-    const estimatedDeliveryAt = estimateDeliveryAt(
-      maxPrep,
-      restaurant.lat != null && restaurant.lng != null
-        ? { lat: restaurant.lat, lng: restaurant.lng }
-        : null,
-      { lat: deliveryLat, lng: deliveryLng },
-      distanceKm,
-    );
-
-    const orderRows = await restRequest(token, buildPath("/food_orders", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        customer_id: user.id,
-        restaurant_id: body.restaurant_id,
-        delivery_address: deliveryAddress,
-        delivery_lat: deliveryLat,
-        delivery_lng: deliveryLng,
-        pickup_address:
-          [restaurant.address, restaurant.town_name, restaurant.pincode]
-            .filter(Boolean)
-            .join(", ") || restaurant.name,
-        pickup_lat: restaurant.lat ?? null,
-        pickup_lng: restaurant.lng ?? null,
-        notes: body.notes || null,
-        total,
-        payment_method: body.payment_method || "cash",
-        delivery_pin: deliveryPin,
-        estimated_delivery_at: estimatedDeliveryAt,
-        contactless_delivery: !!body.contactless_delivery,
-      },
+    const order = await prisma.foodOrder.create({
+      data: {
+        customerId: user.id, restaurantId: body.restaurant_id, deliveryAddress: body.delivery_address, total, paymentMethod: body.payment_method || "cash",
+        deliveryPin: generateDeliveryPin(), estimatedDeliveryAt: estimateDeliveryAt(maxPrep, { lat: body.lat, lng: body.lng }, { lat: restaurant.lat, lng: restaurant.lng }, distanceKm),
+        items: { create: items.map(i => ({ menuItemId: i.id, name: i.name, price: i.price, quantity: i.quantity })) }
+      }
     });
-
-    const order = firstRow(orderRows);
-    if (!order) {
-      throw new HttpError(500, "Failed to create food order");
-    }
-
-    const orderItems = items.map((item) => ({
-      order_id: order.id,
-      menu_item_id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-    }));
-
-    if (orderItems.length > 0) {
-      await restRequest(token, "/food_order_items", {
-        method: "POST",
-        body: orderItems,
-      });
-    }
-
     return { order };
   }),
-  route("POST", /^\/api\/orders\/grocery$/, async ({ token, user, body }) => {
+  route("POST", /^\/api\/orders\/grocery$/, async ({ user, body }) => {
     const items = validateCartItems(body.items);
-    const storeRows = await restRequest(
-      token,
-      buildPath("/grocery_stores", {
-        select: "id,name,address,town_name,pincode,lat,lng,is_open",
-        id: `eq.${body.store_id}`,
-        limit: "1",
-      }),
-    );
-    const store = firstRow(storeRows);
-    if (!store || store.is_open === false) {
-      throw new HttpError(400, "This store is not accepting orders right now");
-    }
-
-    const groceryRows = await restRequest(
-      token,
-      buildPath("/grocery_items", {
-        select: "id,name,price,is_available,stock_quantity",
-        store_id: `eq.${body.store_id}`,
-        id: `in.(${items.map((item) => item.id).join(",")})`,
-      }),
-    );
-    const groceryById = new Map((groceryRows ?? []).map((item) => [item.id, item]));
+    const store = await prisma.groceryStore.findUnique({ where: { id: body.store_id } });
+    if (!store || !store.isOpen) throw new HttpError(400, "Store not available");
+    const groceryItems = await prisma.groceryItem.findMany({ where: { storeId: body.store_id, id: { in: items.map(i => i.id) } } });
+    const groceryById = new Map(groceryItems.map(m => [m.id, m]));
+    let total = 0;
     for (const item of items) {
-      const groceryItem = groceryById.get(item.id);
-      if (!groceryItem || groceryItem.is_available === false) {
-        throw new HttpError(400, `${item.name} is no longer available`);
-      }
-      if (Number(groceryItem.price) !== item.price) {
-        throw new HttpError(400, `Price changed for ${item.name}. Refresh your cart.`);
-      }
-      const stock = Number(groceryItem.stock_quantity ?? 0);
-      if (stock > 0 && stock < item.quantity) {
-        throw new HttpError(400, `${item.name} only has ${stock} left in stock`);
-      }
+      const m = groceryById.get(item.id);
+      if (!m || !m.isAvailable || Number(m.price) !== item.price) throw new HttpError(400, `Item ${item.name} changed`);
+      if (m.stockQuantity < item.quantity) throw new HttpError(400, `Item ${item.name} out of stock`);
+      total += item.price * item.quantity;
     }
-
-    const deliveryAddress = requireText(body.delivery_address, "Delivery address", 300);
-    const deliveryLat = requireNumber(body.delivery_lat, "Delivery latitude");
-    const deliveryLng = requireNumber(body.delivery_lng, "Delivery longitude");
-    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const deliveryPin = generateDeliveryPin();
-    const estimatedDeliveryAt = estimateDeliveryAt(
-      20,
-      store.lat != null && store.lng != null ? { lat: store.lat, lng: store.lng } : null,
-      { lat: deliveryLat, lng: deliveryLng },
-      distanceKm,
-    );
-
-    const orderRows = await restRequest(token, buildPath("/grocery_orders", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        customer_id: user.id,
-        store_id: body.store_id,
-        delivery_address: deliveryAddress,
-        delivery_lat: deliveryLat,
-        delivery_lng: deliveryLng,
-        pickup_address:
-          [store.address, store.town_name, store.pincode].filter(Boolean).join(", ") || store.name,
-        pickup_lat: store.lat ?? null,
-        pickup_lng: store.lng ?? null,
-        notes: body.notes || null,
-        total,
-        payment_method: body.payment_method || "cash",
-        delivery_pin: deliveryPin,
-        estimated_delivery_at: estimatedDeliveryAt,
-        contactless_delivery: !!body.contactless_delivery,
-      },
+    const order = await prisma.groceryOrder.create({
+      data: {
+        customerId: user.id, storeId: body.store_id, deliveryAddress: body.delivery_address, total, paymentMethod: body.payment_method || "cash",
+        deliveryPin: generateDeliveryPin(), estimatedDeliveryAt: estimateDeliveryAt(15, { lat: body.lat, lng: body.lng }, { lat: store.lat, lng: store.lng }, distanceKm),
+        items: { create: items.map(i => ({ groceryItemId: i.id, name: i.name, price: i.price, quantity: i.quantity })) }
+      }
     });
-
-    const order = firstRow(orderRows);
-    if (!order) {
-      throw new HttpError(500, "Failed to create grocery order");
-    }
-
-    try {
-      await deductGroceryStock(token, body.store_id, items);
-    } catch (error) {
-      if (!isMissingTableError(error, "grocery_items")) throw error;
-    }
-
-    const orderItems = items.map((item) => ({
-      order_id: order.id,
-      grocery_item_id: item.id,
-      name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-    }));
-
-    if (orderItems.length > 0) {
-      await restRequest(token, "/grocery_order_items", {
-        method: "POST",
-        body: orderItems,
-      });
-    }
-
+    await deductGroceryStock(body.store_id, items);
     return { order };
   }),
-  route("GET", /^\/api\/orders\/me$/, async ({ token, user }) => {
+  route("GET", /^\/api\/orders\/history$/, async ({ user }) => {
     const [food, grocery, rides, packages] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/food_orders", {
-          select:
-            "id,status,total,delivery_address,created_at,rider_id:delivery_boy_id,payment_method,restaurants(name)",
-          customer_id: `eq.${user.id}`,
-          order: "created_at.desc",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/grocery_orders", {
-          select:
-            "id,status,total,delivery_address,created_at,rider_id:delivery_boy_id,payment_method,grocery_stores(name)",
-          customer_id: `eq.${user.id}`,
-          order: "created_at.desc",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/rides", {
-          select:
-            "id,status,fare_estimate,pickup_address,drop_address,created_at,rider_id,vehicle_type,payment_method",
-          customer_id: `eq.${user.id}`,
-          order: "created_at.desc",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/package_deliveries", {
-          select:
-            "id,status,fare_estimate,pickup_address,drop_address,created_at,rider_id,package_size,payment_method",
-          customer_id: `eq.${user.id}`,
-          order: "created_at.desc",
-        }),
-      ),
+      prisma.foodOrder.findMany({ where: { customerId: user.id }, include: { restaurant: { select: { name: true } } }, orderBy: { createdAt: "desc" } }),
+      prisma.groceryOrder.findMany({ where: { customerId: user.id }, include: { store: { select: { name: true } } }, orderBy: { createdAt: "desc" } }),
+      prisma.ride.findMany({ where: { customerId: user.id }, orderBy: { createdAt: "desc" } }),
+      prisma.packageDelivery.findMany({ where: { customerId: user.id }, orderBy: { createdAt: "desc" } }),
     ]);
-
     return {
-      food: food ?? [],
-      grocery: grocery ?? [],
-      rides: rides ?? [],
-      packages: packages ?? [],
+      food: food.map(f => ({ ...f, delivery_address: f.deliveryAddress, rider_id: f.deliveryBoyId, restaurants: f.restaurant })),
+      grocery: grocery.map(g => ({ ...g, delivery_address: g.deliveryAddress, rider_id: g.deliveryBoyId, grocery_stores: g.store })),
+      rides, packages
     };
   }),
-  route(
-    "POST",
-    /^\/api\/orders\/(ride|package|food|grocery)\/([^/]+)\/cancel$/,
-    async ({ token, user, match, body }) => {
-      const kind = match[1];
-      const id = decodeURIComponent(match[2]);
-      const table = {
-        ride: "rides",
-        package: "package_deliveries",
-        food: "food_orders",
-        grocery: "grocery_orders",
-      }[kind];
-
-      const currentRows = await restRequest(
-        token,
-        buildPath(`/${table}`, {
-          select: "id,status,customer_id",
-          id: `eq.${id}`,
-          customer_id: `eq.${user.id}`,
-          limit: "1",
-        }),
-      );
-      const current = firstRow(currentRows);
-      assertCancellable(current, kind);
-
-      const rows = await restRequest(
-        token,
-        buildPath(`/${table}`, { id: `eq.${id}`, customer_id: `eq.${user.id}`, select: "*" }),
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: {
-            status: "cancelled",
-            cancellation_reason: cleanText(body.reason) || "Cancelled by customer",
-            cancelled_at: new Date().toISOString(),
-          },
-        },
-      );
-
-      return { row: firstRow(rows) };
-    },
-  ),
-  route("GET", /^\/api\/track\/(ride|package|food|grocery)\/([^/]+)$/, async ({ token, match }) => {
+  route("POST", /^\/api\/orders\/cancel$/, async ({ user, body }) => {
+    const { id, kind } = body;
+    const modelName = { ride: "ride", package: "packageDelivery", food: "foodOrder", grocery: "groceryOrder" }[kind];
+    const current = await prisma[modelName].findFirst({ where: { id, customerId: user.id } });
+    assertCancellable(current, kind);
+    const row = await prisma[modelName].update({
+      where: { id }, data: { status: "cancelled", cancellationReason: body.reason || "Customer cancelled", cancelledAt: new Date() }
+    });
+    return { row };
+  }),
+  route("GET", /^\/api\/track\/(ride|package|food|grocery)\/([^/]+)$/, async ({ match }) => {
     const kind = match[1];
     const id = decodeURIComponent(match[2]);
-    const table = {
-      ride: "rides",
-      package: "package_deliveries",
-      food: "food_orders",
-      grocery: "grocery_orders",
-    }[kind];
-
-    const rows = await restRequest(
-      token,
-      buildPath(`/${table}`, {
-        select: "*",
-        id: `eq.${id}`,
-      }),
-    );
-
-    const row = firstRow(rows);
-    const normalizedRow = kind === "food" || kind === "grocery" ? normalizeDeliveryOrder(row) : row;
+    const modelName = { ride: "ride", package: "packageDelivery", food: "foodOrder", grocery: "groceryOrder" }[kind];
+    const row = await prisma[modelName].findUnique({ where: { id } });
     let partner = null;
-    if (normalizedRow?.rider_id) {
-      const profileRows = await restRequest(
-        token,
-        buildPath("/profiles", {
-          select: "id,full_name,phone",
-          id: `eq.${normalizedRow.rider_id}`,
-          limit: "1",
-        }),
-      );
-      partner = firstRow(profileRows);
-    }
-
-    return {
-      row: normalizedRow ? { ...normalizedRow, partner } : null,
-    };
+    const riderId = row?.riderId || row?.deliveryBoyId;
+    if (riderId) partner = await prisma.profile.findUnique({ where: { id: riderId }, select: { id: true, fullName: true, phone: true } });
+    return { row: { ...row, rider_id: riderId, partner: partner ? { ...partner, full_name: partner.fullName } : null } };
   }),
-  route(
-    "GET",
-    /^\/api\/chat\/(ride|package|food|grocery)\/([^/]+)$/,
-    async ({ token, user, match }) => {
-      const kind = match[1];
-      const serviceId = decodeURIComponent(match[2]);
-      const context = await getChatContext(token, user, kind, serviceId);
-
-      const messages = await restRequest(
-        token,
-        buildPath("/chat_messages", {
-          select: "id,service_kind,service_id,sender_id,body,created_at",
-          service_kind: `eq.${context.kind}`,
-          service_id: `eq.${serviceId}`,
-          order: "created_at.asc",
-          limit: "100",
-        }),
-      );
-
-      return {
-        messages: messages ?? [],
-        participant: {
-          customer_id: context.row.customer_id,
-          partner_id: context.row[context.partnerColumn] ?? null,
-        },
-      };
-    },
-  ),
-  route(
-    "POST",
-    /^\/api\/chat\/(ride|package|food|grocery)\/([^/]+)$/,
-    async ({ token, user, match, body }) => {
-      const kind = match[1];
-      const serviceId = decodeURIComponent(match[2]);
-      const context = await getChatContext(token, user, kind, serviceId);
-
-      const messageBody = cleanText(body.message);
-      if (!messageBody) {
-        throw new HttpError(400, "Message is required");
-      }
-
-      if (messageBody.length > 1000) {
-        throw new HttpError(400, "Message is too long");
-      }
-
-      const rows = await restRequest(token, buildPath("/chat_messages", { select: "*" }), {
-        method: "POST",
-        headers: { Prefer: "return=representation" },
-        body: {
-          service_kind: kind,
-          service_id: serviceId,
-          sender_id: user.id,
-          body: messageBody,
-        },
-      });
-
-      const saved = firstRow(rows);
-      void notifyChatRecipients({
-        senderId: user.id,
-        context,
-        kind,
-        serviceId,
-        messageBody,
-      }).catch((error) => {
-        logEvent("warn", "chat_push_notify_failed", {
-          serviceId,
-          kind,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
-
-      return { message: saved };
-    },
-  ),
-  route("POST", /^\/api\/rides$/, async ({ token, user, body }) => {
-    const pickupLat = requireNumber(body.pickup_lat, "Pickup latitude");
-    const pickupLng = requireNumber(body.pickup_lng, "Pickup longitude");
-    const dropLat = requireNumber(body.drop_lat, "Drop latitude");
-    const dropLng = requireNumber(body.drop_lng, "Drop longitude");
-    const pickupAddress = requireText(body.pickup_address, "Pickup address", 300);
-    const dropAddress = requireText(body.drop_address, "Drop address", 300);
-    const fareEstimate = requireNumber(body.fare_estimate, "Fare estimate");
-    const deliveryPin = generateDeliveryPin();
-    const estimatedArrivalAt = estimateDeliveryAt(
-      5,
-      { lat: pickupLat, lng: pickupLng },
-      { lat: dropLat, lng: dropLng },
-      distanceKm,
-    );
-    const rows = await restRequest(token, buildPath("/rides", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        customer_id: user.id,
-        pickup_lat: pickupLat,
-        pickup_lng: pickupLng,
-        pickup_address: pickupAddress,
-        drop_lat: dropLat,
-        drop_lng: dropLng,
-        drop_address: dropAddress,
-        fare_estimate: fareEstimate,
-        vehicle_type: body.vehicle_type,
-        notes: body.notes || null,
-        payment_method: body.payment_method || "cash",
-        delivery_pin: deliveryPin,
-        estimated_arrival_at: estimatedArrivalAt,
-      },
-    });
-
-    return { ride: firstRow(rows) };
-  }),
-  route("POST", /^\/api\/packages$/, async ({ token, user, body }) => {
-    const pickupLat = requireNumber(body.pickup_lat, "Pickup latitude");
-    const pickupLng = requireNumber(body.pickup_lng, "Pickup longitude");
-    const dropLat = requireNumber(body.drop_lat, "Drop latitude");
-    const dropLng = requireNumber(body.drop_lng, "Drop longitude");
-    const pickupAddress = requireText(body.pickup_address, "Pickup address", 300);
-    const dropAddress = requireText(body.drop_address, "Drop address", 300);
-    const receiverName = requireText(body.receiver_name, "Receiver name", 120);
-    const receiverPhone = requireText(body.receiver_phone, "Receiver phone", 30);
-    const fareEstimate = requireNumber(body.fare_estimate, "Fare estimate");
-    const deliveryPin = generateDeliveryPin();
-    const estimatedDeliveryAt = estimateDeliveryAt(
-      10,
-      { lat: pickupLat, lng: pickupLng },
-      { lat: dropLat, lng: dropLng },
-      distanceKm,
-    );
-    const rows = await restRequest(token, buildPath("/package_deliveries", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        customer_id: user.id,
-        pickup_lat: pickupLat,
-        pickup_lng: pickupLng,
-        pickup_address: pickupAddress,
-        drop_lat: dropLat,
-        drop_lng: dropLng,
-        drop_address: dropAddress,
-        fare_estimate: fareEstimate,
-        package_size: body.package_size,
-        receiver_name: receiverName,
-        receiver_phone: receiverPhone,
-        notes: body.notes || null,
-        payment_method: body.payment_method || "cash",
-        delivery_pin: deliveryPin,
-        estimated_delivery_at: estimatedDeliveryAt,
-      },
-    });
-
-    return { packageDelivery: firstRow(rows) };
-  }),
-  route("POST", /^\/api\/admin\/notifications\/test$/, async ({ token, user, body }) => {
-    const roles = await getRoles(token, user.id);
-    if (!roles.includes("admin")) {
-      throw new HttpError(403, "Only admin users can send test notifications");
-    }
-
-    const explicitToken = trimToken(body.token);
-    const targetUserId = cleanText(body.user_id);
-
-    let targetTokens = explicitToken ? [explicitToken] : [];
-    if (!explicitToken && targetUserId) {
-      const rows = await serviceRoleRestRequest(
-        buildPath("/user_push_tokens", {
-          select: "token",
-          user_id: `eq.${targetUserId}`,
-          order: "updated_at.desc",
-          limit: "5",
-        }),
-      );
-      targetTokens = (rows ?? []).map((row) => trimToken(row.token)).filter(Boolean);
-    }
-
-    if (targetTokens.length === 0) {
-      throw new HttpError(400, "Provide token or user_id with at least one saved token");
-    }
-
-    const title = cleanText(body.title) || "Test notification";
-    const message = cleanText(body.body) || "This is a test push from Rweezy backend.";
-    const data = body.data && typeof body.data === "object" ? body.data : {};
-
-    const results = [];
-    for (const fcmToken of targetTokens) {
-      try {
-        const result = await sendFcmNotification({
-          token: fcmToken,
-          title,
-          body: message,
-          data,
-        });
-        results.push({ token: fcmToken, ok: true, result });
-      } catch (error) {
-        results.push({
-          token: fcmToken,
-          ok: false,
-          error: error instanceof Error ? error.message : "Failed",
-        });
-      }
-    }
-
-    return {
-      sent: results.filter((item) => item.ok).length,
-      failed: results.filter((item) => !item.ok).length,
-      results,
-    };
-  }),
-  route("GET", /^\/api\/admin\/stats$/, async ({ token }) => {
-    const [profiles, restaurants, foodOrders, rides, packages, stores] = await Promise.all([
-      restRequest(token, buildPath("/profiles", { select: "id" })),
-      restRequest(token, buildPath("/restaurants", { select: "id" })),
-      restRequest(token, buildPath("/food_orders", { select: "id" })),
-      restRequest(token, buildPath("/rides", { select: "id" })),
-      restRequest(token, buildPath("/package_deliveries", { select: "id" })),
-      restRequest(token, buildPath("/grocery_stores", { select: "id" })),
-    ]);
-
-    return {
-      users: profiles?.length ?? 0,
-      restaurants: restaurants?.length ?? 0,
-      foodOrders: foodOrders?.length ?? 0,
-      rides: rides?.length ?? 0,
-      packages: packages?.length ?? 0,
-      stores: stores?.length ?? 0,
-    };
-  }),
-  route("GET", /^\/api\/admin\/analytics$/, async ({ token }) => {
-    const [profiles, deliveryRoles, restaurants, stores, foodOrders, groceryOrders] =
-      await Promise.all([
-        restRequest(token, buildPath("/profiles", { select: "id,full_name,phone" })),
-        restRequest(
-          token,
-          buildPath("/user_roles", { select: "user_id,role", role: "eq.delivery_boy" }),
-        ),
-        restRequest(
-          token,
-          buildPath("/restaurants", { select: "id,name,is_open", order: "name.asc" }),
-        ),
-        restRequest(
-          token,
-          buildPath("/grocery_stores", { select: "id,name,is_open", order: "name.asc" }),
-        ),
-        restRequest(
-          token,
-          buildPath("/food_orders", {
-            select:
-              "id,restaurant_id,total,status,created_at,delivery_boy_id,delivery_lat,delivery_lng,rider_lat,rider_lng",
-          }),
-        ),
-        restRequest(
-          token,
-          buildPath("/grocery_orders", {
-            select:
-              "id,store_id,total,status,created_at,delivery_boy_id,delivery_lat,delivery_lng,rider_lat,rider_lng",
-          }),
-        ),
-      ]);
-
-    const todayStart = startOfLocalDay();
-    const monthStart = startOfLocalMonth();
-    const deliveredStatuses = new Set(["delivered"]);
-    const deliveryBoyIds = new Set((deliveryRoles ?? []).map((role) => role.user_id));
-    const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-
-    const summarizePartner = (partners, orders, idKey) =>
-      (partners ?? []).map((partner) => {
-        const partnerOrders = (orders ?? []).filter((order) => order[idKey] === partner.id);
-        const delivered = partnerOrders.filter((order) => deliveredStatuses.has(order.status));
-        const todayOrders = delivered.filter((order) => isOnOrAfter(order.created_at, todayStart));
-        const monthOrders = delivered.filter((order) => isOnOrAfter(order.created_at, monthStart));
-
-        return {
-          id: partner.id,
-          name: partner.name,
-          is_open: partner.is_open,
-          todayOrders: todayOrders.length,
-          todayIncome: todayOrders.reduce((sum, order) => sum + money(order.total), 0),
-          monthOrders: monthOrders.length,
-          monthIncome: monthOrders.reduce((sum, order) => sum + money(order.total), 0),
-          totalOrders: partnerOrders.length,
-        };
-      });
-
-    const deliverySummary = new Map();
-    const ensureDeliveryBoy = (userId) => {
-      if (!userId) return null;
-      if (!deliverySummary.has(userId)) {
-        const profile = profileById.get(userId);
-        deliverySummary.set(userId, {
-          id: userId,
-          name: profile?.full_name || "Unnamed delivery boy",
-          phone: profile?.phone ?? null,
-          foodDeliveries: 0,
-          groceryDeliveries: 0,
-          todayDeliveries: 0,
-          monthDeliveries: 0,
-          trackedKm: 0,
-          foodIncomeHandled: 0,
-          groceryIncomeHandled: 0,
-        });
-      }
-      return deliverySummary.get(userId);
-    };
-
-    for (const userId of deliveryBoyIds) {
-      ensureDeliveryBoy(userId);
-    }
-
-    const addDeliveryOrder = (order, kind) => {
-      const summary = ensureDeliveryBoy(order.delivery_boy_id);
-      if (!summary) return;
-
-      const delivered = deliveredStatuses.has(order.status);
-      if (kind === "food" && delivered) {
-        summary.foodDeliveries += 1;
-        summary.foodIncomeHandled += money(order.total);
-      }
-      if (kind === "grocery" && delivered) {
-        summary.groceryDeliveries += 1;
-        summary.groceryIncomeHandled += money(order.total);
-      }
-      if (delivered && isOnOrAfter(order.created_at, todayStart)) summary.todayDeliveries += 1;
-      if (delivered && isOnOrAfter(order.created_at, monthStart)) summary.monthDeliveries += 1;
-
-      summary.trackedKm += distanceKm(
-        order.rider_lat != null && order.rider_lng != null
-          ? { lat: order.rider_lat, lng: order.rider_lng }
-          : null,
-        order.delivery_lat != null && order.delivery_lng != null
-          ? { lat: order.delivery_lat, lng: order.delivery_lng }
-          : null,
-      );
-    };
-
-    for (const order of foodOrders ?? []) addDeliveryOrder(order, "food");
-    for (const order of groceryOrders ?? []) addDeliveryOrder(order, "grocery");
-
-    const restaurantIncome = summarizePartner(restaurants, foodOrders, "restaurant_id").sort(
-      (a, b) => b.monthIncome - a.monthIncome,
-    );
-    const groceryStoreIncome = summarizePartner(stores, groceryOrders, "store_id").sort(
-      (a, b) => b.monthIncome - a.monthIncome,
-    );
-    const deliveryBoys = [...deliverySummary.values()]
-      .map((summary) => ({
-        ...summary,
-        totalDeliveries: summary.foodDeliveries + summary.groceryDeliveries,
-        trackedKm: Number(summary.trackedKm.toFixed(2)),
-      }))
-      .sort((a, b) => b.monthDeliveries - a.monthDeliveries);
-
-    const totalRestaurantMonthIncome = restaurantIncome.reduce(
-      (sum, item) => sum + item.monthIncome,
-      0,
-    );
-    const totalGroceryMonthIncome = groceryStoreIncome.reduce(
-      (sum, item) => sum + item.monthIncome,
-      0,
-    );
-
-    return {
-      restaurantIncome,
-      groceryStoreIncome,
-      deliveryBoys,
-      totals: {
-        restaurantTodayIncome: restaurantIncome.reduce((sum, item) => sum + item.todayIncome, 0),
-        restaurantMonthIncome: totalRestaurantMonthIncome,
-        groceryTodayIncome: groceryStoreIncome.reduce((sum, item) => sum + item.todayIncome, 0),
-        groceryMonthIncome: totalGroceryMonthIncome,
-        deliveryBoys: deliveryBoys.length,
-        deliveriesToday: deliveryBoys.reduce((sum, item) => sum + item.todayDeliveries, 0),
-        deliveriesMonth: deliveryBoys.reduce((sum, item) => sum + item.monthDeliveries, 0),
-        trackedKm: Number(deliveryBoys.reduce((sum, item) => sum + item.trackedKm, 0).toFixed(2)),
-      },
-    };
-  }),
-  route("GET", /^\/api\/admin\/restaurants$/, async ({ token, url }) => {
-    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
-    const limit = Math.min(100, Math.max(10, Number(url.searchParams.get("limit") ?? 20)));
-    const offset = (page - 1) * limit;
-    const fetchLimit = limit + 1;
-    const restaurants = await restRequest(
-      token,
-      buildPath("/restaurants", {
-        select: "*",
-        order: "created_at.desc",
-        limit: String(fetchLimit),
-        offset: String(offset),
-      }),
-    );
-    const hasNext = (restaurants?.length ?? 0) > limit;
-    const pageRestaurants = (restaurants ?? []).slice(0, limit);
-    const managerIds = pageRestaurants
-      .map((item) => item?.manager_id)
-      .filter((id) => typeof id === "string" && id.length > 0);
-    const restaurantIds = pageRestaurants
-      .map((item) => item?.id)
-      .filter((id) => typeof id === "string" && id.length > 0);
-    const [profiles, roles, orders] = await Promise.all([
-      managerIds.length > 0
-        ? restRequest(
-            token,
-            buildPath("/profiles", { select: "id,full_name", id: `in.(${managerIds.join(",")})` }),
-          )
-        : [],
-      managerIds.length > 0
-        ? restRequest(
-            token,
-            buildPath("/user_roles", {
-              select: "user_id,role",
-              role: "eq.hotel_manager",
-              user_id: `in.(${managerIds.join(",")})`,
-            }),
-          )
-        : [],
-      restaurantIds.length > 0
-        ? restRequest(
-            token,
-            buildPath("/food_orders", { select: "restaurant_id", restaurant_id: `in.(${restaurantIds.join(",")})` }),
-          )
-        : [],
-    ]);
-
-    return {
-      restaurants: pageRestaurants,
-      profiles: profiles ?? [],
-      roles: roles ?? [],
-      orders: orders ?? [],
-      page,
-      limit,
-      hasNext,
-    };
-  }),
-  route("POST", /^\/api\/admin\/restaurants$/, async ({ token, body }) => {
-    const rows = await restRequest(token, buildPath("/restaurants", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body,
-    });
-
-    return { restaurant: firstRow(rows) };
-  }),
-  route("PUT", /^\/api\/admin\/restaurants\/([^/]+)$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/restaurants", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body,
-      },
-    );
-
-    return { restaurant: firstRow(rows) };
-  }),
-  route("DELETE", /^\/api\/admin\/restaurants\/([^/]+)$/, async ({ token, match }) => {
-    const id = decodeURIComponent(match[1]);
-    await restRequest(token, buildPath("/restaurants", { id: `eq.${id}` }), { method: "DELETE" });
-
-    return { ok: true };
-  }),
-  route("POST", /^\/api\/admin\/restaurants\/([^/]+)\/toggle$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/restaurants", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: { is_open: !!body.is_open },
-      },
-    );
-
-    return { restaurant: firstRow(rows) };
-  }),
-  route(
-    "POST",
-    /^\/api\/admin\/restaurants\/([^/]+)\/grant-manager$/,
-    async ({ token, match, body }) => {
-      const id = decodeURIComponent(match[1]);
-      if (!body.user_id) throw new HttpError(400, "user_id is required");
-
-      await restRequest(token, "/user_roles", {
-        method: "POST",
-        body: { user_id: body.user_id, role: "hotel_manager" },
-      });
-
-      const rows = await restRequest(
-        token,
-        buildPath("/restaurants", { id: `eq.${id}`, select: "*" }),
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: { manager_id: body.user_id },
-        },
-      );
-
-      return { restaurant: firstRow(rows) };
-    },
-  ),
-  route(
-    "POST",
-    /^\/api\/admin\/restaurants\/([^/]+)\/revoke-manager$/,
-    async ({ token, match, body }) => {
-      const id = decodeURIComponent(match[1]);
-      if (!body.user_id) throw new HttpError(400, "user_id is required");
-
-      await restRequest(
-        token,
-        buildPath("/user_roles", {
-          user_id: `eq.${body.user_id}`,
-          role: "eq.hotel_manager",
-        }),
-        { method: "DELETE" },
-      );
-
-      const rows = await restRequest(
-        token,
-        buildPath("/restaurants", { id: `eq.${id}`, select: "*" }),
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: { manager_id: null, is_open: false },
-        },
-      );
-
-      return { restaurant: firstRow(rows) };
-    },
-  ),
-  route("GET", /^\/api\/admin\/stores$/, async ({ token, url }) => {
-    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
-    const limit = Math.min(100, Math.max(10, Number(url.searchParams.get("limit") ?? 20)));
-    const offset = (page - 1) * limit;
-    const fetchLimit = limit + 1;
-    const stores = await restRequest(
-      token,
-      buildPath("/grocery_stores", {
-        select: "*",
-        order: "created_at.desc",
-        limit: String(fetchLimit),
-        offset: String(offset),
-      }),
-    );
-    const hasNext = (stores?.length ?? 0) > limit;
-    const pageStores = (stores ?? []).slice(0, limit);
-
-    return { stores: pageStores, page, limit, hasNext };
-  }),
-  route("POST", /^\/api\/admin\/stores$/, async ({ token, body }) => {
-    const rows = await restRequest(token, buildPath("/grocery_stores", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body,
-    });
-
-    return { store: firstRow(rows) };
-  }),
-  route("PUT", /^\/api\/admin\/stores\/([^/]+)$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/grocery_stores", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body,
-      },
-    );
-
-    return { store: firstRow(rows) };
-  }),
-  route("DELETE", /^\/api\/admin\/stores\/([^/]+)$/, async ({ token, match }) => {
-    const id = decodeURIComponent(match[1]);
-    await restRequest(token, buildPath("/grocery_stores", { id: `eq.${id}` }), {
-      method: "DELETE",
-    });
-
-    return { ok: true };
-  }),
-  route("GET", /^\/api\/admin\/users$/, async ({ token, url }) => {
-    const search = cleanText(url.searchParams.get("search"));
-    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
-    const limit = Math.min(100, Math.max(10, Number(url.searchParams.get("limit") ?? 50)));
-    const offset = (page - 1) * limit;
-
-    const profileParams = {
-      select: "id,full_name,phone",
-      order: "full_name.asc",
-      limit: String(limit),
-      offset: String(offset),
-    };
-    if (search) {
-      profileParams.or = `(full_name.ilike.*${search}*,phone.ilike.*${search}*)`;
-    }
-
-    const [profiles, roleRequests, countRows] = await Promise.all([
-      restRequest(token, buildPath("/profiles", profileParams)),
-      restRequest(
-        token,
-        buildPath("/role_requests", {
-          select: "*",
-          status: "eq.pending",
-          order: "created_at.desc",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/profiles", { select: "id", ...(search ? { or: profileParams.or } : {}) }),
-        {
-          headers: { Prefer: "count=exact" },
-        },
-      ).catch(() => []),
-    ]);
-
-    const pageUserIds = (profiles ?? [])
-      .map((profile) => profile?.id)
-      .filter((id) => typeof id === "string" && id.length > 0);
-    const roles =
-      pageUserIds.length > 0
-        ? await restRequest(
-            token,
-            buildPath("/user_roles", {
-              select: "user_id,role",
-              user_id: `in.(${pageUserIds.join(",")})`,
-            }),
-          )
-        : [];
-
-    return {
-      profiles: profiles ?? [],
-      roles: roles ?? [],
-      roleRequests: roleRequests ?? [],
-      page,
-      limit,
-      total: Array.isArray(countRows) ? countRows.length : (profiles?.length ?? 0),
-    };
-  }),
-  route(
-    "POST",
-    /^\/api\/admin\/users\/([^/]+)\/roles\/toggle$/,
-    async ({ token, user, match, body }) => {
-      const userId = decodeURIComponent(match[1]);
-      const role = body.role;
-      const hasRole = !!body.has_role;
-
-      if (!role) throw new HttpError(400, "role is required");
-
-      if (hasRole) {
-        await restRequest(
-          token,
-          buildPath("/user_roles", {
-            user_id: `eq.${userId}`,
-            role: `eq.${role}`,
-          }),
-          { method: "DELETE" },
-        );
-      } else {
-        await restRequest(token, buildPath("/user_roles", { on_conflict: "user_id,role" }), {
-          method: "POST",
-          headers: { Prefer: "resolution=ignore-duplicates" },
-          body: { user_id: userId, role },
-        });
-      }
-
-      await writeAudit(
-        token,
-        user.id,
-        hasRole ? "role_removed" : "role_granted",
-        "user",
-        userId,
-        `${hasRole ? "Removed" : "Granted"} ${role} role`,
-        { role },
-      );
-
-      return { ok: true };
-    },
-  ),
-  route(
-    "POST",
-    /^\/api\/admin\/role-requests\/([^/]+)\/review$/,
-    async ({ token, user, match, body }) => {
-      const requestId = decodeURIComponent(match[1]);
-      const decision =
-        body.decision === "approved"
-          ? "approved"
-          : body.decision === "rejected"
-            ? "rejected"
-            : null;
-      if (!decision) throw new HttpError(400, "Decision must be approved or rejected");
-
-      const requestRows = await restRequest(
-        token,
-        buildPath("/role_requests", { select: "*", id: `eq.${requestId}`, limit: "1" }),
-      );
-      const request = firstRow(requestRows);
-      if (!request) throw new HttpError(404, "Role request not found");
-
-      if (decision === "approved") {
-        await restRequest(token, buildPath("/user_roles", { on_conflict: "user_id,role" }), {
-          method: "POST",
-          headers: { Prefer: "resolution=ignore-duplicates" },
-          body: { user_id: request.user_id, role: request.requested_role },
-        });
-      }
-
-      const rows = await restRequest(
-        token,
-        buildPath("/role_requests", { id: `eq.${requestId}`, select: "*" }),
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: {
-            status: decision,
-            reviewed_by: user.id,
-            reviewed_at: new Date().toISOString(),
-          },
-        },
-      );
-
-      await writeAudit(
-        token,
-        user.id,
-        `role_request_${decision}`,
-        "role_request",
-        requestId,
-        `${decision === "approved" ? "Approved" : "Rejected"} ${request.requested_role} request`,
-        { user_id: request.user_id, requested_role: request.requested_role },
-      );
-
-      return { request: firstRow(rows) };
-    },
-  ),
-  route("GET", /^\/api\/hotel\/dashboard$/, async ({ token, user }) => {
-    const restaurantRows = await restRequest(
-      token,
-      buildPath("/restaurants", {
-        select: "*",
-        manager_id: `eq.${user.id}`,
-      }),
-    );
-
-    const restaurant = firstRow(restaurantRows);
-    if (!restaurant) {
-      return { restaurant: null, stats: { total: 0, pending: 0, today: 0 } };
-    }
-
-    const orders = await restRequest(
-      token,
-      buildPath("/food_orders", {
-        select: "id,status,created_at",
-        restaurant_id: `eq.${restaurant.id}`,
-      }),
-    );
-
-    const today = new Date().toDateString();
-    return {
-      restaurant,
-      stats: {
-        total: orders?.length ?? 0,
-        pending:
-          orders?.filter((order) => ["pending", "accepted", "preparing"].includes(order.status))
-            .length ?? 0,
-        today:
-          orders?.filter((order) => new Date(order.created_at).toDateString() === today).length ??
-          0,
-      },
-    };
-  }),
-  route("PUT", /^\/api\/hotel\/restaurant$/, async ({ token, user, body }) => {
-    const payload = {
-      name: body.name,
-      description: body.description ?? null,
-      address: body.address ?? null,
-      image_url: body.image_url ?? null,
-      is_open: body.is_open ?? true,
-      manager_id: user.id,
-    };
-
-    const rows = body.id
-      ? await restRequest(token, buildPath("/restaurants", { id: `eq.${body.id}`, select: "*" }), {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: payload,
-        })
-      : await restRequest(token, buildPath("/restaurants", { select: "*" }), {
-          method: "POST",
-          headers: { Prefer: "return=representation" },
-          body: payload,
-        });
-
-    return { restaurant: firstRow(rows) };
-  }),
-  route("GET", /^\/api\/hotel\/menu$/, async ({ token, user }) => {
-    const restaurantRows = await restRequest(
-      token,
-      buildPath("/restaurants", {
-        select: "id",
-        manager_id: `eq.${user.id}`,
-      }),
-    );
-
-    const restaurant = firstRow(restaurantRows);
-    if (!restaurant) {
-      return { restaurantId: null, items: [] };
-    }
-
-    const items = await restRequest(
-      token,
-      buildPath("/menu_items", {
-        select: "*",
-        restaurant_id: `eq.${restaurant.id}`,
-        order: "created_at.desc",
-      }),
-    );
-
-    return { restaurantId: restaurant.id, items: items ?? [] };
-  }),
-  route("POST", /^\/api\/hotel\/menu$/, async ({ token, user, body }) => {
-    const restaurantRows = await restRequest(
-      token,
-      buildPath("/restaurants", { select: "id", manager_id: `eq.${user.id}` }),
-    );
-
-    const restaurant = firstRow(restaurantRows);
-    if (!restaurant) throw new HttpError(400, "No restaurant assigned");
-
-    const rows = await restRequest(token, buildPath("/menu_items", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        restaurant_id: restaurant.id,
-        name: body.name,
-        description: body.description ?? null,
-        price: body.price,
-        category: body.category ?? null,
-        image_url: body.image_url ?? null,
-        is_available: body.is_available ?? true,
-        is_veg: body.is_veg ?? true,
-        prep_time_minutes: body.prep_time_minutes ?? 15,
-        is_special: body.is_special ?? false,
-        modifiers: body.modifiers ?? [],
-      },
-    });
-
-    return { item: firstRow(rows) };
-  }),
-  route("PUT", /^\/api\/hotel\/menu\/([^/]+)$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/menu_items", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body,
-      },
-    );
-
-    return { item: firstRow(rows) };
-  }),
-  route("DELETE", /^\/api\/hotel\/menu\/([^/]+)$/, async ({ token, match }) => {
-    const id = decodeURIComponent(match[1]);
-    await restRequest(token, buildPath("/menu_items", { id: `eq.${id}` }), { method: "DELETE" });
-
-    return { ok: true };
-  }),
-  route("POST", /^\/api\/hotel\/menu\/([^/]+)\/toggle$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/menu_items", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: { is_available: !!body.is_available },
-      },
-    );
-
-    return { item: firstRow(rows) };
-  }),
-  route("GET", /^\/api\/hotel\/orders$/, async ({ token, user }) => {
-    const restaurantRows = await restRequest(
-      token,
-      buildPath("/restaurants", { select: "id", manager_id: `eq.${user.id}` }),
-    );
-
-    const restaurant = firstRow(restaurantRows);
-    if (!restaurant) {
-      return { restaurantId: null, orders: [] };
-    }
-
-    const orders = await restRequest(
-      token,
-      buildPath("/food_orders", {
-        select:
-          "id,status,total,delivery_address,notes,created_at,food_order_items(id,name,quantity,price)",
-        restaurant_id: `eq.${restaurant.id}`,
-        order: "created_at.desc",
-      }),
-    );
-
-    return { restaurantId: restaurant.id, orders: orders ?? [] };
-  }),
-  route("POST", /^\/api\/hotel\/orders\/([^/]+)\/advance$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/food_orders", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: { status: body.status },
-      },
-    );
-
-    return { order: firstRow(rows) };
-  }),
-  route("POST", /^\/api\/hotel\/orders\/([^/]+)\/reject$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/food_orders", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: {
-          status: "cancelled",
-          cancellation_reason: cleanText(body.reason) || "Rejected by restaurant",
-          cancelled_at: new Date().toISOString(),
-        },
-      },
-    );
-
-    return { order: firstRow(rows) };
-  }),
-  route("GET", /^\/api\/hotel\/history$/, async ({ token, user }) => {
-    const restaurantRows = await restRequest(
-      token,
-      buildPath("/restaurants", { select: "id", manager_id: `eq.${user.id}` }),
-    );
-
-    const restaurant = firstRow(restaurantRows);
-    if (!restaurant) {
-      return { restaurantId: null, orders: [] };
-    }
-
-    const orders = await restRequest(
-      token,
-      buildPath("/food_orders", {
-        select:
-          "id,status,total,delivery_address,notes,created_at,food_order_items(id,name,quantity,price)",
-        restaurant_id: `eq.${restaurant.id}`,
-        order: "created_at.desc",
-        limit: "100",
-      }),
-    );
-
-    return { restaurantId: restaurant.id, orders: orders ?? [] };
-  }),
-  route("GET", /^\/api\/grocery\/dashboard$/, async ({ token, user }) => {
-    const storeRows = await restRequest(
-      token,
-      buildPath("/grocery_stores", {
-        select: "*",
-        manager_id: `eq.${user.id}`,
-      }),
-    );
-
-    const store = firstRow(storeRows);
-    if (!store) {
-      return { store: null, stats: { total: 0, pending: 0, today: 0 } };
-    }
-
-    const orders = await restRequest(
-      token,
-      buildPath("/grocery_orders", {
-        select: "id,status,created_at",
-        store_id: `eq.${store.id}`,
-      }),
-    );
-
-    const today = new Date().toDateString();
-    return {
-      store,
-      stats: {
-        total: orders?.length ?? 0,
-        pending:
-          orders?.filter((order) => ["pending", "accepted", "preparing"].includes(order.status))
-            .length ?? 0,
-        today:
-          orders?.filter((order) => new Date(order.created_at).toDateString() === today).length ??
-          0,
-      },
-    };
-  }),
-  route("PUT", /^\/api\/grocery\/store$/, async ({ token, user, body }) => {
-    const payload = {
-      name: body.name,
-      description: body.description ?? null,
-      address: body.address ?? null,
-      image_url: body.image_url ?? null,
-      is_open: body.is_open ?? true,
-      manager_id: user.id,
-    };
-
-    const rows = body.id
-      ? await restRequest(
-          token,
-          buildPath("/grocery_stores", { id: `eq.${body.id}`, select: "*" }),
-          {
-            method: "PATCH",
-            headers: { Prefer: "return=representation" },
-            body: payload,
-          },
-        )
-      : await restRequest(token, buildPath("/grocery_stores", { select: "*" }), {
-          method: "POST",
-          headers: { Prefer: "return=representation" },
-          body: payload,
-        });
-
-    return { store: firstRow(rows) };
-  }),
-  route("GET", /^\/api\/grocery\/items$/, async ({ token, user }) => {
-    const storeRows = await restRequest(
-      token,
-      buildPath("/grocery_stores", { select: "id", manager_id: `eq.${user.id}` }),
-    );
-
-    const store = firstRow(storeRows);
-    if (!store) {
-      return { storeId: null, items: [] };
-    }
-
-    const items = await restRequest(
-      token,
-      buildPath("/grocery_items", {
-        select: "*",
-        store_id: `eq.${store.id}`,
-        order: "created_at.desc",
-      }),
-    );
-
-    return { storeId: store.id, items: items ?? [] };
-  }),
-  route("POST", /^\/api\/grocery\/items$/, async ({ token, user, body }) => {
-    const storeRows = await restRequest(
-      token,
-      buildPath("/grocery_stores", { select: "id", manager_id: `eq.${user.id}` }),
-    );
-
-    const store = firstRow(storeRows);
-    if (!store) throw new HttpError(400, "No store assigned");
-
-    const rows = await restRequest(token, buildPath("/grocery_items", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        store_id: store.id,
-        name: body.name,
-        description: body.description ?? null,
-        price: body.price,
-        category: body.category ?? null,
-        image_url: body.image_url ?? null,
-        is_available: body.is_available ?? true,
-        stock_quantity: body.stock_quantity ?? 0,
-        low_stock_threshold: body.low_stock_threshold ?? 5,
-        expiry_date: body.expiry_date ?? null,
-        aisle_location: body.aisle_location ?? null,
-        unit: body.unit ?? "pcs",
-      },
-    });
-
-    return { item: firstRow(rows) };
-  }),
-  route("PUT", /^\/api\/grocery\/items\/([^/]+)$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/grocery_items", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body,
-      },
-    );
-
-    return { item: firstRow(rows) };
-  }),
-  route("DELETE", /^\/api\/grocery\/items\/([^/]+)$/, async ({ token, match }) => {
-    const id = decodeURIComponent(match[1]);
-    await restRequest(token, buildPath("/grocery_items", { id: `eq.${id}` }), { method: "DELETE" });
-
-    return { ok: true };
-  }),
-  route("POST", /^\/api\/grocery\/items\/([^/]+)\/toggle$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/grocery_items", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: { is_available: !!body.is_available },
-      },
-    );
-
-    return { item: firstRow(rows) };
-  }),
-  route("GET", /^\/api\/grocery\/orders$/, async ({ token, user }) => {
-    const storeRows = await restRequest(
-      token,
-      buildPath("/grocery_stores", { select: "id", manager_id: `eq.${user.id}` }),
-    );
-
-    const store = firstRow(storeRows);
-    if (!store) {
-      return { storeId: null, orders: [] };
-    }
-
-    const orders = await restRequest(
-      token,
-      buildPath("/grocery_orders", {
-        select:
-          "id,status,total,delivery_address,notes,created_at,grocery_order_items(id,name,quantity,price)",
-        store_id: `eq.${store.id}`,
-        order: "created_at.desc",
-      }),
-    );
-
-    return { storeId: store.id, orders: orders ?? [] };
-  }),
-  route("POST", /^\/api\/grocery\/orders\/([^/]+)\/advance$/, async ({ token, match, body }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/grocery_orders", { id: `eq.${id}`, select: "*" }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: { status: body.status },
-      },
-    );
-
-    return { order: firstRow(rows) };
-  }),
-  route("GET", /^\/api\/grocery\/history$/, async ({ token, user }) => {
-    const storeRows = await restRequest(
-      token,
-      buildPath("/grocery_stores", { select: "id", manager_id: `eq.${user.id}` }),
-    );
-
-    const store = firstRow(storeRows);
-    if (!store) {
-      return { storeId: null, orders: [] };
-    }
-
-    const orders = await restRequest(
-      token,
-      buildPath("/grocery_orders", {
-        select:
-          "id,status,total,delivery_address,notes,created_at,grocery_order_items(id,name,quantity,price)",
-        store_id: `eq.${store.id}`,
-        order: "created_at.desc",
-        limit: "100",
-      }),
-    );
-
-    return { storeId: store.id, orders: orders ?? [] };
-  }),
-  route("GET", /^\/api\/delivery\/available$/, async ({ token }) => {
-    const [food, grocery] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/food_orders", {
-          select: "id,status,total,delivery_address,created_at,restaurants(name)",
-          delivery_boy_id: "is.null",
-          status: "in.(ready,preparing)",
-          order: "created_at.desc",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/grocery_orders", {
-          select: "id,status,total,delivery_address,created_at,grocery_stores(name)",
-          delivery_boy_id: "is.null",
-          status: "in.(ready,preparing)",
-          order: "created_at.desc",
-        }),
-      ),
-    ]);
-
-    return { food: food ?? [], grocery: grocery ?? [] };
-  }),
-  route("GET", /^\/api\/delivery\/active$/, async ({ token, user }) => {
-    const [food, grocery] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/food_orders", {
-          select:
-            "id,status,total,delivery_address,delivery_lat,delivery_lng,rider_lat,rider_lng,delivery_pin,customer_id,restaurants(name)",
-          delivery_boy_id: `eq.${user.id}`,
-          order: "created_at.desc",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/grocery_orders", {
-          select:
-            "id,status,total,delivery_address,delivery_lat,delivery_lng,rider_lat,rider_lng,delivery_pin,customer_id,grocery_stores(name)",
-          delivery_boy_id: `eq.${user.id}`,
-          order: "created_at.desc",
-        }),
-      ),
-    ]);
-
-    const customerIds = [
-      ...new Set(
-        [...(food ?? []), ...(grocery ?? [])].map((order) => order.customer_id).filter(Boolean),
-      ),
-    ];
-    let profileById = new Map();
-    if (customerIds.length > 0) {
-      const profiles = await restRequest(
-        token,
-        buildPath("/profiles", {
-          select: "id,full_name,phone",
-          id: `in.(${customerIds.join(",")})`,
-        }),
-      );
-      profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-    }
-
-    const attachCustomer = (order) => ({
-      ...normalizeDeliveryOrder(order),
-      customer: profileById.get(order.customer_id) ?? null,
-    });
-
-    return {
-      food: (food ?? []).map(attachCustomer),
-      grocery: (grocery ?? []).map(attachCustomer),
-    };
-  }),
-  route(
-    "POST",
-    /^\/api\/delivery\/(food|grocery)\/([^/]+)\/accept$/,
-    async ({ token, user, match }) => {
-      const kind = match[1];
-      const id = decodeURIComponent(match[2]);
-      const table = kind === "food" ? "food_orders" : "grocery_orders";
-      const rows = await restRequest(
-        token,
-        buildPath(`/${table}`, { id: `eq.${id}`, select: "*" }),
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: { delivery_boy_id: user.id },
-        },
-      );
-
-      const order = firstRow(rows);
-      if (!order) {
-        throw new HttpError(404, "Delivery not found or already assigned");
-      }
-
-      return { order: normalizeDeliveryOrder(order) };
-    },
-  ),
-  route(
-    "POST",
-    /^\/api\/delivery\/(food|grocery)\/([^/]+)\/advance$/,
-    async ({ token, match, body }) => {
-      const kind = match[1];
-      const id = decodeURIComponent(match[2]);
-      const table = kind === "food" ? "food_orders" : "grocery_orders";
-
-      const currentRows = await restRequest(
-        token,
-        buildPath(`/${table}`, { id: `eq.${id}`, select: "*", limit: "1" }),
-      );
-      const current = firstRow(currentRows);
-      if (!current) throw new HttpError(404, "Delivery not found or you are not assigned to it");
-
-      verifyStatusAdvance("delivery", current.status, body.status);
-
-      if (body.status === "delivered") {
-        verifyDeliveryPin(current, body.delivery_pin);
-      }
-
-      const payload = { status: body.status };
-      if (body.status === "delivered") {
-        payload.payment_status = "paid";
-      }
-
-      const rows = await restRequest(
-        token,
-        buildPath(`/${table}`, { id: `eq.${id}`, select: "*" }),
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: payload,
-        },
-      );
-
-      const order = firstRow(rows);
-      if (!order) {
-        throw new HttpError(404, "Delivery not found or you are not assigned to it");
-      }
-
-      return { order: normalizeDeliveryOrder(order) };
-    },
-  ),
-  route("GET", /^\/api\/delivery\/history$/, async ({ token, user }) => {
-    const [food, grocery] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/food_orders", {
-          select: "id,status,total,delivery_address,created_at,restaurants(name)",
-          delivery_boy_id: `eq.${user.id}`,
-          order: "created_at.desc",
-          limit: "100",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/grocery_orders", {
-          select: "id,status,total,delivery_address,created_at,grocery_stores(name)",
-          delivery_boy_id: `eq.${user.id}`,
-          order: "created_at.desc",
-          limit: "100",
-        }),
-      ),
-    ]);
-
-    return { food: food ?? [], grocery: grocery ?? [] };
-  }),
-  route("GET", /^\/api\/rider\/jobs$/, async ({ token, user }) => {
-    const [rides, packages] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/rides", {
-          select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,vehicle_type",
-          or: `(rider_id.is.null,rider_id.eq.${user.id})`,
-          status: "not.in.(completed,cancelled)",
-          order: "created_at.desc",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/package_deliveries", {
-          select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,package_size,receiver_name",
-          or: `(rider_id.is.null,rider_id.eq.${user.id})`,
-          status: "not.in.(completed,cancelled)",
-          order: "created_at.desc",
-        }),
-      ),
-    ]);
-
-    return { rides: rides ?? [], packages: packages ?? [] };
-  }),
-  route("GET", /^\/api\/rider\/active$/, async ({ token, user, url }) => {
-    const id = url.searchParams.get("id");
-    const kind = url.searchParams.get("kind");
-    const tables =
-      kind === "package"
-        ? ["package_deliveries"]
-        : kind === "ride"
-          ? ["rides"]
-          : ["rides", "package_deliveries"];
-
-    for (const table of tables) {
-      const rows = await restRequest(
-        token,
-        buildPath(
-          `/${table}`,
-          id
-            ? { select: "*", id: `eq.${id}`, order: "created_at.desc", limit: "1" }
-            : {
-                select: "*",
-                rider_id: `eq.${user.id}`,
-                status: "not.in.(completed,cancelled)",
-                order: "created_at.desc",
-                limit: "1",
-              },
-        ),
-      );
-
-      const job = firstRow(rows);
-      if (job) {
-        return { job, table };
-      }
-    }
-
-    return { job: null, table: "rides" };
-  }),
-  route("POST", /^\/api\/rider\/rides\/([^/]+)\/accept$/, async ({ token, user, match }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/rides", {
-        id: `eq.${id}`,
-        rider_id: "is.null",
-        select: "*",
-      }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: { rider_id: user.id, status: "accepted" },
-      },
-    );
-
-    return { ride: firstRow(rows) };
-  }),
-  route("POST", /^\/api\/rider\/packages\/([^/]+)\/accept$/, async ({ token, user, match }) => {
-    const id = decodeURIComponent(match[1]);
-    const rows = await restRequest(
-      token,
-      buildPath("/package_deliveries", {
-        id: `eq.${id}`,
-        rider_id: "is.null",
-        select: "*",
-      }),
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=representation" },
-        body: { rider_id: user.id, status: "accepted" },
-      },
-    );
-
-    return { packageDelivery: firstRow(rows) };
-  }),
-  route(
-    "POST",
-    /^\/api\/rider\/(rides|package_deliveries)\/([^/]+)\/advance$/,
-    async ({ token, match, body }) => {
-      const table = match[1];
-      const id = decodeURIComponent(match[2]);
-
-      const currentRows = await restRequest(
-        token,
-        buildPath(`/${table}`, { id: `eq.${id}`, select: "*", limit: "1" }),
-      );
-      const current = firstRow(currentRows);
-      if (!current) throw new HttpError(404, "Job not found");
-
-      verifyStatusAdvance(table === "rides" ? "ride" : "package", current.status, body.status);
-
-      if (body.status === "completed") {
-        verifyDeliveryPin(current, body.delivery_pin);
-      }
-
-      const rows = await restRequest(
-        token,
-        buildPath(`/${table}`, { id: `eq.${id}`, select: "*" }),
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: { status: body.status },
-        },
-      );
-
-      return { job: firstRow(rows) };
-    },
-  ),
-  route(
-    "POST",
-    /^\/api\/rider\/(rides|package_deliveries)\/([^/]+)\/cancel$/,
-    async ({ token, match }) => {
-      const table = match[1];
-      const id = decodeURIComponent(match[2]);
-      const rows = await restRequest(
-        token,
-        buildPath(`/${table}`, { id: `eq.${id}`, select: "*" }),
-        {
-          method: "PATCH",
-          headers: { Prefer: "return=representation" },
-          body: { status: "cancelled", rider_id: null },
-        },
-      );
-
-      return { job: firstRow(rows) };
-    },
-  ),
-  route("GET", /^\/api\/rider\/history$/, async ({ token, user }) => {
-    const [rides, packages] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/rides", {
-          select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,vehicle_type",
-          rider_id: `eq.${user.id}`,
-          order: "created_at.desc",
-          limit: "100",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/package_deliveries", {
-          select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,package_size,receiver_name",
-          rider_id: `eq.${user.id}`,
-          order: "created_at.desc",
-          limit: "100",
-        }),
-      ),
-    ]);
-
-    return { rides: rides ?? [], packages: packages ?? [] };
-  }),
-  route("GET", /^\/api\/admin\/commissions$/, async ({ token }) => ({
-    commissions: await getPlatformCommissions(token),
-  })),
-  route("PUT", /^\/api\/admin\/commissions$/, async ({ token, body }) => {
-    const value = {
-      restaurant: Number(body.restaurant ?? DEFAULT_COMMISSIONS.restaurant),
-      grocery: Number(body.grocery ?? DEFAULT_COMMISSIONS.grocery),
-      delivery: Number(body.delivery ?? DEFAULT_COMMISSIONS.delivery),
-    };
-    const saved = await savePlatformCommissions(token, value);
-    return { commissions: saved };
-  }),
-  route("GET", /^\/api\/admin\/catalog-settings$/, async ({ token }) => ({
-    radius_km: await getCatalogRadiusKm(token),
-    limits: {
-      min_km: MIN_CATALOG_RADIUS_KM,
-      max_km: MAX_CATALOG_RADIUS_KM,
-      default_km: DEFAULT_CATALOG_RADIUS_KM,
-    },
-  })),
-  route("PUT", /^\/api\/admin\/catalog-settings$/, async ({ token, body }) => {
-    const requested = Number(body?.radius_km);
-    if (!Number.isFinite(requested)) {
-      throw new HttpError(400, "radius_km must be a number");
-    }
-    if (requested < MIN_CATALOG_RADIUS_KM || requested > MAX_CATALOG_RADIUS_KM) {
-      throw new HttpError(
-        400,
-        `radius_km must be between ${MIN_CATALOG_RADIUS_KM} and ${MAX_CATALOG_RADIUS_KM}`,
-      );
-    }
-
-    const saved = await saveCatalogRadiusKm(token, requested);
-    return {
-      radius_km: saved,
-      limits: {
-        min_km: MIN_CATALOG_RADIUS_KM,
-        max_km: MAX_CATALOG_RADIUS_KM,
-        default_km: DEFAULT_CATALOG_RADIUS_KM,
-      },
-    };
-  }),
-  route("POST", /^\/api\/reviews$/, async ({ token, user, body }) => {
-    const allowed = ["food", "grocery", "ride", "package"];
-    const serviceKind = body.service_kind;
-    if (!allowed.includes(serviceKind)) {
-      throw new HttpError(400, "Invalid service kind for review");
-    }
-    const serviceId = requireText(body.service_id, "Service id", 80);
-    const rating = Number(body.rating);
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      throw new HttpError(400, "Rating must be between 1 and 5");
-    }
-
-    const rows = await restRequest(token, buildPath("/order_reviews", { select: "*" }), {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        user_id: user.id,
-        service_kind: serviceKind,
-        service_id: serviceId,
-        rating,
-        comment: sanitizeComment(body.comment),
-      },
-    });
-
-    return { review: firstRow(rows) };
-  }),
-  route("GET", /^\/api\/reviews\/([^/]+)\/([^/]+)$/, async ({ token, match }) => {
-    const serviceKind = match[1];
+  route("GET", /^\/api\/chat\/(ride|package|food|grocery)\/([^/]+)$/, async ({ user, match }) => {
+    const kind = match[1];
     const serviceId = decodeURIComponent(match[2]);
-    const rows = await restRequest(
-      token,
-      buildPath("/order_reviews", {
-        select: "id,rating,comment,created_at,user_id",
-        service_kind: `eq.${serviceKind}`,
-        service_id: `eq.${serviceId}`,
-        order: "created_at.desc",
-        limit: "20",
-      }),
-    );
-    return { reviews: rows ?? [] };
+    const context = await getChatContext(user, kind, serviceId);
+    const messages = await prisma.chatMessage.findMany({ where: { serviceKind: context.kind, serviceId }, orderBy: { createdAt: "asc" }, take: 100 });
+    return { messages: messages.map(m => ({ ...m, sender_id: m.senderId, created_at: m.createdAt })), participant: { customer_id: context.row.customer_id, partner_id: context.row[context.partnerColumn] || null } };
   }),
-  route("GET", /^\/api\/delivery\/earnings$/, async ({ token, user }) => {
-    const [food, grocery] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/food_orders", {
-          select: "id,total,status,created_at",
-          delivery_boy_id: `eq.${user.id}`,
-          status: "eq.delivered",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/grocery_orders", {
-          select: "id,total,status,created_at",
-          delivery_boy_id: `eq.${user.id}`,
-          status: "eq.delivered",
-        }),
-      ),
-    ]);
-    const orders = [...(food ?? []), ...(grocery ?? [])];
-    const todayStart = startOfLocalDay();
-    const monthStart = startOfLocalMonth();
-    const today = orders.filter((o) => isOnOrAfter(o.created_at, todayStart));
-    const month = orders.filter((o) => isOnOrAfter(o.created_at, monthStart));
-    const sum = (list) => list.reduce((acc, o) => acc + money(o.total), 0);
-
-    return {
-      todayEarnings: sum(today),
-      monthEarnings: sum(month),
-      totalDeliveries: orders.length,
-    };
+  route("POST", /^\/api\/chat\/(ride|package|food|grocery)\/([^/]+)$/, async ({ user, body, match }) => {
+    const kind = match[1];
+    const serviceId = decodeURIComponent(match[2]);
+    const context = await getChatContext(user, kind, serviceId);
+    const saved = await prisma.chatMessage.create({ data: { serviceKind: kind, serviceId, senderId: user.id, body: requireText(body.message, "Message", 1000) } });
+    void notifyChatRecipients({ senderId: user.id, context, kind, serviceId, messageBody: body.message });
+    return { message: { ...saved, sender_id: saved.senderId, created_at: saved.createdAt } };
   }),
-  route("GET", /^\/api\/rider\/earnings$/, async ({ token, user }) => {
-    const [rides, packages] = await Promise.all([
-      restRequest(
-        token,
-        buildPath("/rides", {
-          select: "id,fare_estimate,status,created_at",
-          rider_id: `eq.${user.id}`,
-          status: "eq.completed",
-        }),
-      ),
-      restRequest(
-        token,
-        buildPath("/package_deliveries", {
-          select: "id,fare_estimate,status,created_at",
-          rider_id: `eq.${user.id}`,
-          status: "eq.completed",
-        }),
-      ),
-    ]);
-    const jobs = [...(rides ?? []), ...(packages ?? [])];
-    const todayStart = startOfLocalDay();
-    const monthStart = startOfLocalMonth();
-    const today = jobs.filter((j) => isOnOrAfter(j.created_at, todayStart));
-    const month = jobs.filter((j) => isOnOrAfter(j.created_at, monthStart));
-    const sum = (list) => list.reduce((acc, j) => acc + money(j.fare_estimate), 0);
-
-    return {
-      todayEarnings: sum(today),
-      monthEarnings: sum(month),
-      totalJobs: jobs.length,
-    };
-  }),
-  route("GET", /^\/api\/grocery\/alerts$/, async ({ token, user }) => {
-    const storeRows = await restRequest(
-      token,
-      buildPath("/grocery_stores", { select: "id", manager_id: `eq.${user.id}` }),
-    );
-    const store = firstRow(storeRows);
-    if (!store) return { lowStock: [], expiringSoon: [] };
-
-    const items = await restRequest(
-      token,
-      buildPath("/grocery_items", {
-        select: "id,name,stock_quantity,low_stock_threshold,expiry_date,is_available",
-        store_id: `eq.${store.id}`,
-      }),
-    );
-
-    const today = new Date();
-    const weekAhead = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-    const lowStock = (items ?? []).filter((item) => {
-      const stock = Number(item.stock_quantity ?? 0);
-      const threshold = Number(item.low_stock_threshold ?? 5);
-      return item.is_available !== false && stock <= threshold;
+  route("POST", /^\/api\/rides$/, async ({ user, body }) => {
+    const ride = await prisma.ride.create({
+      data: {
+        customerId: user.id, pickupLat: body.pickup_lat, pickupLng: body.pickup_lng, pickupAddress: body.pickup_address,
+        dropLat: body.drop_lat, dropLng: body.drop_lng, dropAddress: body.drop_address, fareEstimate: body.fare_estimate,
+        vehicleType: body.vehicle_type, notes: body.notes, paymentMethod: body.payment_method || "cash",
+        deliveryPin: generateDeliveryPin(), estimatedArrivalAt: estimateDeliveryAt(5, { lat: body.pickup_lat, lng: body.pickup_lng }, { lat: body.drop_lat, lng: body.drop_lng }, distanceKm)
+      }
     });
-
-    const expiringSoon = (items ?? []).filter((item) => {
-      if (!item.expiry_date) return false;
-      const expiry = new Date(item.expiry_date);
-      return expiry >= today && expiry <= weekAhead;
+    return { ride };
+  }),
+  route("POST", /^\/api\/packages$/, async ({ user, body }) => {
+    const pkg = await prisma.packageDelivery.create({
+      data: {
+        customerId: user.id, pickupLat: body.pickup_lat, pickupLng: body.pickup_lng, pickupAddress: body.pickup_address,
+        dropLat: body.drop_lat, dropLng: body.drop_lng, dropAddress: body.drop_address, fareEstimate: body.fare_estimate,
+        packageSize: body.package_size, receiverName: body.receiver_name, receiverPhone: body.receiver_phone,
+        notes: body.notes, paymentMethod: body.payment_method || "cash", deliveryPin: generateDeliveryPin(),
+        estimatedDeliveryAt: estimateDeliveryAt(10, { lat: body.pickup_lat, lng: body.pickup_lng }, { lat: body.drop_lat, lng: body.drop_lng }, distanceKm)
+      }
     });
-
-    return { lowStock, expiringSoon };
+    return { packageDelivery: pkg };
+  }),
+  route("GET", /^\/api\/admin\/analytics$/, async ({ user }) => {
+    const roles = await getRoles(user.id);
+    if (!roles.includes("admin")) throw new HttpError(403, "Forbidden");
+    const [users, restaurants, stores, foodOrders, groceryOrders, rides, packages] = await Promise.all([
+      prisma.profile.count(), prisma.restaurant.count(), prisma.groceryStore.count(),
+      prisma.foodOrder.count(), prisma.groceryOrder.count(), prisma.ride.count(), prisma.packageDelivery.count()
+    ]);
+    return { users, restaurants, stores, foodOrders, groceryOrders, rides, packages };
+  }),
+  route("POST", /^\/api\/admin\/restaurants$/, async ({ user, body }) => {
+    const roles = await getRoles(user.id);
+    if (!roles.includes("admin")) throw new HttpError(403, "Forbidden");
+    const r = await prisma.restaurant.create({ data: body });
+    return { restaurant: r };
+  }),
+  route("PUT", /^\/api\/admin\/restaurants\/([^/]+)$/, async ({ user, match, body }) => {
+    const roles = await getRoles(user.id);
+    if (!roles.includes("admin")) throw new HttpError(403, "Forbidden");
+    const r = await prisma.restaurant.update({ where: { id: decodeURIComponent(match[1]) }, data: body });
+    return { restaurant: r };
+  }),
+  route("POST", /^\/api\/admin\/restaurants\/([^/]+)\/toggle$/, async ({ user, match, body }) => {
+    const roles = await getRoles(user.id);
+    if (!roles.includes("admin")) throw new HttpError(403, "Forbidden");
+    const r = await prisma.restaurant.update({ where: { id: decodeURIComponent(match[1]) }, data: { isOpen: !!body.is_open } });
+    return { restaurant: r };
+  }),
+  route("POST", /^\/api\/admin\/role-requests\/([^/]+)\/decide$/, async ({ user, match, body }) => {
+    const roles = await getRoles(user.id);
+    if (!roles.includes("admin")) throw new HttpError(403, "Forbidden");
+    const requestId = decodeURIComponent(match[1]);
+    const request = await prisma.roleRequest.findUnique({ where: { id: requestId } });
+    if (!request) throw new HttpError(404, "Not found");
+    if (body.decision === "approved") {
+      await prisma.userRole.upsert({ where: { userId_role: { userId: request.userId, role: request.requestedRole } }, update: {}, create: { userId: request.userId, role: request.requestedRole } });
+    }
+    const updated = await prisma.roleRequest.update({ where: { id: requestId }, data: { status: body.decision, reviewedBy: user.id, reviewedAt: new Date() } });
+    return { request: updated };
+  }),
+  route("GET", /^\/api\/hotel\/dashboard$/, async ({ user }) => {
+    const restaurant = await prisma.restaurant.findFirst({ where: { managerId: user.id } });
+    if (!restaurant) return { restaurant: null };
+    const stats = {
+      total: await prisma.foodOrder.count({ where: { restaurantId: restaurant.id } }),
+      pending: await prisma.foodOrder.count({ where: { restaurantId: restaurant.id, status: { in: ["pending", "accepted", "preparing"] } } }),
+      today: await prisma.foodOrder.count({ where: { restaurantId: restaurant.id, createdAt: { gte: startOfLocalDay() } } })
+    };
+    return { restaurant, stats };
+  }),
+  route("POST", /^\/api\/hotel\/orders\/([^/]+)\/advance$/, async ({ user, match, body }) => {
+    const restaurant = await prisma.restaurant.findFirst({ where: { managerId: user.id } });
+    const order = await prisma.foodOrder.update({ where: { id: decodeURIComponent(match[1]), restaurantId: restaurant.id }, data: { status: body.status } });
+    return { order };
+  }),
+  route("GET", /^\/api\/delivery\/available$/, async () => {
+    const food = await prisma.foodOrder.findMany({ where: { deliveryBoyId: null, status: { in: ["ready", "preparing"] } }, include: { restaurant: true } });
+    const grocery = await prisma.groceryOrder.findMany({ where: { deliveryBoyId: null, status: { in: ["ready", "preparing"] } }, include: { store: true } });
+    return { food, grocery };
+  }),
+  route("POST", /^\/api\/delivery\/(food|grocery)\/([^/]+)\/accept$/, async ({ user, match }) => {
+    const modelName = match[1] === "food" ? "foodOrder" : "groceryOrder";
+    const order = await prisma[modelName].update({ where: { id: decodeURIComponent(match[2]), deliveryBoyId: null }, data: { deliveryBoyId: user.id, status: "accepted" } });
+    return { order };
+  }),
+  route("POST", /^\/api\/delivery\/(food|grocery)\/([^/]+)\/advance$/, async ({ user, match, body }) => {
+    const modelName = match[1] === "food" ? "foodOrder" : "groceryOrder";
+    const order = await prisma[modelName].update({ where: { id: decodeURIComponent(match[2]), deliveryBoyId: user.id }, data: { status: body.status, paymentStatus: body.status === "delivered" ? "paid" : undefined } });
+    return { order };
+  }),
+  route("GET", /^\/api\/rider\/jobs$/, async ({ user }) => {
+    const rides = await prisma.ride.findMany({ where: { OR: [{ riderId: null }, { riderId: user.id }], NOT: { status: { in: ["completed", "cancelled"] } } } });
+    const packages = await prisma.packageDelivery.findMany({ where: { OR: [{ riderId: null }, { riderId: user.id }], NOT: { status: { in: ["completed", "cancelled"] } } } });
+    return { rides, packages };
+  }),
+  route("POST", /^\/api\/rider\/(rides|package_deliveries)\/([^/]+)\/accept$/, async ({ user, match }) => {
+    const modelName = match[1] === "rides" ? "ride" : "packageDelivery";
+    const job = await prisma[modelName].update({ where: { id: decodeURIComponent(match[2]), riderId: null }, data: { riderId: user.id, status: "accepted" } });
+    return { job };
+  }),
+  route("POST", /^\/api\/rider\/(rides|package_deliveries)\/([^/]+)\/advance$/, async ({ user, match, body }) => {
+    const modelName = match[1] === "rides" ? "ride" : "packageDelivery";
+    const job = await prisma[modelName].update({ where: { id: decodeURIComponent(match[2]), riderId: user.id }, data: { status: body.status } });
+    return { job };
+  }),
+  route("GET", /^\/api\/admin\/commissions$/, async () => ({ commissions: await getPlatformCommissions() })),
+  route("PUT", /^\/api\/admin\/commissions$/, async ({ body }) => ({ commissions: await savePlatformCommissions(body) })),
+  route("POST", /^\/api\/reviews$/, async ({ user, body }) => {
+    const review = await prisma.orderReview.create({ data: { userId: user.id, serviceKind: body.service_kind, serviceId: body.service_id, rating: body.rating, comment: sanitizeComment(body.comment) } });
+    return { review };
+  }),
+  route("GET", /^\/api\/reviews\/([^/]+)\/([^/]+)$/, async ({ match }) => {
+    const reviews = await prisma.orderReview.findMany({ where: { serviceKind: match[1], serviceId: decodeURIComponent(match[2]) }, orderBy: { createdAt: "desc" }, take: 20 });
+    return { reviews };
   }),
 ];
-
 async function matchApiRoute(req, url) {
   for (const entry of routes) {
     if (entry.method !== req.method) continue;

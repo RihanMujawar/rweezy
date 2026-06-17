@@ -20,6 +20,7 @@ export function normalizeIndianPhone(value) {
 export function isPublicApiRoute(method, pathname) {
   return (
     pathname === "/api/health" ||
+    pathname.startsWith("/api/catalog/") ||
     (method === "POST" && pathname === "/api/auth/login") ||
     (method === "POST" && pathname === "/api/auth/register") ||
     (method === "POST" && pathname === "/api/auth/phone/send-otp") ||
