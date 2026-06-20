@@ -139,10 +139,14 @@
   }
 
   body {
-    background-color: transparent;
+    background: radial-gradient(circle at 50% 50%, oklch(0.99 0.003 240), oklch(0.96 0.008 240));
     color: var(--color-foreground);
     min-height: 100vh;
     font-family: 'Outfit', 'Inter', sans-serif;
+  }
+
+  .dark body {
+    background: radial-gradient(circle at 50% 50%, oklch(0.15 0.02 240), oklch(0.1 0.03 240));
   }
 }
 
@@ -247,63 +251,6 @@ header {
 }
 
 /* Animations & Keyframes */
-@keyframes liquid-drift-1 {
-  0%, 100% {
-    transform: translate(0, 0) scale(1) rotate(0deg);
-  }
-  33% {
-    transform: translate(12vw, 8vh) scale(1.2) rotate(120deg);
-  }
-  66% {
-    transform: translate(-6vw, 15vh) scale(0.85) rotate(240deg);
-  }
-}
-
-@keyframes liquid-drift-2 {
-  0%, 100% {
-    transform: translate(0, 0) scale(1) rotate(0deg);
-  }
-  25% {
-    transform: translate(-10vw, -10vh) scale(0.9) rotate(-90deg);
-  }
-  75% {
-    transform: translate(8vw, 12vh) scale(1.15) rotate(180deg);
-  }
-}
-
-@keyframes liquid-drift-3 {
-  0%, 100% {
-    transform: translate(0, 0) scale(1) rotate(0deg);
-  }
-  50% {
-    transform: translate(14vw, -12vh) scale(1.25) rotate(180deg);
-  }
-}
-
-@keyframes liquid-drift-4 {
-  0%, 100% {
-    transform: translate(0, 0) scale(1) rotate(0deg);
-  }
-  40% {
-    transform: translate(-12vw, 10vh) scale(0.8) rotate(90deg);
-  }
-  80% {
-    transform: translate(6vw, -8vh) scale(1.1) rotate(-180deg);
-  }
-}
-
-.animate-liquid-1 {
-  animation: liquid-drift-1 28s infinite alternate ease-in-out;
-}
-.animate-liquid-2 {
-  animation: liquid-drift-2 32s infinite alternate ease-in-out;
-}
-.animate-liquid-3 {
-  animation: liquid-drift-3 26s infinite alternate ease-in-out;
-}
-.animate-liquid-4 {
-  animation: liquid-drift-4 24s infinite alternate ease-in-out;
-}
 
 /* Page fade entrance */
 @keyframes fadeInUp {

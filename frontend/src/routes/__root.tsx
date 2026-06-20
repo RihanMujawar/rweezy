@@ -1,7 +1,6 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "@/components/ui/sonner";
-import { LiquidBackground } from "@/components/liquid-background";
 import { SystemThemeSync } from "@/components/system-theme-sync";
 import { AndroidAppDownloadPrompt } from "@/components/android-app-download-prompt";
 
@@ -81,7 +80,6 @@ function RootComponent() {
     <AuthProvider>
       <SystemThemeSync />
       <AndroidAppDownloadPrompt />
-      <LiquidBackground />
       <Outlet />
       <Toaster richColors position="top-right" />
     </AuthProvider>

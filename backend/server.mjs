@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import http from "node:http";
+import serverless from "serverless-http";
 import { fileURLToPath } from "node:url";
 import { ROOT_DIR, env } from "./lib/env.mjs";
 import {
@@ -3767,7 +3768,7 @@ async function serveFrontend(req, res, url) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+async function mainHandler(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
 
   try {
@@ -3780,6 +3781,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/")) {
       await handleApi(req, res, url);
       return;
+    }
+
+    if (process.env.LAMBDA_TASK_ROOT) {
+       throw new HttpError(404, "Not Found");
     }
 
     await serveFrontend(req, res, url);
@@ -3798,8 +3803,14 @@ const server = http.createServer(async (req, res) => {
 
     sendJson(res, status, { error: message, requestId }, headers);
   }
-});
+}
 
-server.listen(env.port, env.host, () => {
-  console.log(`Backend listening on http://${env.host}:${env.port}`);
-});
+const server = http.createServer(mainHandler);
+
+export const handler = serverless(server);
+
+if (!process.env.LAMBDA_TASK_ROOT) {
+  server.listen(env.port, env.host, () => {
+    console.log(`Backend listening on http://${env.host}:${env.port}`);
+  });
+}
