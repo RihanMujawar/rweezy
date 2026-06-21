@@ -17,18 +17,17 @@ test("loginPhonePasswordSchema rejects invalid phone", () => {
   assert.equal(result.success, false);
 });
 
-test("passwordResetRequestSchema rejects invalid email", () => {
-  const result = passwordResetRequestSchema.safeParse({ email: "bad" });
+test("passwordResetRequestSchema rejects invalid phone", () => {
+  const result = passwordResetRequestSchema.safeParse({ phone: "bad" });
   assert.equal(result.success, false);
 });
 
 test("passwordResetCompleteSchema requires matching passwords", () => {
   const result = passwordResetCompleteSchema.safeParse({
-    email: "demo@rweezy.test",
     phone: "+919876543210",
     password: "secret1",
     confirmPassword: "other",
-    emailOtp: "123456",
+    phoneVerificationToken: "token",
   });
   assert.equal(result.success, false);
 });

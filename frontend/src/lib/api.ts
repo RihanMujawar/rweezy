@@ -77,7 +77,7 @@ export const api = {
         method: "POST",
         body: payload,
       }),
-    requestPasswordReset: (payload: { email: string }) =>
+    requestPasswordReset: (payload: { phone: string }) =>
       apiRequest<{ ok: true; message: string; phoneHint?: string | null }>(
         "/api/auth/password-reset/request",
         {
@@ -86,10 +86,8 @@ export const api = {
         },
       ),
     completePasswordReset: (payload: {
-      email: string;
       phone: string;
       phone_verification_token: string;
-      email_otp: string;
       password: string;
     }) =>
       apiRequest<{
@@ -103,7 +101,7 @@ export const api = {
       }),
     register: (payload: {
       full_name: string;
-      email: string;
+      email?: string;
       phone: string;
       password: string;
       phone_verification_token: string;
@@ -127,6 +125,14 @@ export const api = {
     getMe: () =>
       apiRequest<{ user: { id: string; email?: string | null } | null; roles: string[] }>(
         "/api/auth/me",
+      ),
+    loginWithFirebaseGoogle: (payload: { id_token: string }) =>
+      apiRequest<{ user: { id: string; email?: string | null }; roles: string[] }>(
+        "/api/auth/firebase-google",
+        {
+          method: "POST",
+          body: payload,
+        },
       ),
   },
 

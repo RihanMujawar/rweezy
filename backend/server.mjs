@@ -19,6 +19,7 @@ import {
   createConfirmedUserWithPassword,
   createSessionForEmail,
   findUserByEmail,
+  findUserByPhone,
   findUserEmailByPhone,
   getUserFromToken,
   refreshAuthSession,
@@ -43,6 +44,7 @@ import {
   sendPhoneVerificationCode,
   verifyPhoneVerificationCode,
 } from "./lib/twilio.mjs";
+import { verifyFirebaseToken } from "./lib/firebase-admin.mjs";
 import {
   assertStatusAdvance,
   estimateDeliveryAt,
@@ -485,14 +487,14 @@ function requireNumber(value, label) {
 }
 
 function validateRegistration(body) {
-  const email = requireText(body.email, "Email", 320).toLowerCase();
+  const email = cleanText(body.email)?.toLowerCase();
   const fullName = requireText(body.full_name, "Full name", 120);
   const password = typeof body.password === "string" ? body.password : "";
   if (password.length < 8) throw new HttpError(400, "Password must be at least 8 characters");
   if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
     throw new HttpError(400, "Password must include at least one letter and one number");
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Enter a valid email");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Enter a valid email");
 
   const phone = normalizeIndianPhone(body.phone);
   if (!/^\+\d{10,15}$/.test(phone)) {
@@ -662,26 +664,9 @@ async function resolveAccountForPasswordReset(email) {
   };
 }
 
-async function resolveEmailForPhone(phone) {
-  let foundEmail = null;
 
-  try {
-    const rows = await serviceRoleRestRequest("/rpc/email_for_phone_login", {
-      method: "POST",
-      body: { lookup_phone: phone },
-    });
-    foundEmail = typeof rows === "string" ? rows : null;
-  } catch (error) {
-    if (!(error instanceof HttpError) || error.status !== 404) {
-      throw error;
-    }
-  }
-
-  if (!foundEmail) {
-    foundEmail = await findUserEmailByPhone(phone);
-  }
-
-  return foundEmail;
+async function resolveUserForPhone(phone) {
+  return findUserByPhone(phone);
 }
 
 async function assertPhoneAvailable(phone) {
@@ -715,14 +700,14 @@ async function completeUserRegistration({
   roleMessage,
 }) {
   verifyPhoneVerificationToken(phoneVerificationToken, phone);
-  await assertEmailAvailable(email);
+  if (email) await assertEmailAvailable(email);
   await assertPhoneAvailable(phone);
 
   const role = "customer";
   let createdUserId = null;
-  let emailVerificationRequired = env.authRequireEmailVerification;
+  let emailVerificationRequired = email ? env.authRequireEmailVerification : false;
 
-  if (env.authRequireEmailVerification) {
+  if (emailVerificationRequired) {
     const signup = await signUpWithPassword(email, password, fullName, {
       role,
       phone,
@@ -789,7 +774,7 @@ async function completeUserRegistration({
 
   if (emailVerificationRequired) {
     return {
-      user: { id: createdUserId, email },
+      user: { id: createdUserId, email: email || null },
       roles: [role],
       authenticated: false,
       emailVerificationRequired: true,
@@ -798,7 +783,7 @@ async function completeUserRegistration({
     };
   }
 
-  const session = await signInWithPassword({ email }, password);
+  const session = await signInWithPassword(email ? { email } : { phone }, password);
   const normalized = normalizeAuthSession(session);
   const roles =
     normalized.accessToken && normalized.user
@@ -1024,8 +1009,8 @@ const routes = [
 
     const purpose = normalizeAuthPurpose(cleanText(body.purpose));
     if (purpose === "login") {
-      const email = await resolveEmailForPhone(phone);
-      if (!email) {
+      const user = await findUserByPhone(phone);
+      if (!user) {
         throw new HttpError(404, "No account found for this phone number");
       }
     } else if (purpose === "reset_password") {
@@ -1074,12 +1059,16 @@ const routes = [
       };
     }
 
-    const email = await resolveEmailForPhone(phone);
-    if (!email) {
+    const user = await findUserByPhone(phone);
+    if (!user) {
       throw new HttpError(404, "No account found for this phone number");
     }
 
-    const session = await createSessionForEmail(email);
+    if (!user.email) {
+      throw new HttpError(400, "This account does not have an email address for passwordless sign-in. Please use your password.");
+    }
+
+    const session = await createSessionForEmail(user.email);
     const normalized = normalizeAuthSession(session);
     if (!normalized.user) {
       throw new HttpError(401, "Unable to sign in with this phone number");
@@ -1098,57 +1087,49 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/password-reset\/request$/, async ({ body }) => {
-    const email = cleanText(body.email)?.toLowerCase();
-    if (!email) {
-      throw new HttpError(400, "Email is required");
+    const phone = normalizeIndianPhone(body.phone);
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+      throw new HttpError(400, "Enter a valid phone number with country code");
     }
 
-    const account = await resolveAccountForPasswordReset(email);
-    if (account) {
-      await sendPasswordResetEmailOtp(account.email);
+    const user = await findUserByPhone(phone);
+    if (!user) {
+      throw new HttpError(404, "No account found for this phone number");
     }
+
+    await sendPhoneVerificationCode(phone);
 
     return {
       ok: true,
-      message:
-        "If an account exists for this email, we sent a 6-digit reset code. Check your inbox and spam folder.",
-      phoneHint: account?.phone ? maskPhoneHint(account.phone) : null,
+      message: "Verification code sent to your phone",
     };
   }),
   route("POST", /^\/api\/auth\/password-reset\/complete$/, async ({ body }) => {
-    const email = cleanText(body.email)?.toLowerCase();
-    const emailOtp = cleanText(body.email_otp);
     const phone = normalizeIndianPhone(body.phone);
     const phoneVerificationToken = cleanText(body.phone_verification_token);
     const password = typeof body.password === "string" ? body.password : "";
 
-    if (!email) {
-      throw new HttpError(400, "Email is required");
-    }
-    if (!/^\d{6}$/.test(emailOtp)) {
-      throw new HttpError(400, "Enter the 6-digit email OTP");
-    }
     if (!phone || !/^\+\d{10,15}$/.test(phone)) {
       throw new HttpError(400, "Enter a valid phone number with country code");
     }
-    if (password.length < 6) {
-      throw new HttpError(400, "Password must be at least 6 characters");
+    if (password.length < 8) {
+      throw new HttpError(400, "Password must be at least 8 characters");
     }
-
-    const account = await resolveAccountForPasswordReset(email);
-    if (!account?.phone) {
-      throw new HttpError(400, "Unable to reset password for this account");
-    }
-    if (account.phone !== phone) {
-      throw new HttpError(400, "Phone number does not match this account");
+    if (!phoneVerificationToken) {
+      throw new HttpError(400, "Phone verification is required");
     }
 
     verifyPhoneVerificationToken(phoneVerificationToken, phone);
-    verifyPasswordResetEmailOtp(email, emailOtp);
 
-    await updateUserPassword(account.userId, password);
+    const user = await findUserByPhone(phone);
+    if (!user) throw new HttpError(404, "Account not found");
 
-    const session = await createSessionForEmail(account.email);
+    await updateUserPassword(user.id, password);
+
+    // Password reset complete, now sign the user in.
+    // signInWithPassword works for both phone (via user metadata or auth phone) and email.
+    const identifier = user.email ? { email: user.email } : { phone };
+    const session = await signInWithPassword(identifier, password);
     const normalized = normalizeAuthSession(session);
     if (!normalized.accessToken || !normalized.user?.id) {
       throw new HttpError(500, "Password updated, but sign-in session could not be created");
@@ -1180,18 +1161,21 @@ const routes = [
   route("POST", /^\/api\/auth\/login$/, async ({ body }) => {
     const email = cleanText(body.email);
     const phone = normalizeIndianPhone(body.phone);
-    let identifier = { email };
+    let identifier = email ? { email } : { phone };
 
-    if (phone) {
-      const resolvedEmail = await resolveEmailForPhone(phone);
-      if (!resolvedEmail) {
+    if (phone && !email) {
+      const user = await resolveUserForPhone(phone);
+      if (!user) {
         throw new HttpError(404, "No account found for this phone number");
       }
-      identifier = { email: resolvedEmail };
+      // If user has email but we only have phone, we use the resolved email for better compatibility.
+      if (user.email) {
+        identifier = { email: user.email };
+      }
     }
 
-    if (!identifier.email) {
-      throw new HttpError(400, "Phone number is required");
+    if (!identifier.email && !identifier.phone) {
+      throw new HttpError(400, "Email or phone number is required");
     }
 
     let session;
@@ -1239,6 +1223,66 @@ const routes = [
       businessName: body.business_name,
       roleMessage: body.role_message,
     });
+  }),
+  route("POST", /^\/api\/auth\/firebase-google$/, async ({ body }) => {
+    const idToken = cleanText(body.id_token);
+    if (!idToken) throw new HttpError(400, "Firebase ID token is required");
+
+    let decoded;
+    try {
+      decoded = await verifyFirebaseToken(idToken);
+    } catch (error) {
+      throw new HttpError(401, `Invalid Firebase token: ${error.message}`);
+    }
+
+    const email = decoded.email?.toLowerCase();
+    if (!email) throw new HttpError(400, "Google account must have an email address");
+
+    let user = await findUserByEmail(email);
+    let session;
+
+    if (!user) {
+      // Auto-register new Google users
+      user = await createConfirmedUserWithPassword(email, crypto.randomUUID(), decoded.name || "Google User", {
+        role: "customer",
+        provider: "google",
+      });
+
+      const userId = user?.id ?? user?.user?.id;
+      if (userId) {
+        await serviceRoleRestRequest(buildPath("/profiles", { on_conflict: "id" }), {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates" },
+          body: {
+            id: userId,
+            full_name: decoded.name || "Google User",
+          },
+        });
+
+        await serviceRoleRestRequest(buildPath("/user_roles", { on_conflict: "user_id,role" }), {
+          method: "POST",
+          headers: { Prefer: "resolution=ignore-duplicates" },
+          body: {
+            user_id: userId,
+            role: "customer",
+          },
+        });
+      }
+    }
+
+    session = await createSessionForEmail(email);
+    const normalized = normalizeAuthSession(session);
+    const roles = normalized.accessToken
+      ? await getRoles(normalized.accessToken, normalized.user.id)
+      : ["customer"];
+
+    return {
+      user: normalized.user,
+      roles,
+      __responseHeaders: {
+        "Set-Cookie": buildSessionCookies(session),
+      },
+    };
   }),
   route("POST", /^\/api\/auth\/logout$/, async ({ req }) => {
     const bearerToken = getBearerToken(req);

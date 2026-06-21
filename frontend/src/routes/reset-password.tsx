@@ -11,8 +11,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 const resetSearchSchema = z.object({
-  email: z.string().email().optional(),
-  phoneHint: z.string().optional(),
+  phone: z.string().optional(),
 });
 
 export const Route = createFileRoute("/reset-password")({
@@ -24,56 +23,38 @@ function ResetPasswordPage() {
   const navigate = useNavigate();
   const { refreshAuth } = useAuth();
   const search = Route.useSearch();
-  const [email, setEmail] = useState(search.email ?? "");
-  const [phoneSuffix, setPhoneSuffix] = useState("");
-  const [emailOtp, setEmailOtp] = useState("");
+  const [phoneSuffix, setPhoneSuffix] = useState(
+    search.phone?.startsWith("+91") ? search.phone.slice(3) : "",
+  );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [phoneVerificationToken, setPhoneVerificationToken] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
 
   const fullPhone = phoneSuffix ? `+91${phoneSuffix.replace(/\D/g, "").slice(0, 10)}` : "";
-  const phoneHint = search.phoneHint;
 
   useEffect(() => {
     setPhoneVerificationToken("");
-  }, [fullPhone, email]);
+  }, [fullPhone]);
 
   const validationPayload = useMemo(
     () => ({
-      email,
       phone: fullPhone,
       password,
       confirmPassword,
-      emailOtp,
+      phoneVerificationToken,
     }),
-    [confirmPassword, email, emailOtp, fullPhone, password],
+    [confirmPassword, fullPhone, password, phoneVerificationToken],
   );
 
   useEffect(() => {
-    const hasStarted = Object.values(validationPayload).some((value) => Boolean(value));
+    const hasStarted =
+      phoneSuffix || password || confirmPassword || phoneVerificationToken;
     if (!hasStarted) return;
     const parsed = passwordResetCompleteSchema.safeParse(validationPayload);
     setErrors(parsed.success ? {} : fieldErrors(parsed.error));
-  }, [validationPayload]);
-
-  const resendResetEmail = async () => {
-    if (!email.trim()) {
-      toast.error("Enter your email first");
-      return;
-    }
-    setResending(true);
-    try {
-      const result = await api.auth.requestPasswordReset({ email: email.trim().toLowerCase() });
-      toast.success(result.message);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to resend email code");
-    } finally {
-      setResending(false);
-    }
-  };
+  }, [validationPayload, phoneSuffix]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -85,18 +66,11 @@ function ResetPasswordPage() {
       return;
     }
 
-    if (!phoneVerificationToken) {
-      toast.error("Verify your phone number with the OTP code before setting a new password");
-      return;
-    }
-
     setLoading(true);
     try {
       const result = await api.auth.completePasswordReset({
-        email: parsed.data.email.toLowerCase(),
         phone: parsed.data.phone,
         phone_verification_token: phoneVerificationToken,
-        email_otp: parsed.data.emailOtp,
         password: parsed.data.password,
       });
       await refreshAuth();
@@ -120,49 +94,10 @@ function ResetPasswordPage() {
         </Link>
         <h1 className="mt-6 text-2xl font-bold tracking-tight">Choose a new password</h1>
         <p className="text-sm text-muted-foreground">
-          Enter the code from your email, then verify the phone number on your account.
-          {phoneHint ? ` Registered number ends with ${phoneHint}.` : null}
+          Verify your phone number with the OTP code, then choose your new password.
         </p>
 
         <form onSubmit={(event) => void handleSubmit(event)} className="mt-6 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="reset-email">Email</Label>
-            <Input
-              id="reset-email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              aria-invalid={Boolean(errors.email)}
-            />
-            {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email-otp">Email OTP</Label>
-            <Input
-              id="email-otp"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="123456"
-              value={emailOtp}
-              onChange={(event) => setEmailOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
-              aria-invalid={Boolean(errors.emailOtp)}
-            />
-            {errors.emailOtp && <p className="text-xs text-destructive">{errors.emailOtp}</p>}
-          </div>
-
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full text-xs"
-            disabled={resending || !email.trim()}
-            onClick={resendResetEmail}
-          >
-            {resending ? "Sending..." : "Resend email code"}
-          </Button>
-
           <div className="space-y-2">
             <Label htmlFor="reset-phone">Phone number</Label>
             <div className="flex gap-2">
@@ -191,9 +126,8 @@ function ResetPasswordPage() {
           <PhoneOtpVerification
             phone={fullPhone}
             purpose="reset_password"
-            email={email.trim().toLowerCase()}
             onVerified={setPhoneVerificationToken}
-            disabled={phoneSuffix.length !== 10 || !email.trim()}
+            disabled={phoneSuffix.length !== 10}
           />
 
           <div className="space-y-2">
@@ -229,7 +163,7 @@ function ResetPasswordPage() {
           <Button
             type="submit"
             className="w-full"
-            disabled={loading || emailOtp.length !== 6 || !phoneVerificationToken}
+            disabled={loading || !phoneVerificationToken}
           >
             {loading ? "Updating..." : "Update password"}
           </Button>

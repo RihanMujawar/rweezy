@@ -15,19 +15,15 @@ export const loginPhoneSchema = z.object({
 });
 
 export const passwordResetRequestSchema = z.object({
-  email: z.string().trim().email("Enter a valid email"),
+  phone: phoneSchema,
 });
 
 export const passwordResetCompleteSchema = z
   .object({
-    email: z.string().trim().email("Enter a valid email"),
     phone: phoneSchema,
     password: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string().min(6, "Confirm your password"),
-    emailOtp: z
-      .string()
-      .trim()
-      .regex(/^\d{6}$/, "Enter the 6-digit code sent to your email"),
+    phoneVerificationToken: z.string().min(1, "Phone verification is required"),
   })
   .refine((data) => data.password === data.confirmPassword, {
     path: ["confirmPassword"],
@@ -45,7 +41,7 @@ export const phoneOtpCodeSchema = z.object({
 export const registerSchema = z
   .object({
     fullName: z.string().trim().min(2, "Enter your full name").max(120),
-    email: z.string().trim().email("Enter a valid email"),
+    email: z.string().trim().email("Enter a valid email").optional().or(z.literal("")),
     phone: phoneSchema,
     password: z
       .string()

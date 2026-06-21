@@ -156,17 +156,12 @@ export async function sendPasswordResetEmailOtp(email) {
     throw new HttpError(400, "Email is required");
   }
 
-  const code = env.emailOtpDevBypass ? env.emailOtpDevBypassCode : generateCode();
+  const code = generateCode();
   emailOtpStore.set(normalizedEmail, {
     hash: hashOtp(normalizedEmail, code),
     expiresAt: Date.now() + OTP_TTL_MS,
     attempts: 0,
   });
-
-  if (env.emailOtpDevBypass) {
-    console.warn(`Password reset email OTP for ${normalizedEmail}: ${code}`);
-    return;
-  }
 
   await sendSmtpMail({
     to: normalizedEmail,

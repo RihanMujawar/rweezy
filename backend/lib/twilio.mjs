@@ -34,7 +34,6 @@ async function twilioVerifyRequest(path, body) {
 }
 
 export function assertTwilioConfigured() {
-  if (env.twilioDevBypass) return;
   if (!twilioConfigured()) {
     throw new HttpError(
       500,
@@ -44,10 +43,6 @@ export function assertTwilioConfigured() {
 }
 
 export async function sendPhoneVerificationCode(phone) {
-  if (env.twilioDevBypass) {
-    return { sid: "dev-bypass", status: "pending", to: phone };
-  }
-
   assertTwilioConfigured();
   return twilioVerifyRequest(`/Services/${env.twilioVerifyServiceSid}/Verifications`, {
     To: phone,
@@ -56,13 +51,6 @@ export async function sendPhoneVerificationCode(phone) {
 }
 
 export async function verifyPhoneVerificationCode(phone, code) {
-  if (env.twilioDevBypass) {
-    if (String(code).trim() !== env.twilioDevBypassCode) {
-      throw new HttpError(401, "Invalid verification code");
-    }
-    return { sid: "dev-bypass", status: "approved", to: phone };
-  }
-
   assertTwilioConfigured();
   const payload = await twilioVerifyRequest(
     `/Services/${env.twilioVerifyServiceSid}/VerificationCheck`,

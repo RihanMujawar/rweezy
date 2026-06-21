@@ -13,19 +13,21 @@ export const Route = createFileRoute("/forgot-password")({
 
 function ForgotPasswordPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
+  const fullPhone = phone ? `+91${phone}` : "";
+
   useEffect(() => {
-    if (!email) return;
-    const parsed = passwordResetRequestSchema.safeParse({ email });
+    if (!phone) return;
+    const parsed = passwordResetRequestSchema.safeParse({ phone: fullPhone });
     setErrors(parsed.success ? {} : fieldErrors(parsed.error));
-  }, [email]);
+  }, [fullPhone, phone]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const parsed = passwordResetRequestSchema.safeParse({ email });
+    const parsed = passwordResetRequestSchema.safeParse({ phone: fullPhone });
     if (!parsed.success) {
       const nextErrors = fieldErrors(parsed.error);
       setErrors(nextErrors);
@@ -36,14 +38,13 @@ function ForgotPasswordPage() {
     setLoading(true);
     try {
       const result = await api.auth.requestPasswordReset({
-        email: parsed.data.email.toLowerCase(),
+        phone: parsed.data.phone,
       });
       toast.success(result.message);
       navigate({
         to: "/reset-password",
         search: {
-          email: parsed.data.email.toLowerCase(),
-          phoneHint: result.phoneHint ?? undefined,
+          phone: parsed.data.phone,
         },
       });
     } catch (error) {
@@ -64,26 +65,36 @@ function ForgotPasswordPage() {
         </Link>
         <h1 className="mt-6 text-2xl font-bold tracking-tight">Reset your password</h1>
         <p className="text-sm text-muted-foreground">
-          Enter the email on your account. We&apos;ll send a reset code and you&apos;ll confirm your
-          phone number on the next step.
+          Enter your registered phone number. We&apos;ll send a verification code to your phone.
         </p>
 
         <form onSubmit={(event) => void handleSubmit(event)} className="mt-6 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              aria-invalid={Boolean(errors.email)}
-            />
-            {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+            <Label htmlFor="phone">Phone number</Label>
+            <div className="flex gap-2">
+              <div className="flex items-center justify-center rounded-md border bg-muted px-3 text-sm font-medium">
+                +91
+              </div>
+              <Input
+                id="phone"
+                name="tel"
+                type="tel"
+                pattern="[0-9]{10}"
+                placeholder="9876543210"
+                required
+                value={phone}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                  setPhone(val);
+                }}
+                className="flex-1"
+                aria-invalid={Boolean(errors.phone)}
+              />
+            </div>
+            {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Sending..." : "Send email code"}
+          <Button type="submit" className="w-full" disabled={loading || phone.length !== 10}>
+            {loading ? "Sending..." : "Send OTP"}
           </Button>
         </form>
 
