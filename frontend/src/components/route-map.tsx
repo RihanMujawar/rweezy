@@ -69,6 +69,7 @@ function MapboxShell({
   lines?: MapLine[];
   height: number;
   onClick?: (point: LatLng) => void;
+  onMarkerClick?: (id: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -82,9 +83,15 @@ function MapboxShell({
     [center.lat, center.lng],
   );
 
+  const onMarkerClickRef = useRef(onMarkerClick);
+
   useEffect(() => {
     onClickRef.current = onClick;
   }, [onClick]);
+
+  useEffect(() => {
+    onMarkerClickRef.current = onMarkerClick;
+  }, [onMarkerClick]);
 
   useEffect(() => {
     if (!MAPBOX_TOKEN || !containerRef.current || mapRef.current) return;
@@ -139,11 +146,16 @@ function MapboxShell({
     if (!map || !mapbox || !mapReady) return;
 
     markerRefs.current.forEach((marker) => marker.remove());
-    markerRefs.current = markers.map((marker) =>
-      new mapbox.Marker({ element: markerElement(marker.kind), anchor: "center" })
+    markerRefs.current = markers.map((marker) => {
+      const el = markerElement(marker.kind);
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onMarkerClickRef.current?.(marker.id);
+      });
+      return new mapbox.Marker({ element: el, anchor: "center" })
         .setLngLat(coords(marker.point))
-        .addTo(map),
-    );
+        .addTo(map);
+    });
 
     const renderLines = () => {
       for (const line of lines) {
@@ -542,10 +554,30 @@ export function DeliveryPinMap({
   );
 }
 
-export function StaticPointMap({ point, height = 240 }: { point: LatLng; height?: number }) {
-  const markers = useMemo<MapMarker[]>(() => [{ id: "delivery", point, kind: "drop" }], [point]);
+export function StaticPointMap({
+  point,
+  height = 240,
+  markers: externalMarkers,
+  onMarkerClick,
+}: {
+  point: LatLng;
+  height?: number;
+  markers?: MapMarker[];
+  onMarkerClick?: (id: string) => void;
+}) {
+  const markers = useMemo<MapMarker[]>(
+    () => externalMarkers ?? [{ id: "delivery", point, kind: "drop" }],
+    [point, externalMarkers],
+  );
 
-  return <MapboxShell center={point} markers={markers} height={height} />;
+  return (
+    <MapboxShell
+      center={point}
+      markers={markers}
+      height={height}
+      onMarkerClick={onMarkerClick}
+    />
+  );
 }
 
 export function PickerMap({

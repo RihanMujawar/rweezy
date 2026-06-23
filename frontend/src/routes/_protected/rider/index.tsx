@@ -17,8 +17,10 @@ import {
   History,
   Power,
   IndianRupee,
+  Map as MapIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { OrdersMap, MapOrder } from "@/components/orders-map";
 
 export const Route = createFileRoute("/_protected/rider/")({
   component: RiderList,
@@ -32,11 +34,14 @@ type Ride = {
   pickup_lat: number;
   pickup_lng: number;
   drop_address: string;
+  drop_lat: number;
+  drop_lng: number;
   fare_estimate: number | null;
   status: string;
   created_at: string;
   rider_id: string | null;
   vehicle_type?: string | null;
+  profiles?: { full_name: string; phone: string };
 };
 
 type Pkg = {
@@ -45,12 +50,15 @@ type Pkg = {
   pickup_lat: number;
   pickup_lng: number;
   drop_address: string;
+  drop_lat: number;
+  drop_lng: number;
   fare_estimate: number | null;
   status: string;
   created_at: string;
   rider_id: string | null;
   package_size: string;
   receiver_name: string | null;
+  profiles?: { full_name: string; phone: string };
 };
 
 type HistoryRide = {
@@ -198,6 +206,69 @@ function RiderList() {
   const myRides = rides.filter((r) => r.rider_id === user?.id);
   const availablePkgs = acceptingJobs ? sortJobs(pkgs.filter((r) => !r.rider_id)) : [];
   const myPkgs = pkgs.filter((r) => r.rider_id === user?.id);
+
+  const mapOrders: MapOrder[] = [
+    ...availableRides.map((o) => ({
+      id: o.id,
+      lat: o.drop_lat || 0,
+      lng: o.drop_lng || 0,
+      pickupLat: o.pickup_lat,
+      pickupLng: o.pickup_lng,
+      customerName: o.profiles?.full_name,
+      customerPhone: o.profiles?.phone,
+      status: o.status,
+      total: o.fare_estimate || 0,
+      type: "ride" as const,
+      canAccept: true,
+    })),
+    ...availablePkgs.map((o) => ({
+      id: o.id,
+      lat: o.drop_lat || 0,
+      lng: o.drop_lng || 0,
+      pickupLat: o.pickup_lat,
+      pickupLng: o.pickup_lng,
+      customerName: o.profiles?.full_name,
+      customerPhone: o.profiles?.phone,
+      status: o.status,
+      total: o.fare_estimate || 0,
+      type: "package" as const,
+      canAccept: true,
+    })),
+    ...myRides.map((o) => ({
+      id: o.id,
+      lat: o.drop_lat || 0,
+      lng: o.drop_lng || 0,
+      pickupLat: o.pickup_lat,
+      pickupLng: o.pickup_lng,
+      customerName: o.profiles?.full_name,
+      customerPhone: o.profiles?.phone,
+      status: o.status,
+      total: o.fare_estimate || 0,
+      type: "ride" as const,
+      canAccept: false,
+    })),
+    ...myPkgs.map((o) => ({
+      id: o.id,
+      lat: o.drop_lat || 0,
+      lng: o.drop_lng || 0,
+      pickupLat: o.pickup_lat,
+      pickupLng: o.pickup_lng,
+      customerName: o.profiles?.full_name,
+      customerPhone: o.profiles?.phone,
+      status: o.status,
+      total: o.fare_estimate || 0,
+      type: "package" as const,
+      canAccept: false,
+    })),
+  ].filter((o) => o.lat !== 0);
+
+  const handleAccept = async (id: string, type: MapOrder["type"]) => {
+    const order = [...rides, ...pkgs].find((o) => o.id === id);
+    if (!order) return;
+    if (type === "ride") await acceptRide(id, { lat: order.pickup_lat, lng: order.pickup_lng });
+    else if (type === "package")
+      await acceptPkg(id, { lat: order.pickup_lat, lng: order.pickup_lng });
+  };
   const todayHistory = [...historyRides, ...historyPkgs].filter(
     (job) => new Date(job.created_at).toDateString() === new Date().toDateString(),
   );
@@ -345,20 +416,30 @@ function RiderList() {
           </div>
         </div>
 
-        <Tabs defaultValue="rides" className="mt-6">
+        <Tabs defaultValue="orders" className="mt-6">
           <TabsList className="flex-wrap">
-            <TabsTrigger value="rides">
-              Rides ({availableRides.length + myRides.length})
-            </TabsTrigger>
-            <TabsTrigger value="packages">
-              Packages ({availablePkgs.length + myPkgs.length})
+            <TabsTrigger value="orders">
+              <MapIcon className="mr-2 h-4 w-4" /> Orders
             </TabsTrigger>
             <TabsTrigger value="history">
-              History ({historyRides.length + historyPkgs.length})
+              <History className="mr-2 h-4 w-4" /> History
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="rides" className="mt-4 space-y-6">
+          <TabsContent value="orders">
+            <div className="mt-4 space-y-6">
+              <OrdersMap orders={mapOrders} onAccept={handleAccept} height={600} />
+
+              <Tabs defaultValue="rides">
+                <TabsList className="flex-wrap">
+                  <TabsTrigger value="rides">
+                    Rides ({availableRides.length + myRides.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="packages">
+                    Packages ({availablePkgs.length + myPkgs.length})
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="rides" className="mt-4 space-y-6">
             {myRides.length > 0 && (
               <section>
                 <h2 className="mb-2 text-lg font-semibold">Your active ride</h2>
@@ -455,10 +536,10 @@ function RiderList() {
                   })}
                 </div>
               )}
-            </section>
-          </TabsContent>
+                </section>
+                </TabsContent>
 
-          <TabsContent value="packages" className="mt-4 space-y-6">
+                <TabsContent value="packages" className="mt-4 space-y-6">
             {myPkgs.length > 0 && (
               <section>
                 <h2 className="mb-2 text-lg font-semibold">Your active package</h2>
@@ -552,7 +633,10 @@ function RiderList() {
                   })}
                 </div>
               )}
-            </section>
+                </section>
+                </TabsContent>
+              </Tabs>
+            </div>
           </TabsContent>
 
           <TabsContent value="history" className="mt-4">

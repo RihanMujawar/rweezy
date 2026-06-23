@@ -2846,13 +2846,13 @@ const routes = [
       token,
       buildPath("/food_orders", {
         select:
-          "id,status,total,delivery_address,notes,created_at,food_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer:customer_id(full_name),food_order_items(id,name,quantity,price)",
         restaurant_id: `eq.${restaurant.id}`,
         order: "created_at.desc",
       }),
     );
 
-    return { restaurantId: restaurant.id, orders: orders ?? [] };
+    return { restaurantId: restaurant.id, orders: (orders ?? []).map(o => ({ ...o, profiles: o.customer })) };
   }),
   route("POST", /^\/api\/hotel\/orders\/([^/]+)\/advance$/, async ({ token, match, body }) => {
     const id = decodeURIComponent(match[1]);
@@ -2901,14 +2901,14 @@ const routes = [
       token,
       buildPath("/food_orders", {
         select:
-          "id,status,total,delivery_address,notes,created_at,food_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer:customer_id(full_name),food_order_items(id,name,quantity,price)",
         restaurant_id: `eq.${restaurant.id}`,
         order: "created_at.desc",
         limit: "100",
       }),
     );
 
-    return { restaurantId: restaurant.id, orders: orders ?? [] };
+    return { restaurantId: restaurant.id, orders: (orders ?? []).map(o => ({ ...o, profiles: o.customer })) };
   }),
   route("GET", /^\/api\/grocery\/dashboard$/, async ({ token, user }) => {
     const storeRows = await restRequest(
@@ -3075,13 +3075,13 @@ const routes = [
       token,
       buildPath("/grocery_orders", {
         select:
-          "id,status,total,delivery_address,notes,created_at,grocery_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer:customer_id(full_name),grocery_order_items(id,name,quantity,price)",
         store_id: `eq.${store.id}`,
         order: "created_at.desc",
       }),
     );
 
-    return { storeId: store.id, orders: orders ?? [] };
+    return { storeId: store.id, orders: (orders ?? []).map(o => ({ ...o, profiles: o.customer })) };
   }),
   route("POST", /^\/api\/grocery\/orders\/([^/]+)\/advance$/, async ({ token, match, body }) => {
     const id = decodeURIComponent(match[1]);
@@ -3112,21 +3112,21 @@ const routes = [
       token,
       buildPath("/grocery_orders", {
         select:
-          "id,status,total,delivery_address,notes,created_at,grocery_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer:customer_id(full_name),grocery_order_items(id,name,quantity,price)",
         store_id: `eq.${store.id}`,
         order: "created_at.desc",
         limit: "100",
       }),
     );
 
-    return { storeId: store.id, orders: orders ?? [] };
+    return { storeId: store.id, orders: (orders ?? []).map(o => ({ ...o, profiles: o.customer })) };
   }),
   route("GET", /^\/api\/delivery\/available$/, async ({ token }) => {
     const [food, grocery] = await Promise.all([
       restRequest(
         token,
         buildPath("/food_orders", {
-          select: "id,status,total,delivery_address,created_at,restaurants(name)",
+          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,created_at,restaurants(name),customer:customer_id(full_name,phone)",
           delivery_boy_id: "is.null",
           status: "in.(ready,preparing)",
           order: "created_at.desc",
@@ -3135,7 +3135,7 @@ const routes = [
       restRequest(
         token,
         buildPath("/grocery_orders", {
-          select: "id,status,total,delivery_address,created_at,grocery_stores(name)",
+          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,created_at,grocery_stores(name),customer:customer_id(full_name,phone)",
           delivery_boy_id: "is.null",
           status: "in.(ready,preparing)",
           order: "created_at.desc",
@@ -3143,7 +3143,8 @@ const routes = [
       ),
     ]);
 
-    return { food: food ?? [], grocery: grocery ?? [] };
+    const normalize = o => ({ ...o, profiles: o.customer });
+    return { food: (food ?? []).map(normalize), grocery: (grocery ?? []).map(normalize) };
   }),
   route("GET", /^\/api\/delivery\/active$/, async ({ token, user }) => {
     const [food, grocery] = await Promise.all([
@@ -3151,7 +3152,7 @@ const routes = [
         token,
         buildPath("/food_orders", {
           select:
-            "id,status,total,delivery_address,delivery_lat,delivery_lng,rider_lat,rider_lng,delivery_pin,customer_id,restaurants(name)",
+            "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,rider_lat,rider_lng,delivery_pin,customer_id,restaurants(name),customer:customer_id(full_name,phone)",
           delivery_boy_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -3160,7 +3161,7 @@ const routes = [
         token,
         buildPath("/grocery_orders", {
           select:
-            "id,status,total,delivery_address,delivery_lat,delivery_lng,rider_lat,rider_lng,delivery_pin,customer_id,grocery_stores(name)",
+            "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,rider_lat,rider_lng,delivery_pin,customer_id,grocery_stores(name),customer:customer_id(full_name,phone)",
           delivery_boy_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -3184,14 +3185,14 @@ const routes = [
       profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
     }
 
-    const attachCustomer = (order) => ({
+    const normalize = (order) => ({
       ...normalizeDeliveryOrder(order),
-      customer: profileById.get(order.customer_id) ?? null,
+      profiles: order.customer || null,
     });
 
     return {
-      food: (food ?? []).map(attachCustomer),
-      grocery: (grocery ?? []).map(attachCustomer),
+      food: (food ?? []).map(normalize),
+      grocery: (grocery ?? []).map(normalize),
     };
   }),
   route(
@@ -3270,6 +3271,7 @@ const routes = [
         buildPath("/food_orders", {
           select: "id,status,total,delivery_address,created_at,restaurants(name)",
           delivery_boy_id: `eq.${user.id}`,
+          status: "in.(delivered,completed,cancelled)",
           order: "created_at.desc",
           limit: "100",
         }),
@@ -3279,6 +3281,7 @@ const routes = [
         buildPath("/grocery_orders", {
           select: "id,status,total,delivery_address,created_at,grocery_stores(name)",
           delivery_boy_id: `eq.${user.id}`,
+          status: "in.(delivered,completed,cancelled)",
           order: "created_at.desc",
           limit: "100",
         }),
@@ -3293,7 +3296,7 @@ const routes = [
         token,
         buildPath("/rides", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,vehicle_type",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,drop_lat,drop_lng,fare_estimate,status,created_at,rider_id,vehicle_type,customer:customer_id(full_name,phone)",
           or: `(rider_id.is.null,rider_id.eq.${user.id})`,
           status: "not.in.(completed,cancelled)",
           order: "created_at.desc",
@@ -3303,7 +3306,7 @@ const routes = [
         token,
         buildPath("/package_deliveries", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,package_size,receiver_name",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,drop_lat,drop_lng,fare_estimate,status,created_at,rider_id,package_size,receiver_name,customer:customer_id(full_name,phone)",
           or: `(rider_id.is.null,rider_id.eq.${user.id})`,
           status: "not.in.(completed,cancelled)",
           order: "created_at.desc",
@@ -3311,7 +3314,8 @@ const routes = [
       ),
     ]);
 
-    return { rides: rides ?? [], packages: packages ?? [] };
+    const normalize = o => ({ ...o, profiles: o.customer });
+    return { rides: (rides ?? []).map(normalize), packages: (packages ?? []).map(normalize) };
   }),
   route("GET", /^\/api\/rider\/active$/, async ({ token, user, url }) => {
     const id = url.searchParams.get("id");
@@ -3329,9 +3333,9 @@ const routes = [
         buildPath(
           `/${table}`,
           id
-            ? { select: "*", id: `eq.${id}`, order: "created_at.desc", limit: "1" }
+            ? { select: "*,customer:customer_id(full_name,phone)", id: `eq.${id}`, order: "created_at.desc", limit: "1" }
             : {
-                select: "*",
+                select: "*,customer:customer_id(full_name,phone)",
                 rider_id: `eq.${user.id}`,
                 status: "not.in.(completed,cancelled)",
                 order: "created_at.desc",
@@ -3342,7 +3346,7 @@ const routes = [
 
       const job = firstRow(rows);
       if (job) {
-        return { job, table };
+        return { job: { ...job, profiles: job.customer }, table };
       }
     }
 
