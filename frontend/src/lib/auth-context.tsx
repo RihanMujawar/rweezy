@@ -13,6 +13,11 @@ export type AppRole =
 type AuthUser = {
   id: string;
   email?: string | null;
+  phone?: string | null;
+  user_metadata?: {
+    full_name?: string;
+    [key: string]: any;
+  };
 };
 
 interface AuthContextValue {

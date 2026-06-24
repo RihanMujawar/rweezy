@@ -218,11 +218,17 @@ function AppHome() {
       .finally(() => setLoadingGrocery(false));
   }, []);
 
+  const displayName =
+    user?.user_metadata?.full_name?.split(" ")?.[0] ||
+    user?.email?.split("@")?.[0] ||
+    user?.phone ||
+    "User";
+
   return (
     <div className="container mx-auto px-4 py-5 md:py-8">
       {user?.id && <OnboardingDialog userId={user.id} email={user.email} />}
       <div className="mb-5 md:mb-8">
-        <h1 className="text-2xl font-bold md:text-3xl">Hello {user?.email?.split("@")[0]} 👋</h1>
+        <h1 className="text-2xl font-bold md:text-3xl">Hello {displayName} 👋</h1>
         <p className="mt-1 text-sm text-muted-foreground md:text-base">
           What would you like to do today?
         </p>

@@ -353,7 +353,7 @@ async function getChatContext(token, user, kind, serviceId) {
     return { kind: normalizedKind, row, partnerColumn: target.partnerColumn };
   }
 
-  const roles = await getRoles(token, user.id);
+  const roles = await getRoles(user.id);
   if (!roles.includes("admin")) {
     throw new HttpError(403, "You do not have access to this chat");
   }
@@ -787,7 +787,7 @@ async function completeUserRegistration({
   const normalized = normalizeAuthSession(session);
   const roles =
     normalized.accessToken && normalized.user
-      ? await getRoles(normalized.accessToken, normalized.user.id)
+      ? await getRoles(normalized.user.id)
       : [role];
 
   return {
@@ -891,16 +891,23 @@ async function getServerEntry() {
   return serverEntryPromise;
 }
 
-async function getRoles(token, userId) {
-  const rows = await restRequest(
-    token,
-    buildPath("/user_roles", {
-      select: "role",
-      user_id: `eq.${userId}`,
-    }),
-  );
+async function getRoles(userId) {
+  try {
+    const rows = await serviceRoleRestRequest(
+      buildPath("/user_roles", {
+        select: "role",
+        user_id: `eq.${userId}`,
+      }),
+    );
 
-  return (rows ?? []).map((row) => row.role);
+    return (rows ?? []).map((row) => row.role);
+  } catch (error) {
+    if (isMissingTableError(error, "user_roles")) {
+      console.warn("user_roles table missing, defaulting to no roles");
+      return [];
+    }
+    throw error;
+  }
 }
 
 async function jsonBody(req) {
@@ -1075,7 +1082,7 @@ const routes = [
     }
 
     const roles = normalized.accessToken
-      ? await getRoles(normalized.accessToken, normalized.user.id)
+      ? await getRoles(normalized.user.id)
       : [];
 
     return {
@@ -1134,7 +1141,7 @@ const routes = [
     if (!normalized.accessToken || !normalized.user?.id) {
       throw new HttpError(500, "Password updated, but sign-in session could not be created");
     }
-    const roles = await getRoles(normalized.accessToken, normalized.user.id);
+    const roles = await getRoles(normalized.user.id);
 
     return {
       ok: true,
@@ -1197,7 +1204,7 @@ const routes = [
     }
 
     const roles = normalized.accessToken
-      ? await getRoles(normalized.accessToken, normalized.user.id)
+      ? await getRoles(normalized.user.id)
       : [];
 
     return {
@@ -1273,7 +1280,7 @@ const routes = [
     session = await createSessionForEmail(email);
     const normalized = normalizeAuthSession(session);
     const roles = normalized.accessToken
-      ? await getRoles(normalized.accessToken, normalized.user.id)
+      ? await getRoles(normalized.user.id)
       : ["customer"];
 
     return {
@@ -1300,8 +1307,8 @@ const routes = [
       },
     };
   }),
-  route("GET", /^\/api\/auth\/me$/, async ({ token, user }) => {
-    const roles = await getRoles(token, user.id);
+  route("GET", /^\/api\/auth\/me$/, async ({ user }) => {
+    const roles = await getRoles(user.id);
     return { user, roles };
   }),
   route("POST", /^\/api\/notifications\/token$/, async ({ user, body }) => {
@@ -2106,8 +2113,8 @@ const routes = [
 
     return { packageDelivery: firstRow(rows) };
   }),
-  route("POST", /^\/api\/admin\/notifications\/test$/, async ({ token, user, body }) => {
-    const roles = await getRoles(token, user.id);
+  route("POST", /^\/api\/admin\/notifications\/test$/, async ({ user, body }) => {
+    const roles = await getRoles(user.id);
     if (!roles.includes("admin")) {
       throw new HttpError(403, "Only admin users can send test notifications");
     }
