@@ -88,8 +88,8 @@ function StorePage() {
         </div>
         {cartCount > 0 && cart.storeId === storeId && (
           <Button className="min-h-11" onClick={() => navigate({ to: "/app/grocery/checkout" })}>
-            <ShoppingCart className="mr-2 h-4 w-4" /> Cart ({cartCount}) — $
-            {cart.total().toFixed(2)}
+            <ShoppingCart className="mr-2 h-4 w-4" /> Cart ({cartCount}) — ₹
+            {cart.total().toFixed(0)}
           </Button>
         )}
       </div>
@@ -141,7 +141,7 @@ function StorePage() {
                   {item.description && (
                     <p className="text-sm text-muted-foreground">{item.description}</p>
                   )}
-                  <p className="mt-1 font-medium">${Number(item.price).toFixed(2)}</p>
+                  <p className="mt-1 font-medium">₹{Number(item.price).toFixed(0)}</p>
                 </div>
                 {qty === 0 ? (
                   <Button size="sm" className="min-h-11" onClick={() => addItem(item)}>

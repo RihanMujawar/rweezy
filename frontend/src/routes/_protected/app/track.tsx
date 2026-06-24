@@ -131,19 +131,27 @@ function TrackOrder() {
   if (error) return <div className="container mx-auto px-4 py-8 text-red-600">{error}</div>;
   if (!row) return <div className="container mx-auto px-4 py-8">Not found.</div>;
 
-  // Coordinates depend on kind: rides/packages have pickup+drop; food/grocery have store location is unknown here, use delivery + rider
+  // Coordinates depend on kind: rides/packages have pickup+drop; food/grocery have store location + delivery
   let pickup: LatLng | null = null;
   let drop: LatLng | null = null;
+
+  if (row.pickup_lat != null && row.pickup_lng != null) {
+    pickup = { lat: row.pickup_lat, lng: row.pickup_lng };
+  }
+
   if (kind === "ride" || kind === "package") {
-    pickup = { lat: row.pickup_lat!, lng: row.pickup_lng! };
-    drop = { lat: row.drop_lat!, lng: row.drop_lng! };
+    if (row.drop_lat != null && row.drop_lng != null) {
+      drop = { lat: row.drop_lat, lng: row.drop_lng };
+    }
   } else {
-    if (row.delivery_lat && row.delivery_lng) {
+    if (row.delivery_lat != null && row.delivery_lng != null) {
       drop = { lat: row.delivery_lat, lng: row.delivery_lng };
-      pickup =
-        row.pickup_lat && row.pickup_lng ? { lat: row.pickup_lat, lng: row.pickup_lng } : drop;
     }
   }
+
+  // Fallback: if pickup is missing for food/grocery, use drop as a placeholder or vice-versa
+  if (!pickup && drop) pickup = drop;
+  if (pickup && !drop) drop = pickup;
 
   const rider = row.rider_lat && row.rider_lng ? { lat: row.rider_lat, lng: row.rider_lng } : null;
   const target = drop;

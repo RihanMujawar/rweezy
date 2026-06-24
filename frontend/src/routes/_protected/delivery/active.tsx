@@ -194,9 +194,19 @@ function DeliveryActive() {
               <h3 className="font-semibold">
                 {icon} {nameOf(o)}
               </h3>
-              <span className="text-xs rounded-full bg-secondary px-2 py-1">{o.status}</span>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">{o.status}</span>
+                {o.customer?.full_name && (
+                  <span className="text-xs font-medium">{o.customer.full_name}</span>
+                )}
+              </div>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">📍 {o.delivery_address}</p>
+            {o.customer?.phone && (
+              <a href={`tel:${o.customer.phone}`} className="mt-1 block text-xs text-primary hover:underline">
+                📞 {o.customer.phone}
+              </a>
+            )}
             {(() => {
               const delivery =
                 o.delivery_lat != null && o.delivery_lng != null

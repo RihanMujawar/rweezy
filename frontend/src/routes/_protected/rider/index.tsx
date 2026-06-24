@@ -451,6 +451,9 @@ function RiderList() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <Badge>{r.status}</Badge>
+                            {r.profiles?.full_name && (
+                              <span className="text-xs font-semibold">{r.profiles.full_name}</span>
+                            )}
                             <Icon className="h-4 w-4" />
                             <span className="text-xs uppercase">{r.vehicle_type}</span>
                             {r.fare_estimate && (
@@ -503,6 +506,9 @@ function RiderList() {
                           <div className="flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge variant="secondary">{r.status}</Badge>
+                            {r.profiles?.full_name && (
+                              <span className="text-xs font-semibold">{r.profiles.full_name}</span>
+                            )}
                               <Icon className="h-4 w-4" />
                               <span className="text-xs uppercase">{r.vehicle_type}</span>
                               {r.fare_estimate && (
@@ -549,6 +555,9 @@ function RiderList() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <Badge>{r.status}</Badge>
+                          {r.profiles?.full_name && (
+                            <span className="text-xs font-semibold">{r.profiles.full_name}</span>
+                          )}
                           <PackageIcon className="h-4 w-4" />
                           <span className="text-xs uppercase">{r.package_size}</span>
                           {r.fare_estimate && (
@@ -600,6 +609,9 @@ function RiderList() {
                           <div className="flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge variant="secondary">{r.status}</Badge>
+                            {r.profiles?.full_name && (
+                              <span className="text-xs font-semibold">{r.profiles.full_name}</span>
+                            )}
                               <PackageIcon className="h-4 w-4" />
                               <span className="text-xs uppercase">{r.package_size}</span>
                               {r.fare_estimate && (

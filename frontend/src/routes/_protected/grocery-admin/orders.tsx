@@ -26,7 +26,7 @@ type Order = {
   delivery_lng?: number;
   notes: string | null;
   created_at: string;
-  profiles?: { full_name: string };
+  profiles?: { full_name: string; phone?: string | null };
   grocery_order_items: { id: string; name: string; quantity: number; price: number }[];
 };
 
@@ -164,10 +164,15 @@ function GroceryOrders() {
             />
           )}
           <div>
-            <Badge variant="secondary" className={statusColor(o.status)}>
-              {o.status}
-            </Badge>
-            <span className="ml-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className={statusColor(o.status)}>
+                {o.status}
+              </Badge>
+              {o.profiles?.full_name && (
+                <span className="font-medium text-sm">{o.profiles.full_name}</span>
+              )}
+            </div>
+            <span className="text-[10px] text-muted-foreground">
               {new Date(o.created_at).toLocaleString()}
             </span>
           </div>
@@ -190,14 +195,22 @@ function GroceryOrders() {
               Mark as {NEXT[o.status]}
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="min-h-11"
-            onClick={() => toast.message("Customer phone is not attached to this order yet.")}
-          >
-            <Phone className="mr-2 h-4 w-4" /> Call customer
-          </Button>
+          {o.profiles?.phone ? (
+            <Button size="sm" variant="outline" className="min-h-11" asChild>
+              <a href={`tel:${o.profiles.phone}`}>
+                <Phone className="mr-2 h-4 w-4" /> Call customer
+              </a>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => toast.message("Customer phone is not attached to this order yet.")}
+            >
+              <Phone className="mr-2 h-4 w-4" /> Call customer
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
