@@ -21,7 +21,7 @@ export const Route = createFileRoute("/reset-password")({
 
 function ResetPasswordPage() {
   const navigate = useNavigate();
-  const { refreshAuth } = useAuth();
+  const { setAuthenticatedUser } = useAuth();
   const search = Route.useSearch();
   const [phoneSuffix, setPhoneSuffix] = useState(
     search.phone?.startsWith("+91") ? search.phone.slice(3) : "",
@@ -73,7 +73,7 @@ function ResetPasswordPage() {
         phone_verification_token: phoneVerificationToken,
         password: parsed.data.password,
       });
-      await refreshAuth();
+      setAuthenticatedUser(result);
       toast.success(result.message);
       navigate({ to: "/app" });
     } catch (error) {

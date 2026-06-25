@@ -23,7 +23,7 @@ const roleOptions = [
 
 function PartnerRegisterPage() {
   const navigate = useNavigate();
-  const { refreshAuth } = useAuth();
+  const { setAuthenticatedUser } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
@@ -72,15 +72,29 @@ function PartnerRegisterPage() {
     setErrors({});
     setLoading(true);
     try {
+      const {
+        fullName: parsedFullName,
+        email: parsedEmail,
+        phone: parsedPhone,
+        requestedRole: parsedRequestedRole,
+        businessName: parsedBusinessName,
+        roleMessage: parsedRoleMessage,
+      } = parsed.data;
+
+      if (!parsedEmail) {
+        toast.error("Email is required");
+        return;
+      }
+
       const result = await api.auth.register({
-        full_name: parsed.data.fullName,
-        email: parsed.data.email.toLowerCase(),
-        phone: parsed.data.phone,
+        full_name: parsedFullName,
+        email: parsedEmail.toLowerCase(),
+        phone: parsedPhone,
         password,
         phone_verification_token: phoneVerificationToken,
-        requested_role: parsed.data.requestedRole,
-        business_name: parsed.data.businessName,
-        role_message: parsed.data.roleMessage,
+        requested_role: parsedRequestedRole,
+        business_name: parsedBusinessName,
+        role_message: parsedRoleMessage,
       });
 
       if (result.emailVerificationRequired) {
@@ -90,7 +104,7 @@ function PartnerRegisterPage() {
       }
 
       if (result.authenticated) {
-        await refreshAuth();
+        setAuthenticatedUser(result);
         toast.warning(
           result.roleRequestWarning ??
             "Account created! Your role request is pending admin approval.",

@@ -10,7 +10,13 @@ type PhoneOtpVerificationProps = {
   phone: string;
   purpose: "login" | "register" | "reset_password";
   email?: string;
-  onVerified: (phoneVerificationToken: string) => void;
+  onVerified: (
+    phoneVerificationToken: string,
+    result?: {
+      user?: { id: string; email?: string | null };
+      roles?: string[];
+    },
+  ) => void;
   disabled?: boolean;
 };
 
@@ -103,7 +109,7 @@ export function PhoneOtpVerification({
         onVerified(result.phoneVerificationToken);
         toast.success("Phone number verified");
       } else {
-        onVerified("");
+        onVerified("", result);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Invalid verification code";

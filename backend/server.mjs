@@ -903,6 +903,47 @@ async function getRoles(token, userId) {
   return (rows ?? []).map((row) => row.role);
 }
 
+async function getProfileMap(token, ids) {
+  const uniqueIds = [...new Set((ids ?? []).filter(Boolean))];
+  if (uniqueIds.length === 0) return new Map();
+
+  const path = buildPath("/profiles", {
+    select: "id,full_name,phone",
+    id: `in.(${uniqueIds.join(",")})`,
+  });
+
+  try {
+    const rows = env.supabaseServiceRoleKey
+      ? await serviceRoleRestRequest(path)
+      : await restRequest(token, path);
+    return new Map((rows ?? []).map((profile) => [profile.id, profile]));
+  } catch (error) {
+    console.warn(`Profile lookup unavailable: ${error.message}`);
+    return new Map();
+  }
+}
+
+async function attachUserProfiles(token, rows, mappings) {
+  const list = Array.isArray(rows) ? rows : rows ? [rows] : [];
+  const ids = list.flatMap((row) => Object.values(mappings).map((column) => row?.[column]));
+  const profileMap = await getProfileMap(token, ids);
+
+  const hydrated = list.map((row) => {
+    const profiles = {};
+    for (const [key, column] of Object.entries(mappings)) {
+      profiles[key] = profileMap.get(row?.[column]) ?? null;
+    }
+
+    return {
+      ...row,
+      ...profiles,
+      profiles: profiles.customer ?? profiles.rider ?? row.profiles ?? null,
+    };
+  });
+
+  return Array.isArray(rows) ? hydrated : (hydrated[0] ?? null);
+}
+
 async function jsonBody(req) {
   return readJson(req);
 }
@@ -1830,7 +1871,7 @@ const routes = [
         token,
         buildPath("/food_orders", {
           select:
-            "id,status,total,delivery_address,created_at,rider_id:delivery_boy_id,payment_method,restaurants(name),customer:customer_id(full_name,phone)",
+            "id,status,total,delivery_address,created_at,customer_id,rider_id:delivery_boy_id,payment_method,restaurants(name)",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -1839,7 +1880,7 @@ const routes = [
         token,
         buildPath("/grocery_orders", {
           select:
-            "id,status,total,delivery_address,created_at,rider_id:delivery_boy_id,payment_method,grocery_stores(name),customer:customer_id(full_name,phone)",
+            "id,status,total,delivery_address,created_at,customer_id,rider_id:delivery_boy_id,payment_method,grocery_stores(name)",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -1848,7 +1889,7 @@ const routes = [
         token,
         buildPath("/rides", {
           select:
-            "id,status,fare_estimate,pickup_address,drop_address,created_at,rider_id,vehicle_type,payment_method,rider:rider_id(full_name,phone)",
+            "id,status,fare_estimate,pickup_address,drop_address,created_at,customer_id,rider_id,vehicle_type,payment_method",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -1857,20 +1898,18 @@ const routes = [
         token,
         buildPath("/package_deliveries", {
           select:
-            "id,status,fare_estimate,pickup_address,drop_address,created_at,rider_id,package_size,payment_method,rider:rider_id(full_name,phone)",
+            "id,status,fare_estimate,pickup_address,drop_address,created_at,customer_id,rider_id,package_size,payment_method",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
       ),
     ]);
 
-    const mapWithProfiles = (list) => (list ?? []).map(o => ({ ...o, profiles: o.customer || o.rider || null }));
-
     return {
-      food: mapWithProfiles(food),
-      grocery: mapWithProfiles(grocery),
-      rides: mapWithProfiles(rides),
-      packages: mapWithProfiles(packages),
+      food: await attachUserProfiles(token, food ?? [], { customer: "customer_id", rider: "rider_id" }),
+      grocery: await attachUserProfiles(token, grocery ?? [], { customer: "customer_id", rider: "rider_id" }),
+      rides: await attachUserProfiles(token, rides ?? [], { customer: "customer_id", rider: "rider_id" }),
+      packages: await attachUserProfiles(token, packages ?? [], { customer: "customer_id", rider: "rider_id" }),
     };
   }),
   route(
@@ -1926,10 +1965,10 @@ const routes = [
     }[kind];
 
     const select = kind === "food"
-      ? "*,restaurants(name),customer:customer_id(full_name,phone),rider:delivery_boy_id(full_name,phone)"
+      ? "*,restaurants(name)"
       : kind === "grocery"
-        ? "*,grocery_stores(name),customer:customer_id(full_name,phone),rider:delivery_boy_id(full_name,phone)"
-        : "*,customer:customer_id(full_name,phone),rider:rider_id(full_name,phone)";
+        ? "*,grocery_stores(name)"
+        : "*";
 
     const rows = await restRequest(
       token,
@@ -1943,14 +1982,18 @@ const routes = [
     if (!row) return { row: null };
 
     const normalizedRow = kind === "food" || kind === "grocery" ? normalizeDeliveryOrder(row) : row;
-    const partner = normalizedRow.rider || null; // For rides/packages from the join
+    const hydratedRow = await attachUserProfiles(token, normalizedRow, {
+      customer: "customer_id",
+      rider: "rider_id",
+    });
+    const partner = hydratedRow.rider || null;
 
     // Backwards compatibility for frontend expectations
     return {
       row: {
-        ...normalizedRow,
-        partner: partner || normalizedRow.customer || null, // Fallback or handle based on role? Usually track shows partner to customer.
-        profiles: normalizedRow.customer || null
+        ...hydratedRow,
+        partner: partner || hydratedRow.customer || null,
+        profiles: hydratedRow.customer || null
       },
     };
   }),
@@ -2850,13 +2893,16 @@ const routes = [
       token,
       buildPath("/food_orders", {
         select:
-          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer:customer_id(full_name,phone),food_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer_id,food_order_items(id,name,quantity,price)",
         restaurant_id: `eq.${restaurant.id}`,
         order: "created_at.desc",
       }),
     );
 
-    return { restaurantId: restaurant.id, orders: (orders ?? []).map(o => ({ ...o, profiles: o.customer || null })) };
+    return {
+      restaurantId: restaurant.id,
+      orders: await attachUserProfiles(token, orders ?? [], { customer: "customer_id" }),
+    };
   }),
   route("POST", /^\/api\/hotel\/orders\/([^/]+)\/advance$/, async ({ token, match, body }) => {
     const id = decodeURIComponent(match[1]);
@@ -2905,14 +2951,17 @@ const routes = [
       token,
       buildPath("/food_orders", {
         select:
-          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer:customer_id(full_name,phone),food_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer_id,food_order_items(id,name,quantity,price)",
         restaurant_id: `eq.${restaurant.id}`,
         order: "created_at.desc",
         limit: "100",
       }),
     );
 
-    return { restaurantId: restaurant.id, orders: (orders ?? []).map(o => ({ ...o, profiles: o.customer || null })) };
+    return {
+      restaurantId: restaurant.id,
+      orders: await attachUserProfiles(token, orders ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/grocery\/dashboard$/, async ({ token, user }) => {
     const storeRows = await restRequest(
@@ -3079,13 +3128,16 @@ const routes = [
       token,
       buildPath("/grocery_orders", {
         select:
-          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer:customer_id(full_name,phone),grocery_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer_id,grocery_order_items(id,name,quantity,price)",
         store_id: `eq.${store.id}`,
         order: "created_at.desc",
       }),
     );
 
-    return { storeId: store.id, orders: (orders ?? []).map(o => ({ ...o, profiles: o.customer || null })) };
+    return {
+      storeId: store.id,
+      orders: await attachUserProfiles(token, orders ?? [], { customer: "customer_id" }),
+    };
   }),
   route("POST", /^\/api\/grocery\/orders\/([^/]+)\/advance$/, async ({ token, match, body }) => {
     const id = decodeURIComponent(match[1]);
@@ -3116,21 +3168,24 @@ const routes = [
       token,
       buildPath("/grocery_orders", {
         select:
-          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer:customer_id(full_name,phone),grocery_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer_id,grocery_order_items(id,name,quantity,price)",
         store_id: `eq.${store.id}`,
         order: "created_at.desc",
         limit: "100",
       }),
     );
 
-    return { storeId: store.id, orders: (orders ?? []).map(o => ({ ...o, profiles: o.customer || null })) };
+    return {
+      storeId: store.id,
+      orders: await attachUserProfiles(token, orders ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/delivery\/available$/, async ({ token }) => {
     const [food, grocery] = await Promise.all([
       restRequest(
         token,
         buildPath("/food_orders", {
-          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,created_at,restaurants(name),customer:customer_id(full_name,phone)",
+          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,created_at,customer_id,restaurants(name)",
           delivery_boy_id: "is.null",
           status: "in.(ready,preparing)",
           order: "created_at.desc",
@@ -3139,7 +3194,7 @@ const routes = [
       restRequest(
         token,
         buildPath("/grocery_orders", {
-          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,created_at,grocery_stores(name),customer:customer_id(full_name,phone)",
+          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,created_at,customer_id,grocery_stores(name)",
           delivery_boy_id: "is.null",
           status: "in.(ready,preparing)",
           order: "created_at.desc",
@@ -3147,8 +3202,10 @@ const routes = [
       ),
     ]);
 
-    const normalize = o => ({ ...o, profiles: o.customer || null });
-    return { food: (food ?? []).map(normalize), grocery: (grocery ?? []).map(normalize) };
+    return {
+      food: await attachUserProfiles(token, food ?? [], { customer: "customer_id" }),
+      grocery: await attachUserProfiles(token, grocery ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/delivery\/active$/, async ({ token, user }) => {
     const [food, grocery] = await Promise.all([
@@ -3156,7 +3213,7 @@ const routes = [
         token,
         buildPath("/food_orders", {
           select:
-            "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,rider_lat,rider_lng,delivery_pin,customer_id,restaurants(name),customer:customer_id(full_name,phone)",
+            "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,rider_lat,rider_lng,delivery_pin,customer_id,restaurants(name)",
           delivery_boy_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -3165,29 +3222,15 @@ const routes = [
         token,
         buildPath("/grocery_orders", {
           select:
-            "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,rider_lat,rider_lng,delivery_pin,customer_id,grocery_stores(name),customer:customer_id(full_name,phone)",
+            "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,rider_lat,rider_lng,delivery_pin,customer_id,grocery_stores(name)",
           delivery_boy_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
       ),
     ]);
 
-    const customerIds = [
-      ...new Set(
-        [...(food ?? []), ...(grocery ?? [])].map((order) => order.customer_id).filter(Boolean),
-      ),
-    ];
-    let profileById = new Map();
-    if (customerIds.length > 0) {
-      const profiles = await restRequest(
-        token,
-        buildPath("/profiles", {
-          select: "id,full_name,phone",
-          id: `in.(${customerIds.join(",")})`,
-        }),
-      );
-      profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-    }
+    const hydratedFood = await attachUserProfiles(token, food ?? [], { customer: "customer_id" });
+    const hydratedGrocery = await attachUserProfiles(token, grocery ?? [], { customer: "customer_id" });
 
     const normalize = (order) => ({
       ...normalizeDeliveryOrder(order),
@@ -3195,8 +3238,8 @@ const routes = [
     });
 
     return {
-      food: (food ?? []).map(normalize),
-      grocery: (grocery ?? []).map(normalize),
+      food: hydratedFood.map(normalize),
+      grocery: hydratedGrocery.map(normalize),
     };
   }),
   route(
@@ -3300,7 +3343,7 @@ const routes = [
         token,
         buildPath("/rides", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,drop_lat,drop_lng,fare_estimate,status,created_at,rider_id,vehicle_type,customer:customer_id(full_name,phone)",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,drop_lat,drop_lng,fare_estimate,status,created_at,customer_id,rider_id,vehicle_type",
           or: `(rider_id.is.null,rider_id.eq.${user.id})`,
           status: "not.in.(completed,cancelled)",
           order: "created_at.desc",
@@ -3310,7 +3353,7 @@ const routes = [
         token,
         buildPath("/package_deliveries", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,drop_lat,drop_lng,fare_estimate,status,created_at,rider_id,package_size,receiver_name,customer:customer_id(full_name,phone)",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,drop_lat,drop_lng,fare_estimate,status,created_at,customer_id,rider_id,package_size,receiver_name",
           or: `(rider_id.is.null,rider_id.eq.${user.id})`,
           status: "not.in.(completed,cancelled)",
           order: "created_at.desc",
@@ -3318,8 +3361,10 @@ const routes = [
       ),
     ]);
 
-    const normalize = o => ({ ...o, profiles: o.customer || null });
-    return { rides: (rides ?? []).map(normalize), packages: (packages ?? []).map(normalize) };
+    return {
+      rides: await attachUserProfiles(token, rides ?? [], { customer: "customer_id" }),
+      packages: await attachUserProfiles(token, packages ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/rider\/active$/, async ({ token, user, url }) => {
     const id = url.searchParams.get("id");
@@ -3337,9 +3382,9 @@ const routes = [
         buildPath(
           `/${table}`,
           id
-            ? { select: "*,customer:customer_id(full_name,phone)", id: `eq.${id}`, order: "created_at.desc", limit: "1" }
+            ? { select: "*", id: `eq.${id}`, order: "created_at.desc", limit: "1" }
             : {
-                select: "*,customer:customer_id(full_name,phone)",
+                select: "*",
                 rider_id: `eq.${user.id}`,
                 status: "not.in.(completed,cancelled)",
                 order: "created_at.desc",
@@ -3350,7 +3395,10 @@ const routes = [
 
       const job = firstRow(rows);
       if (job) {
-        return { job: { ...job, profiles: job.customer }, table };
+        return {
+          job: await attachUserProfiles(token, job, { customer: "customer_id" }),
+          table,
+        };
       }
     }
 
@@ -3450,7 +3498,7 @@ const routes = [
         token,
         buildPath("/rides", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,vehicle_type,customer:customer_id(full_name,phone)",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,customer_id,rider_id,vehicle_type",
           rider_id: `eq.${user.id}`,
           order: "created_at.desc",
           limit: "100",
@@ -3460,7 +3508,7 @@ const routes = [
         token,
         buildPath("/package_deliveries", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,package_size,receiver_name,customer:customer_id(full_name,phone)",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,customer_id,rider_id,package_size,receiver_name",
           rider_id: `eq.${user.id}`,
           order: "created_at.desc",
           limit: "100",
@@ -3468,8 +3516,10 @@ const routes = [
       ),
     ]);
 
-    const normalize = o => ({ ...o, profiles: o.customer || null });
-    return { rides: (rides ?? []).map(normalize), packages: (packages ?? []).map(normalize) };
+    return {
+      rides: await attachUserProfiles(token, rides ?? [], { customer: "customer_id" }),
+      packages: await attachUserProfiles(token, packages ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/admin\/commissions$/, async ({ token }) => ({
     commissions: await getPlatformCommissions(token),

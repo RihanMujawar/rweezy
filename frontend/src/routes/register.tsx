@@ -17,7 +17,7 @@ export const Route = createFileRoute("/register")({
 
 function RegisterPage() {
   const navigate = useNavigate();
-  const { refreshAuth } = useAuth();
+  const { setAuthenticatedUser } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
@@ -89,7 +89,7 @@ function RegisterPage() {
       }
 
       if (result.authenticated) {
-        await refreshAuth();
+        setAuthenticatedUser(result);
         toast.success("Account created!");
         navigate({ to: "/app" });
       } else {
@@ -116,8 +116,8 @@ function RegisterPage() {
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
 
-      await api.auth.loginWithFirebaseGoogle({ id_token: idToken });
-      await refreshAuth();
+      const authResult = await api.auth.loginWithFirebaseGoogle({ id_token: idToken });
+      setAuthenticatedUser(authResult);
       toast.success("Welcome back!");
       navigate({ to: "/app" });
     } catch (error) {

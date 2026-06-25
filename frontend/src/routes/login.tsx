@@ -17,7 +17,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { refreshAuth } = useAuth();
+  const { setAuthenticatedUser } = useAuth();
   const [mode, setMode] = useState<"password" | "otp">("password");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -53,8 +53,11 @@ function LoginPage() {
 
     setLoading(true);
     try {
-      await api.auth.login({ phone: parsed.data.phone, password: parsed.data.password });
-      await refreshAuth();
+      const result = await api.auth.login({
+        phone: parsed.data.phone,
+        password: parsed.data.password,
+      });
+      setAuthenticatedUser(result);
       toast.success("Welcome back!");
       navigate({ to: "/app" });
     } catch (error) {
@@ -64,9 +67,17 @@ function LoginPage() {
     }
   };
 
-  const handlePhoneVerified = async () => {
+  const handlePhoneVerified = (
+    _phoneVerificationToken: string,
+    result?: {
+      user?: { id: string; email?: string | null };
+      roles?: string[];
+    },
+  ) => {
     setPhoneLoginReady(true);
-    await refreshAuth();
+    if (result?.user) {
+      setAuthenticatedUser({ user: result.user, roles: result.roles });
+    }
     toast.success("Welcome back!");
     navigate({ to: "/app" });
   };
@@ -84,8 +95,8 @@ function LoginPage() {
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
 
-      await api.auth.loginWithFirebaseGoogle({ id_token: idToken });
-      await refreshAuth();
+      const authResult = await api.auth.loginWithFirebaseGoogle({ id_token: idToken });
+      setAuthenticatedUser(authResult);
       toast.success("Welcome back!");
       navigate({ to: "/app" });
     } catch (error) {

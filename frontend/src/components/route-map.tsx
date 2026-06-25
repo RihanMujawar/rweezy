@@ -63,6 +63,7 @@ function MapboxShell({
   lines = [],
   height,
   onClick,
+  onMarkerClick,
 }: {
   center: LatLng;
   markers: MapMarker[];
