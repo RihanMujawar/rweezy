@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "@/lib/location-context";
 import { api } from "@/lib/api";
 import { Search, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,13 +34,15 @@ function FoodList() {
   const [query, setQuery] = useState("");
   const [openOnly, setOpenOnly] = useState(false);
 
+  const { location: gpsLocation } = useLocation();
+
   useEffect(() => {
-    api.catalog.getRestaurants().then(({ restaurants: data, location }) => {
+    api.catalog.getRestaurants(gpsLocation || undefined).then(({ restaurants: data, location }) => {
       setRestaurants((data as Restaurant[]) ?? []);
       setLocation((location as Location | null) ?? null);
       setLoading(false);
     });
-  }, []);
+  }, [gpsLocation]);
 
   const filteredRestaurants = useMemo(() => {
     const needle = query.trim().toLowerCase();

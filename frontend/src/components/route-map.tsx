@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type mapboxgl from "mapbox-gl";
+import L from "leaflet";
 import { api } from "@/lib/api";
 import type { LatLng } from "@/lib/geo";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,8 @@ import { AlertCircle, LocateFixed, Search } from "lucide-react";
 
 export type { LatLng };
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
-const MAPBOX_STYLE = "mapbox://styles/mapbox/streets-v12";
 const DEFAULT_CENTER: LatLng = { lat: 12.9716, lng: 77.5946 };
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
 type MarkerKind = "pickup" | "drop" | "rider" | "current";
 
@@ -33,31 +32,36 @@ type PlaceSearchResult = {
   point: LatLng;
 };
 
-function coords(point: LatLng): [number, number] {
-  return [point.lng, point.lat];
-}
-
-function markerElement(kind: MarkerKind) {
-  const el = document.createElement("div");
-  el.className = "grid place-items-center rounded-full border-[3px] border-white shadow-md";
+function markerIcon(kind: MarkerKind) {
+  let color = "#2563eb";
+  let content = "";
+  let size = 22;
+  let shadow = "0 0 0 5px rgba(37,99,235,.22),0 0 0 2px #2563eb";
 
   if (kind === "pickup") {
-    el.style.cssText = "width:18px;height:18px;background:#22c55e;box-shadow:0 0 0 2px #22c55e";
+    color = "#22c55e";
+    size = 18;
+    shadow = "0 0 0 2px #22c55e";
   } else if (kind === "drop") {
-    el.style.cssText = "width:18px;height:18px;background:#ef4444;box-shadow:0 0 0 2px #ef4444";
+    color = "#ef4444";
+    size = 18;
+    shadow = "0 0 0 2px #ef4444";
   } else if (kind === "rider") {
-    el.style.cssText =
-      "width:24px;height:24px;background:#2563eb;color:white;font-size:12px;font-weight:700;box-shadow:0 0 0 2px #2563eb";
-    el.textContent = "D";
-  } else {
-    el.style.cssText =
-      "width:22px;height:22px;background:#2563eb;box-shadow:0 0 0 5px rgba(37,99,235,.22),0 0 0 2px #2563eb";
+    color = "#2563eb";
+    size = 24;
+    content = "D";
+    shadow = "0 0 0 2px #2563eb";
   }
 
-  return el;
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:${size}px;height:${size}px;background:${color};border:3px solid white;border-radius:50%;box-shadow:${shadow};display:grid;place-items:center;color:white;font-size:12px;font-weight:700;">${content}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
 }
 
-function MapboxShell({
+function LeafletShell({
   center,
   markers,
   lines = [],
@@ -73,175 +77,102 @@ function MapboxShell({
   onMarkerClick?: (id: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const mapboxRef = useRef<typeof mapboxgl | null>(null);
-  const markerRefs = useRef<mapboxgl.Marker[]>([]);
-  const onClickRef = useRef(onClick);
-  const [mapError, setMapError] = useState<string | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markersGroupRef = useRef<L.LayerGroup | null>(null);
+  const linesGroupRef = useRef<L.LayerGroup | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const centerCoords = useMemo<[number, number]>(
-    () => [center.lng, center.lat],
-    [center.lat, center.lng],
-  );
-
-  const onMarkerClickRef = useRef(onMarkerClick);
+  const onClickRef = useRef(onClick);
 
   useEffect(() => {
     onClickRef.current = onClick;
   }, [onClick]);
 
   useEffect(() => {
-    onMarkerClickRef.current = onMarkerClick;
-  }, [onMarkerClick]);
+    if (!containerRef.current || mapRef.current) return;
 
-  useEffect(() => {
-    if (!MAPBOX_TOKEN || !containerRef.current || mapRef.current) return;
-    let cancelled = false;
-    setMapReady(false);
+    const map = L.map(containerRef.current, {
+      center: [center.lat, center.lng],
+      zoom: 13,
+      zoomControl: false,
+    });
 
-    import("mapbox-gl")
-      .then((module) => {
-        if (cancelled || !containerRef.current) return;
+    L.control.zoom({ position: "topright" }).addTo(map);
 
-        const mapbox = module.default;
-        mapbox.accessToken = MAPBOX_TOKEN;
-        mapboxRef.current = mapbox;
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
 
-        const map = new mapbox.Map({
-          container: containerRef.current,
-          style: MAPBOX_STYLE,
-          center: centerCoords,
-          zoom: 13,
-        });
+    map.on("click", (e) => {
+      onClickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng });
+    });
 
-        map.addControl(new mapbox.NavigationControl({ showCompass: false }), "top-right");
-        map.on("error", () => {
-          setMapError("Map could not load. Check your Mapbox token and network connection.");
-        });
-        map.on("click", (event) => {
-          onClickRef.current?.({ lat: event.lngLat.lat, lng: event.lngLat.lng });
-        });
+    markersGroupRef.current = L.layerGroup().addTo(map);
+    linesGroupRef.current = L.layerGroup().addTo(map);
 
-        mapRef.current = map;
-        setMapReady(true);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setMapError("Map could not load. Check your Mapbox token and network connection.");
-        }
-      });
+    mapRef.current = map;
+    setMapReady(true);
 
     return () => {
-      cancelled = true;
-      markerRefs.current.forEach((marker) => marker.remove());
-      markerRefs.current = [];
-      mapRef.current?.remove();
+      map.remove();
       mapRef.current = null;
-      mapboxRef.current = null;
     };
-  }, [centerCoords]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
-    const mapbox = mapboxRef.current;
-    if (!map || !mapbox || !mapReady) return;
+    if (!map || !mapReady) return;
 
-    markerRefs.current.forEach((marker) => marker.remove());
-    markerRefs.current = markers.map((marker) => {
-      const el = markerElement(marker.kind);
-      el.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onMarkerClickRef.current?.(marker.id);
+    // Update Markers
+    if (markersGroupRef.current) {
+      markersGroupRef.current.clearLayers();
+      markers.forEach((m) => {
+        const marker = L.marker([m.point.lat, m.point.lng], {
+          icon: markerIcon(m.kind),
+        });
+        marker.on("click", (e) => {
+          L.DomEvent.stopPropagation(e);
+          onMarkerClick?.(m.id);
+        });
+        marker.addTo(markersGroupRef.current!);
       });
-      return new mapbox.Marker({ element: el, anchor: "center" })
-        .setLngLat(coords(marker.point))
-        .addTo(map);
-    });
-
-    const renderLines = () => {
-      for (const line of lines) {
-        const sourceId = `line-source-${line.id}`;
-        const layerId = `line-layer-${line.id}`;
-        const data: GeoJSON.Feature<GeoJSON.LineString> = {
-          type: "Feature",
-          properties: {},
-          geometry: {
-            type: "LineString",
-            coordinates: line.points.map(coords),
-          },
-        };
-
-        const source = map.getSource(sourceId) as mapboxgl.GeoJSONSource | undefined;
-        if (source) {
-          source.setData(data);
-        } else {
-          map.addSource(sourceId, { type: "geojson", data });
-          map.addLayer({
-            id: layerId,
-            type: "line",
-            source: sourceId,
-            paint: {
-              "line-color": line.color,
-              "line-width": line.id === "rider" ? 5 : 4,
-              "line-opacity": line.id === "rider" ? 0.9 : 0.65,
-              ...(line.dashed ? { "line-dasharray": [1.5, 2] } : {}),
-            },
-          });
-        }
-      }
-
-      for (const id of ["route", "rider"]) {
-        if (!lines.some((line) => line.id === id) && map.getLayer(`line-layer-${id}`)) {
-          map.removeLayer(`line-layer-${id}`);
-          map.removeSource(`line-source-${id}`);
-        }
-      }
-    };
-
-    if (map.isStyleLoaded()) {
-      renderLines();
-    } else {
-      map.once("load", renderLines);
     }
 
-    const points = [
-      ...markers.map((marker) => marker.point),
-      ...lines.flatMap((line) => line.points),
+    // Update Lines
+    if (linesGroupRef.current) {
+      linesGroupRef.current.clearLayers();
+      lines.forEach((l) => {
+        const polyline = L.polyline(
+          l.points.map((p) => [p.lat, p.lng]),
+          {
+            color: l.color,
+            weight: l.id === "rider" ? 5 : 4,
+            opacity: l.id === "rider" ? 0.9 : 0.65,
+            dashArray: l.dashed ? "5, 10" : undefined,
+          }
+        );
+        polyline.addTo(linesGroupRef.current!);
+      });
+    }
+
+    // Fit Bounds
+    const allPoints = [
+      ...markers.map((m) => [m.point.lat, m.point.lng] as L.LatLngTuple),
+      ...lines.flatMap((l) => l.points.map((p) => [p.lat, p.lng] as L.LatLngTuple)),
     ];
-    if (points.length === 1) {
-      map.flyTo({ center: coords(points[0]), zoom: 14, essential: false });
-    } else if (points.length > 1) {
-      const bounds = new mapbox.LngLatBounds();
-      points.forEach((point) => bounds.extend(coords(point)));
-      map.fitBounds(bounds, { padding: 48, maxZoom: 15, duration: 500 });
-    } else {
-      map.flyTo({ center: centerCoords, zoom: 13, essential: false });
-    }
-  }, [centerCoords, markers, lines, mapReady]);
 
-  if (!MAPBOX_TOKEN) {
-    return (
-      <div
-        className="grid place-items-center rounded-xl border bg-muted p-6 text-center text-sm text-muted-foreground"
-        style={{ height }}
-      >
-        Add `VITE_MAPBOX_ACCESS_TOKEN` to your environment to enable Mapbox maps.
-      </div>
-    );
-  }
+    if (allPoints.length === 1) {
+      map.setView(allPoints[0], 15);
+    } else if (allPoints.length > 1) {
+      const bounds = L.latLngBounds(allPoints);
+      map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 });
+    } else {
+      map.setView([center.lat, center.lng], 13);
+    }
+  }, [center, markers, lines, mapReady]);
 
   return (
     <div className="relative overflow-hidden rounded-xl border" style={{ height }}>
-      <div ref={containerRef} className="h-full w-full" />
-      {mapError && (
-        <div className="absolute inset-0 grid place-items-center bg-background/90 p-6 text-center text-sm">
-          <div className="max-w-sm">
-            <AlertCircle className="mx-auto mb-2 h-5 w-5 text-destructive" />
-            <p className="font-medium">Map unavailable</p>
-            <p className="mt-1 text-muted-foreground">{mapError}</p>
-          </div>
-        </div>
-      )}
+      <div ref={containerRef} className="h-full w-full z-0" />
     </div>
   );
 }
@@ -256,46 +187,74 @@ async function fetchRoute(from: LatLng, to: LatLng): Promise<LatLng[] | null> {
 }
 
 async function searchPlaces(query: string, near: LatLng): Promise<PlaceSearchResult[]> {
-  if (!MAPBOX_TOKEN) return [];
+  // We'll stick to Mapbox for geocoding if token is available, or fallback to Nominatim
+  if (MAPBOX_TOKEN) {
+    const url = new URL(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`,
+    );
+    url.searchParams.set("access_token", MAPBOX_TOKEN);
+    url.searchParams.set("autocomplete", "true");
+    url.searchParams.set("limit", "5");
+    url.searchParams.set("language", "en");
+    url.searchParams.set("proximity", `${near.lng},${near.lat}`);
 
-  const url = new URL(
-    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`,
-  );
-  url.searchParams.set("access_token", MAPBOX_TOKEN);
-  url.searchParams.set("autocomplete", "true");
-  url.searchParams.set("limit", "5");
-  url.searchParams.set("language", "en");
-  url.searchParams.set("proximity", `${near.lng},${near.lat}`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Location search failed");
 
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Location search failed");
-
-  const data = await response.json();
-  return (data.features ?? [])
-    .filter((feature: { center?: unknown }) => Array.isArray(feature.center))
-    .map(
-      (feature: { id: string; place_name?: string; text?: string; center: [number, number] }) => ({
+    const data = await response.json();
+    return (data.features ?? [])
+      .filter((feature: any) => Array.isArray(feature.center))
+      .map((feature: any) => ({
         id: feature.id,
         label: feature.place_name ?? feature.text ?? "Selected location",
         point: { lat: feature.center[1], lng: feature.center[0] },
-      }),
-    );
+      }));
+  }
+
+  // Fallback to OSM Nominatim
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", "5");
+  url.searchParams.set("addressdetails", "1");
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("Location search failed");
+  const data = await response.json();
+  return data.map((item: any) => ({
+    id: item.place_id.toString(),
+    label: item.display_name,
+    point: { lat: parseFloat(item.lat), lng: parseFloat(item.lon) },
+  }));
 }
 
 async function reverseGeocode(point: LatLng): Promise<string | null> {
-  if (!MAPBOX_TOKEN) return null;
+  if (MAPBOX_TOKEN) {
+    try {
+      const url = new URL(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${point.lng},${point.lat}.json`,
+      );
+      url.searchParams.set("access_token", MAPBOX_TOKEN);
+      url.searchParams.set("limit", "1");
+      url.searchParams.set("language", "en");
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.features?.[0]?.place_name ?? null;
+    } catch {
+      return null;
+    }
+  }
 
   try {
-    const url = new URL(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${point.lng},${point.lat}.json`,
-    );
-    url.searchParams.set("access_token", MAPBOX_TOKEN);
-    url.searchParams.set("limit", "1");
-    url.searchParams.set("language", "en");
+    const url = new URL("https://nominatim.openstreetmap.org/reverse");
+    url.searchParams.set("lat", point.lat.toString());
+    url.searchParams.set("lon", point.lng.toString());
+    url.searchParams.set("format", "json");
     const response = await fetch(url);
     if (!response.ok) return null;
     const data = await response.json();
-    return data.features?.[0]?.place_name ?? null;
+    return data.display_name ?? null;
   } catch {
     return null;
   }
@@ -316,11 +275,6 @@ function LocationSearch({
   const [message, setMessage] = useState<string | null>(null);
 
   const runSearch = async () => {
-    if (!MAPBOX_TOKEN) {
-      setResults([]);
-      setMessage("Location search needs a Mapbox token.");
-      return;
-    }
     const trimmed = query.trim();
     if (trimmed.length < 3) {
       setResults([]);
@@ -365,14 +319,14 @@ function LocationSearch({
           placeholder={placeholder}
           autoComplete="off"
         />
-        <Button type="submit" variant="outline" size="icon" disabled={searching || !MAPBOX_TOKEN}>
+        <Button type="submit" variant="outline" size="icon" disabled={searching}>
           <Search className="h-4 w-4" />
           <span className="sr-only">Search location</span>
         </Button>
       </form>
 
       {results.length > 0 && (
-        <div className="overflow-hidden rounded-lg border bg-card text-sm shadow-sm">
+        <div className="overflow-hidden rounded-lg border bg-card text-sm shadow-sm z-50 relative">
           {results.map((result) => (
             <button
               key={result.id}
@@ -450,39 +404,14 @@ function useBrowserLocation(onPick: (point: LatLng) => void) {
       return;
     }
 
-    if ("permissions" in navigator) {
-      try {
-        const permission = await navigator.permissions.query({ name: "geolocation" });
-        if (permission.state === "denied") {
-          setMessage(
-            "Location is blocked for this site. Open browser site settings and allow Location, then tap again.",
-          );
-          return;
-        }
-      } catch {
-        // Some browsers do not allow querying geolocation permission. The actual location call below still works.
-      }
-    }
-
     setLocating(true);
     setMessage("Asking your browser for location permission...");
 
-    navigator.geolocation.getCurrentPosition(
-      handleSuccess,
-      (error) => {
-        if (error.code === error.TIMEOUT) {
-          navigator.geolocation.getCurrentPosition(handleSuccess, finishWithError, {
-            enableHighAccuracy: false,
-            maximumAge: 60000,
-            timeout: 15000,
-          });
-          return;
-        }
-
-        finishWithError(error);
-      },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 12000 },
-    );
+    navigator.geolocation.getCurrentPosition(handleSuccess, finishWithError, {
+      enableHighAccuracy: true,
+      maximumAge: 2000,
+      timeout: 12000,
+    });
   };
 
   return { locate, locating, message };
@@ -537,7 +466,7 @@ export function DeliveryPinMap({
         onSelect={handleSearchSelect}
         placeholder="Search delivery location"
       />
-      <MapboxShell center={center} markers={markers} height={height} onClick={handleMapClick} />
+      <LeafletShell center={center} markers={markers} height={height} onClick={handleMapClick} />
       <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
         <div className="min-w-0 space-y-1">
           <p>
@@ -572,7 +501,7 @@ export function StaticPointMap({
   );
 
   return (
-    <MapboxShell
+    <LeafletShell
       center={point}
       markers={markers}
       height={height}
@@ -651,7 +580,7 @@ export function PickerMap({
         onSelect={assignPoint}
         placeholder={!pickup ? "Search pickup location" : "Search drop location"}
       />
-      <MapboxShell center={center} markers={markers} height={height} onClick={assignPoint} />
+      <LeafletShell center={center} markers={markers} height={height} onClick={assignPoint} />
       <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
         <div className="min-w-0 space-y-1">
           <p>
@@ -732,5 +661,5 @@ export function RouteMap({
     [route, riderRoute],
   );
 
-  return <MapboxShell center={pickup} markers={markers} lines={lines} height={height} />;
+  return <LeafletShell center={pickup} markers={markers} lines={lines} height={height} />;
 }

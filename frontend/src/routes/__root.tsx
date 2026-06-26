@@ -1,5 +1,6 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth-context";
+import { LocationProvider } from "@/lib/location-context";
 import { Toaster } from "@/components/ui/sonner";
 import { SystemThemeSync } from "@/components/system-theme-sync";
 import { AndroidAppDownloadPrompt } from "@/components/android-app-download-prompt";
@@ -78,10 +79,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   return (
     <AuthProvider>
-      <SystemThemeSync />
-      <AndroidAppDownloadPrompt />
-      <Outlet />
-      <Toaster richColors position="top-right" />
+      <LocationProvider>
+        <SystemThemeSync />
+        <AndroidAppDownloadPrompt />
+        <Outlet />
+        <Toaster richColors position="top-right" />
+      </LocationProvider>
     </AuthProvider>
   );
 }

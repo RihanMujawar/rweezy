@@ -1525,11 +1525,16 @@ const routes = [
 
     return { row: firstRow(rows) };
   }),
-  route("GET", /^\/api\/catalog\/restaurants$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
+  route("GET", /^\/api\/catalog\/restaurants$/, async ({ token, user, url }) => {
+    let location = await getUserCatalogLocation(token, user.id);
+    const radiusKm = await getCatalogRadiusKm(token);
+
+    const latParam = url.searchParams.get("lat");
+    const lngParam = url.searchParams.get("lng");
+    if (latParam && lngParam) {
+      location = { ...location, lat: Number(latParam), lng: Number(lngParam) };
+    }
+
     const restaurants = await restRequest(
       token,
       buildPath("/restaurants", {
@@ -1569,11 +1574,16 @@ const routes = [
       items: itemRows ?? [],
     };
   }),
-  route("GET", /^\/api\/catalog\/items\/food$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
+  route("GET", /^\/api\/catalog\/items\/food$/, async ({ token, user, url }) => {
+    let location = await getUserCatalogLocation(token, user.id);
+    const radiusKm = await getCatalogRadiusKm(token);
+
+    const latParam = url.searchParams.get("lat");
+    const lngParam = url.searchParams.get("lng");
+    if (latParam && lngParam) {
+      location = { ...location, lat: Number(latParam), lng: Number(lngParam) };
+    }
+
     const restaurants = await restRequest(
       token,
       buildPath("/restaurants", {
@@ -1597,11 +1607,16 @@ const routes = [
     );
     return { items: items ?? [] };
   }),
-  route("GET", /^\/api\/catalog\/items\/grocery$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
+  route("GET", /^\/api\/catalog\/items\/grocery$/, async ({ token, user, url }) => {
+    let location = await getUserCatalogLocation(token, user.id);
+    const radiusKm = await getCatalogRadiusKm(token);
+
+    const latParam = url.searchParams.get("lat");
+    const lngParam = url.searchParams.get("lng");
+    if (latParam && lngParam) {
+      location = { ...location, lat: Number(latParam), lng: Number(lngParam) };
+    }
+
     const stores = await restRequest(
       token,
       buildPath("/grocery_stores", {
@@ -1625,11 +1640,16 @@ const routes = [
     );
     return { items: items ?? [] };
   }),
-  route("GET", /^\/api\/catalog\/stores$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
+  route("GET", /^\/api\/catalog\/stores$/, async ({ token, user, url }) => {
+    let location = await getUserCatalogLocation(token, user.id);
+    const radiusKm = await getCatalogRadiusKm(token);
+
+    const latParam = url.searchParams.get("lat");
+    const lngParam = url.searchParams.get("lng");
+    if (latParam && lngParam) {
+      location = { ...location, lat: Number(latParam), lng: Number(lngParam) };
+    }
+
     const stores = await restRequest(
       token,
       buildPath("/grocery_stores", {
