@@ -9,6 +9,8 @@ interface LocationContextType {
   detectLocation: () => Promise<void>;
   loading: boolean;
   error: string | null;
+  needsManualEntry: boolean;
+  setNeedsManualEntry: (val: boolean) => void;
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
@@ -18,6 +20,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsManualEntry, setNeedsManualEntry] = useState(false);
 
   const detectLocation = async () => {
     if (!navigator.geolocation) {
@@ -66,6 +69,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         (err) => {
           setError(err.message);
           setLoading(false);
+          setNeedsManualEntry(true);
           reject(err);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -74,7 +78,19 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <LocationContext.Provider value={{ location, address, setLocation, setAddress, detectLocation, loading, error }}>
+    <LocationContext.Provider
+      value={{
+        location,
+        address,
+        setLocation,
+        setAddress,
+        detectLocation,
+        loading,
+        error,
+        needsManualEntry,
+        setNeedsManualEntry,
+      }}
+    >
       {children}
     </LocationContext.Provider>
   );

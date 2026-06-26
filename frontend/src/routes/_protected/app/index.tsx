@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useOrderSummary } from "@/hooks/use-order-summary";
 import { OnboardingDialog } from "@/components/onboarding-dialog";
+import { ManualLocationDialog } from "@/components/manual-location-dialog";
 import {
   Carousel,
   CarouselContent,
@@ -219,7 +220,14 @@ function ItemCarousel({
 
 function AppHome() {
   const { user, roles } = useAuth();
-  const { location, address, detectLocation, loading: detecting } = useLocation();
+  const {
+    location,
+    address,
+    detectLocation,
+    loading: detecting,
+    needsManualEntry,
+    setNeedsManualEntry,
+  } = useLocation();
   const { latestActiveOrder } = useOrderSummary();
   const [foodItems, setFoodItems] = useState<CatalogItem[]>([]);
   const [groceryItems, setGroceryItems] = useState<CatalogItem[]>([]);
@@ -245,6 +253,14 @@ function AppHome() {
   };
 
   useEffect(() => {
+    if (!location && !detecting) {
+      detectLocation().catch(() => {
+        // Error handled in detectLocation (sets needsManualEntry)
+      });
+    }
+  }, []);
+
+  useEffect(() => {
     fetchData(location || undefined);
   }, [location]);
 
@@ -268,6 +284,7 @@ function AppHome() {
     <div className="min-h-screen bg-background pb-20">
       <div className="container mx-auto px-4 py-6 md:py-10">
         {user?.id && <OnboardingDialog userId={user.id} email={user.email} />}
+        <ManualLocationDialog open={needsManualEntry} onOpenChange={setNeedsManualEntry} />
 
         {/* Header Section */}
         <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -282,7 +299,7 @@ function AppHome() {
             <div className="flex items-center gap-2 text-muted-foreground">
                 <Navigation className="h-4 w-4 text-primary" />
                 <button
-                    onClick={handleDetectLocation}
+                    onClick={() => setNeedsManualEntry(true)}
                     disabled={detecting}
                     className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1 group"
                 >
