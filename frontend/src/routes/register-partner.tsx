@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ManualLocationDialog } from "@/components/manual-location-dialog";
+import { useLocation } from "@/lib/location-context";
+import { LocateFixed, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/register-partner")({
@@ -24,6 +27,12 @@ const roleOptions = [
 function PartnerRegisterPage() {
   const navigate = useNavigate();
   const { setAuthenticatedUser } = useAuth();
+  const {
+    location: businessLocation,
+    address: detectedAddress,
+    detectLocation,
+    loading: locationLoading,
+  } = useLocation();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
@@ -33,16 +42,25 @@ function PartnerRegisterPage() {
   const [requestedRole, setRequestedRole] =
     useState<(typeof roleOptions)[number]["value"]>("rider");
   const [businessName, setBusinessName] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
+  const [townName, setTownName] = useState("");
+  const [pincode, setPincode] = useState("");
+  const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [roleMessage, setRoleMessage] = useState("");
   const [phoneVerificationToken, setPhoneVerificationToken] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   const fullPhone = `${countryCode}${phoneSuffix.replace(/\D/g, "")}`;
+  const isStoreRole = requestedRole === "hotel_manager" || requestedRole === "grocery_manager";
 
   useEffect(() => {
     setPhoneVerificationToken("");
   }, [fullPhone]);
+
+  useEffect(() => {
+    if (detectedAddress) setBusinessAddress(detectedAddress);
+  }, [detectedAddress]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -54,6 +72,10 @@ function PartnerRegisterPage() {
       confirmPassword,
       requestedRole,
       businessName,
+      businessAddress,
+      townName,
+      pincode,
+      businessLocation,
       roleMessage,
     });
 
@@ -78,6 +100,10 @@ function PartnerRegisterPage() {
         phone: parsedPhone,
         requestedRole: parsedRequestedRole,
         businessName: parsedBusinessName,
+        businessAddress: parsedBusinessAddress,
+        townName: parsedTownName,
+        pincode: parsedPincode,
+        businessLocation: parsedBusinessLocation,
         roleMessage: parsedRoleMessage,
       } = parsed.data;
 
@@ -94,6 +120,11 @@ function PartnerRegisterPage() {
         phone_verification_token: phoneVerificationToken,
         requested_role: parsedRequestedRole,
         business_name: parsedBusinessName,
+        business_address: parsedBusinessAddress,
+        business_lat: parsedBusinessLocation?.lat,
+        business_lng: parsedBusinessLocation?.lng,
+        town_name: parsedTownName,
+        pincode: parsedPincode,
         role_message: parsedRoleMessage,
       });
 
@@ -209,7 +240,9 @@ function PartnerRegisterPage() {
 
           <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
             <div className="space-y-2">
-              <Label htmlFor="businessName">Business or vehicle details</Label>
+              <Label htmlFor="businessName">
+                {isStoreRole ? "Restaurant or store name" : "Business or vehicle details"}
+              </Label>
               <Input
                 id="businessName"
                 value={businessName}
@@ -220,6 +253,78 @@ function PartnerRegisterPage() {
                 <p className="text-xs text-destructive">{errors.businessName}</p>
               )}
             </div>
+            {isStoreRole && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="businessAddress">Complete business address</Label>
+                  <Textarea
+                    id="businessAddress"
+                    value={businessAddress}
+                    onChange={(e) => setBusinessAddress(e.target.value)}
+                    placeholder="Shop number, street, locality, town and pincode"
+                  />
+                  {errors.businessAddress && (
+                    <p className="text-xs text-destructive">{errors.businessAddress}</p>
+                  )}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="townName">Town / city</Label>
+                    <Input
+                      id="townName"
+                      value={townName}
+                      onChange={(e) => setTownName(e.target.value)}
+                      placeholder="Your town"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pincode">Pincode</Label>
+                    <Input
+                      id="pincode"
+                      inputMode="numeric"
+                      value={pincode}
+                      onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                      placeholder="110001"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Pin business location</Label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={locationLoading}
+                      onClick={() =>
+                        detectLocation().catch(() =>
+                          toast.error("Location access failed. Search the address manually."),
+                        )
+                      }
+                    >
+                      <LocateFixed className="mr-2 h-4 w-4" />
+                      {locationLoading ? "Detecting..." : "Use current location"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setLocationDialogOpen(true)}>
+                      <MapPin className="mr-2 h-4 w-4" />
+                      Search location
+                    </Button>
+                  </div>
+                  {businessLocation ? (
+                    <p className="text-xs text-emerald-600">
+                      Location pinned ({businessLocation.lat.toFixed(5)},{" "}
+                      {businessLocation.lng.toFixed(5)})
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Pin the exact entrance so nearby customers can discover your business.
+                    </p>
+                  )}
+                  {errors.businessLocation && (
+                    <p className="text-xs text-destructive">{errors.businessLocation}</p>
+                  )}
+                </div>
+              </>
+            )}
             <div className="space-y-2">
               <Label htmlFor="roleMessage">Message for admin</Label>
               <Textarea
@@ -279,6 +384,7 @@ function PartnerRegisterPage() {
           </p>
         </div>
       </div>
+      <ManualLocationDialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen} />
     </div>
   );
 }

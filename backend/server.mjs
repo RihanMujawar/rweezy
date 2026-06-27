@@ -697,8 +697,36 @@ async function completeUserRegistration({
   phoneVerificationToken,
   requestedRole,
   businessName,
+  businessAddress,
+  businessLat,
+  businessLng,
+  townName,
+  pincode,
   roleMessage,
 }) {
+  const isStoreRole = ["hotel_manager", "grocery_manager"].includes(requestedRole);
+  const normalizedBusinessName = cleanText(businessName);
+  const normalizedBusinessAddress = cleanText(businessAddress);
+  const normalizedBusinessLat = Number(businessLat);
+  const normalizedBusinessLng = Number(businessLng);
+  if (isStoreRole && !normalizedBusinessName) {
+    throw new HttpError(400, "Restaurant or store name is required");
+  }
+  if (isStoreRole && !normalizedBusinessAddress) {
+    throw new HttpError(400, "Business address is required");
+  }
+  if (
+    isStoreRole &&
+    (!Number.isFinite(normalizedBusinessLat) ||
+      normalizedBusinessLat < -90 ||
+      normalizedBusinessLat > 90 ||
+      !Number.isFinite(normalizedBusinessLng) ||
+      normalizedBusinessLng < -180 ||
+      normalizedBusinessLng > 180)
+  ) {
+    throw new HttpError(400, "Pin a valid restaurant or store location");
+  }
+
   verifyPhoneVerificationToken(phoneVerificationToken, phone);
   if (email) await assertEmailAvailable(email);
   await assertPhoneAvailable(phone);
@@ -759,7 +787,12 @@ async function completeUserRegistration({
         body: {
           user_id: createdUserId,
           requested_role: requestedRole,
-          business_name: cleanText(businessName) || null,
+          business_name: normalizedBusinessName || null,
+          business_address: normalizedBusinessAddress || null,
+          business_lat: isStoreRole ? normalizedBusinessLat : null,
+          business_lng: isStoreRole ? normalizedBusinessLng : null,
+          town_name: cleanText(townName) || null,
+          pincode: cleanText(pincode) || null,
           message: cleanText(roleMessage) || "Requested during registration",
         },
       });
@@ -1262,6 +1295,11 @@ const routes = [
       phoneVerificationToken,
       requestedRole,
       businessName: body.business_name,
+      businessAddress: body.business_address,
+      businessLat: body.business_lat,
+      businessLng: body.business_lng,
+      townName: body.town_name,
+      pincode: body.pincode,
       roleMessage: body.role_message,
     });
   }),
@@ -2721,6 +2759,39 @@ const routes = [
           headers: { Prefer: "resolution=ignore-duplicates" },
           body: { user_id: request.user_id, role: request.requested_role },
         });
+
+        const listingTable =
+          request.requested_role === "hotel_manager"
+            ? "restaurants"
+            : request.requested_role === "grocery_manager"
+              ? "grocery_stores"
+              : null;
+        if (listingTable) {
+          const existing = await restRequest(
+            token,
+            buildPath(`/${listingTable}`, {
+              select: "id",
+              manager_id: `eq.${request.user_id}`,
+              limit: "1",
+            }),
+          );
+          if (!firstRow(existing)) {
+            await restRequest(token, buildPath(`/${listingTable}`, { select: "*" }), {
+              method: "POST",
+              headers: { Prefer: "return=representation" },
+              body: {
+                manager_id: request.user_id,
+                name: request.business_name,
+                address: request.business_address,
+                town_name: request.town_name,
+                pincode: request.pincode,
+                lat: request.business_lat,
+                lng: request.business_lng,
+                is_open: true,
+              },
+            });
+          }
+        }
       }
 
       const rows = await restRequest(
@@ -2791,6 +2862,10 @@ const routes = [
       name: body.name,
       description: body.description ?? null,
       address: body.address ?? null,
+      town_name: body.town_name ?? null,
+      pincode: body.pincode ?? null,
+      lat: body.lat ?? null,
+      lng: body.lng ?? null,
       image_url: body.image_url ?? null,
       is_open: body.is_open ?? true,
       manager_id: user.id,
@@ -3024,6 +3099,10 @@ const routes = [
       name: body.name,
       description: body.description ?? null,
       address: body.address ?? null,
+      town_name: body.town_name ?? null,
+      pincode: body.pincode ?? null,
+      lat: body.lat ?? null,
+      lng: body.lng ?? null,
       image_url: body.image_url ?? null,
       is_open: body.is_open ?? true,
       manager_id: user.id,

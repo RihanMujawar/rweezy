@@ -108,6 +108,11 @@ export const api = {
       role?: string;
       requested_role?: string;
       business_name?: string;
+      business_address?: string;
+      business_lat?: number;
+      business_lng?: number;
+      town_name?: string;
+      pincode?: string;
       role_message?: string;
     }) =>
       apiRequest<{

@@ -7,7 +7,7 @@ export function GlobalNotificationWatcher() {
   useGlobalNotifications();
 
   useEffect(() => {
-    ensureForegroundMessageListener();
+    void ensureForegroundMessageListener();
   }, []);
 
   return null;

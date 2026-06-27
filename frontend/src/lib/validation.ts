@@ -57,11 +57,45 @@ export const registerSchema = z
       "grocery_manager",
     ]),
     businessName: z.string().trim().max(160).optional(),
+    businessAddress: z.string().trim().max(300).optional(),
+    townName: z.string().trim().max(120).optional(),
+    pincode: z.string().trim().max(12).optional(),
+    businessLocation: z
+      .object({
+        lat: z.number().min(-90).max(90),
+        lng: z.number().min(-180).max(180),
+      })
+      .nullable()
+      .optional(),
     roleMessage: z.string().trim().max(500).optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     path: ["confirmPassword"],
     message: "Passwords do not match",
+  })
+  .superRefine((data, ctx) => {
+    if (!["hotel_manager", "grocery_manager"].includes(data.requestedRole)) return;
+    if (!data.businessName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["businessName"],
+        message: "Enter your restaurant or store name",
+      });
+    }
+    if (!data.businessAddress) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["businessAddress"],
+        message: "Enter the complete business address",
+      });
+    }
+    if (!data.businessLocation) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["businessLocation"],
+        message: "Pin the restaurant or store location",
+      });
+    }
   });
 
 export const checkoutSchema = z.object({

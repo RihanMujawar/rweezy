@@ -23,6 +23,7 @@ const ANDROID_TOKEN_CACHE_KEY = "rweezy:android-fcm-token";
 
 const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
 let foregroundBound = false;
+let foregroundBinding: Promise<void> | null = null;
 
 function isWebPushConfigured() {
   return (
@@ -68,9 +69,26 @@ function bindForegroundListener() {
 }
 
 /** Bind FCM foreground handler app-wide (safe to call on every protected page). */
-export function ensureForegroundMessageListener() {
-  if (typeof window === "undefined" || window.RweezyAndroidBridge || !isWebPushConfigured()) return;
-  bindForegroundListener();
+export function ensureForegroundMessageListener(): Promise<void> {
+  if (typeof window === "undefined" || window.RweezyAndroidBridge || !isWebPushConfigured()) {
+    return Promise.resolve();
+  }
+  if (foregroundBound) return Promise.resolve();
+  if (foregroundBinding) return foregroundBinding;
+
+  foregroundBinding = isSupported()
+    .then((supported) => {
+      if (supported) bindForegroundListener();
+    })
+    .catch(() => {
+      // Foreground notifications are optional. A browser or webview without
+      // the required Push APIs must never prevent the application from loading.
+    })
+    .finally(() => {
+      foregroundBinding = null;
+    });
+
+  return foregroundBinding;
 }
 
 function waitForAndroidFcmToken(): Promise<string> {
@@ -143,7 +161,7 @@ export async function registerWebPushForUser() {
   if (!(await isSupported())) return;
   if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
 
-  ensureForegroundMessageListener();
+  await ensureForegroundMessageListener();
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return;
