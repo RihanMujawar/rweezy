@@ -148,51 +148,167 @@ export async function signInWithPassword(identifier, password) {
 }
 
 export async function signUpWithPassword(email, password, fullName, metadata = {}) {
+  const body = {
+    password,
+    data: {
+      full_name: fullName,
+      ...metadata,
+    },
+  };
+  if (email) {
+    body.email = email;
+  } else if (metadata.phone) {
+    body.phone = metadata.phone;
+  }
   return authRequest("/signup", {
     method: "POST",
-    body: {
-      email,
-      password,
-      data: {
-        full_name: fullName,
-        ...metadata,
-      },
-    },
+    body,
   });
 }
 
 export async function createConfirmedUserWithPassword(email, password, fullName, metadata = {}) {
+  const body = {
+    password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: fullName,
+      ...metadata,
+    },
+  };
+  if (email) {
+    body.email = email;
+  } else if (metadata.phone) {
+    body.phone = metadata.phone;
+    body.phone_confirm = true;
+  }
   return adminAuthRequest("/users", {
     method: "POST",
+    body,
+  });
+}
+
+export async function createSessionForEmail(email) {
+  const link = await adminAuthRequest("/generate_link", {
+    method: "POST",
     body: {
+      type: "magiclink",
       email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: fullName,
-        ...metadata,
-      },
+    },
+  });
+
+  const tokenHash = link?.hashed_token ?? link?.properties?.hashed_token;
+  if (!tokenHash) {
+    throw new HttpError(500, "Unable to start a phone login session");
+  }
+
+  return authRequest("/verify", {
+    method: "POST",
+    body: {
+      type: "magiclink",
+      token_hash: tokenHash,
     },
   });
 }
 
-export async function findUserEmailByPhone(phone) {
-  const normalizedPhone = typeof phone === "string" ? phone.trim() : "";
-  if (!normalizedPhone) return null;
+export async function resendSignupConfirmation(email) {
+  return authRequest("/resend", {
+    method: "POST",
+    body: {
+      type: "signup",
+      email,
+    },
+  });
+}
+
+export async function sendPasswordRecoveryEmail(email) {
+  return authRequest("/recover", {
+    method: "POST",
+    body: { email },
+  });
+}
+
+export async function verifyRecoveryToken(tokenHash) {
+  return authRequest("/verify", {
+    method: "POST",
+    body: {
+      type: "recovery",
+      token_hash: tokenHash,
+    },
+  });
+}
+
+export async function updatePasswordWithAccessToken(accessToken, password) {
+  return authRequest("/user", {
+    method: "PUT",
+    token: accessToken,
+    body: { password },
+  });
+}
+
+export async function updateUserPassword(userId, password) {
+  return adminAuthRequest(`/users/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    body: { password },
+  });
+}
+
+export async function findUserByEmail(email) {
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!normalizedEmail) return null;
 
   for (let page = 1; page <= 10; page += 1) {
     const payload = await adminAuthRequest(`/users?page=${page}&per_page=100`);
     const users = Array.isArray(payload?.users) ? payload.users : [];
 
     const found = users.find((user) => {
-      const metadataPhone = typeof user?.user_metadata?.phone === "string"
-        ? user.user_metadata.phone.trim()
-        : "";
+      const userEmail = typeof user?.email === "string" ? user.email.trim().toLowerCase() : "";
+      return userEmail === normalizedEmail;
+    });
+
+    if (found) return found;
+    if (users.length < 100) break;
+  }
+
+  return null;
+}
+
+export async function findUserEmailByPhone(phone) {
+  const user = await findUserByPhone(phone);
+  return user?.email || null;
+}
+
+export async function findUserByPhone(phone) {
+  const normalizedPhone = typeof phone === "string" ? phone.trim() : "";
+  if (!normalizedPhone) return null;
+
+  // Try searching profiles table first (more efficient)
+  try {
+    const profileRows = await serviceRoleRestRequest(
+      `/profiles?select=id&phone=eq.${encodeURIComponent(normalizedPhone)}&limit=1`,
+    );
+    const profile = Array.isArray(profileRows) ? profileRows[0] : null;
+    if (profile?.id) {
+      const user = await adminAuthRequest(`/users/${encodeURIComponent(profile.id)}`);
+      if (user) return user;
+    }
+  } catch (error) {
+    // If profiles table or user fetch fails, fallback to scanning
+    console.warn("Profile-based user lookup failed, falling back to scan:", error.message);
+  }
+
+  // Fallback: Scan auth users (less efficient but reliable for all users)
+  for (let page = 1; page <= 5; page += 1) {
+    const payload = await adminAuthRequest(`/users?page=${page}&per_page=100`);
+    const users = Array.isArray(payload?.users) ? payload.users : [];
+
+    const found = users.find((user) => {
+      const metadataPhone =
+        typeof user?.user_metadata?.phone === "string" ? user.user_metadata.phone.trim() : "";
       const authPhone = typeof user?.phone === "string" ? user.phone.trim() : "";
       return metadataPhone === normalizedPhone || authPhone === normalizedPhone;
     });
 
-    if (found?.email) return found.email;
+    if (found) return found;
     if (users.length < 100) break;
   }
 

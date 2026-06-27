@@ -19,6 +19,11 @@ type RoleRequest = {
   user_id: string;
   requested_role: AppRole;
   business_name: string | null;
+  business_address: string | null;
+  business_lat: number | null;
+  business_lng: number | null;
+  town_name: string | null;
+  pincode: string | null;
   message: string | null;
   created_at: string;
 };
@@ -137,9 +142,29 @@ function AdminUsers() {
                               {request.requested_role.replace("_", " ")}
                             </div>
                             {request.business_name && (
-                              <div className="text-xs text-muted-foreground">
+                              <div className="text-sm font-medium">
                                 {request.business_name}
                               </div>
+                            )}
+                            {request.business_address && (
+                              <div className="text-xs text-muted-foreground">
+                                {request.business_address}
+                              </div>
+                            )}
+                            {(request.town_name || request.pincode) && (
+                              <div className="text-xs text-muted-foreground">
+                                {[request.town_name, request.pincode].filter(Boolean).join(" · ")}
+                              </div>
+                            )}
+                            {request.business_lat != null && request.business_lng != null && (
+                              <a
+                                className="text-xs text-primary hover:underline"
+                                href={`https://www.google.com/maps?q=${request.business_lat},${request.business_lng}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Verify pinned location
+                              </a>
                             )}
                             {request.message && (
                               <div className="text-xs text-muted-foreground">{request.message}</div>

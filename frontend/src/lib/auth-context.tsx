@@ -20,6 +20,7 @@ interface AuthContextValue {
   session: null;
   roles: AppRole[];
   loading: boolean;
+  setAuthenticatedUser: (auth: { user: AuthUser | null; roles?: string[] }) => void;
   signOut: () => Promise<void>;
   refreshRoles: () => Promise<void>;
   refreshAuth: () => Promise<void>;
@@ -45,6 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setAuthenticatedUser = (auth: { user: AuthUser | null; roles?: string[] }) => {
+    setUser(auth.user ?? null);
+    setRoles((auth.roles as AppRole[]) ?? []);
+    setLoading(false);
+  };
+
   useEffect(() => {
     refreshAuth();
   }, []);
@@ -68,7 +75,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session: null, roles, loading, signOut, refreshRoles, refreshAuth }}
+      value={{
+        user,
+        session: null,
+        roles,
+        loading,
+        setAuthenticatedUser,
+        signOut,
+        refreshRoles,
+        refreshAuth,
+      }}
     >
       {children}
     </AuthContext.Provider>

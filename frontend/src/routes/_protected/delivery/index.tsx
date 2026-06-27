@@ -9,7 +9,8 @@ import { RoleGate } from "@/components/coming-soon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useAlertsPreference } from "@/hooks/use-alerts-preference";
-import { Bell, BellOff, Filter } from "lucide-react";
+import { Bell, BellOff, Filter, Map as MapIcon, History } from "lucide-react";
+import { OrdersMap, MapOrder } from "@/components/orders-map";
 
 export const Route = createFileRoute("/_protected/delivery/")({
   component: DeliveryAvailable,
@@ -20,8 +21,11 @@ type FoodOrder = {
   status: string;
   total: number;
   delivery_address: string;
+  delivery_lat?: number;
+  delivery_lng?: number;
   created_at: string;
   restaurants: { name: string } | null;
+  profiles?: { full_name: string; phone: string };
 };
 
 type GroceryOrder = {
@@ -29,15 +33,23 @@ type GroceryOrder = {
   status: string;
   total: number;
   delivery_address: string;
+  delivery_lat?: number;
+  delivery_lng?: number;
   created_at: string;
   grocery_stores: { name: string } | null;
+  profiles?: { full_name: string; phone: string };
 };
 
 function DeliveryAvailable() {
   const { user, roles } = useAuth();
   const [food, setFood] = useState<FoodOrder[]>([]);
   const [grocery, setGrocery] = useState<GroceryOrder[]>([]);
+  const [activeFood, setActiveFood] = useState<FoodOrder[]>([]);
+  const [activeGrocery, setActiveGrocery] = useState<GroceryOrder[]>([]);
+  const [historyFood, setHistoryFood] = useState<FoodOrder[]>([]);
+  const [historyGrocery, setHistoryGrocery] = useState<GroceryOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const { alertsEnabled, setAlertsEnabled } = useAlertsPreference();
   const [selectedFood, setSelectedFood] = useState<Set<string>>(new Set());
   const [selectedGrocery, setSelectedGrocery] = useState<Set<string>>(new Set());
@@ -45,10 +57,28 @@ function DeliveryAvailable() {
   const [sortBy, setSortBy] = useState<"newest" | "amount">("newest");
 
   const load = useCallback(async () => {
-    const { food: f, grocery: g } = await api.delivery.getAvailable();
+    const [{ food: f, grocery: g }, { food: af, grocery: ag }] = await Promise.all([
+      api.delivery.getAvailable(),
+      api.delivery.getActive(),
+    ]);
     setFood((f as FoodOrder[]) ?? []);
     setGrocery((g as GroceryOrder[]) ?? []);
+    setActiveFood((af as FoodOrder[]) ?? []);
+    setActiveGrocery((ag as GroceryOrder[]) ?? []);
     setLoading(false);
+  }, []);
+
+  const loadHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      const { food: f, grocery: g } = await api.delivery.getHistory();
+      setHistoryFood((f as FoodOrder[]) ?? []);
+      setHistoryGrocery((g as GroceryOrder[]) ?? []);
+    } catch (error) {
+      toast.error("Failed to load history");
+    } finally {
+      setLoadingHistory(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -122,6 +152,97 @@ function DeliveryAvailable() {
   const visibleFood = filterAndSort(food);
   const visibleGrocery = filterAndSort(grocery);
 
+  const mapOrders: MapOrder[] = [
+    ...visibleFood.map((o) => ({
+      id: o.id,
+      lat: o.delivery_lat || 0,
+      lng: o.delivery_lng || 0,
+      pickupLat: o.pickup_lat,
+      pickupLng: o.pickup_lng,
+      customerName: o.profiles?.full_name,
+      customerPhone: o.profiles?.phone,
+      status: o.status,
+      total: o.total,
+      type: "food" as const,
+      canAccept: true,
+    })),
+    ...visibleGrocery.map((o) => ({
+      id: o.id,
+      lat: o.delivery_lat || 0,
+      lng: o.delivery_lng || 0,
+      pickupLat: o.pickup_lat,
+      pickupLng: o.pickup_lng,
+      customerName: o.profiles?.full_name,
+      customerPhone: o.profiles?.phone,
+      status: o.status,
+      total: o.total,
+      type: "grocery" as const,
+      canAccept: true,
+    })),
+    ...activeFood.map((o) => ({
+      id: o.id,
+      lat: o.delivery_lat || 0,
+      lng: o.delivery_lng || 0,
+      pickupLat: o.pickup_lat,
+      pickupLng: o.pickup_lng,
+      customerName: o.profiles?.full_name,
+      customerPhone: o.profiles?.phone,
+      status: o.status,
+      total: o.total,
+      type: "food" as const,
+      canAccept: false,
+    })),
+    ...activeGrocery.map((o) => ({
+      id: o.id,
+      lat: o.delivery_lat || 0,
+      lng: o.delivery_lng || 0,
+      pickupLat: o.pickup_lat,
+      pickupLng: o.pickup_lng,
+      customerName: o.profiles?.full_name,
+      customerPhone: o.profiles?.phone,
+      status: o.status,
+      total: o.total,
+      type: "grocery" as const,
+      canAccept: false,
+    })),
+  ].filter((o) => o.lat !== 0);
+
+  const handleAccept = async (id: string, type: MapOrder["type"]) => {
+    if (type === "food") await acceptFood(id);
+    else if (type === "grocery") await acceptGrocery(id);
+  };
+
+  const renderHistory = (list: (FoodOrder | GroceryOrder)[]) =>
+    list.length === 0 ? (
+      <p className="mt-8 rounded-2xl border bg-card p-12 text-center text-muted-foreground">
+        No completed deliveries found.
+      </p>
+    ) : (
+      <div className="mt-4 space-y-3">
+        {list.map((o) => (
+          <div key={o.id} className="rounded-xl border bg-card p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">
+                {"restaurants" in o
+                  ? `🍽️ ${o.restaurants?.name ?? "Restaurant"}`
+                  : `🛒 ${o.grocery_stores?.name ?? "Store"}`}
+              </h3>
+              <Badge variant="secondary" className="capitalize">
+                {o.status}
+              </Badge>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">📍 {o.delivery_address}</p>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="font-medium">₹{Number(o.total).toFixed(2)}</span>
+              <span className="text-xs text-muted-foreground">
+                {new Date(o.created_at).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+
   return (
     <RoleGate
       allowed={["delivery_boy", "admin"]}
@@ -173,13 +294,26 @@ function DeliveryAvailable() {
           </select>
         </div>
 
-        <Tabs defaultValue="food" className="mt-6">
+        <Tabs defaultValue="orders" className="mt-6">
           <TabsList>
-            <TabsTrigger value="food">Food ({visibleFood.length})</TabsTrigger>
-            <TabsTrigger value="grocery">Grocery ({visibleGrocery.length})</TabsTrigger>
+            <TabsTrigger value="orders">
+              <MapIcon className="mr-2 h-4 w-4" /> Orders
+            </TabsTrigger>
+            <TabsTrigger value="history" onClick={loadHistory}>
+              <History className="mr-2 h-4 w-4" /> History
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="food">
+          <TabsContent value="orders">
+            <div className="mt-4 space-y-6">
+              <OrdersMap orders={mapOrders} onAccept={handleAccept} height={600} />
+
+              <Tabs defaultValue="food">
+                <TabsList>
+                  <TabsTrigger value="food">Food Jobs ({visibleFood.length})</TabsTrigger>
+                  <TabsTrigger value="grocery">Grocery Jobs ({visibleGrocery.length})</TabsTrigger>
+                </TabsList>
+                <TabsContent value="food">
             {loading ? (
               <p className="mt-4 text-muted-foreground">Loading...</p>
             ) : visibleFood.length === 0 ? (
@@ -229,9 +363,8 @@ function DeliveryAvailable() {
                 ))}
               </div>
             )}
-          </TabsContent>
-
-          <TabsContent value="grocery">
+                </TabsContent>
+                <TabsContent value="grocery">
             {loading ? (
               <p className="mt-4 text-muted-foreground">Loading...</p>
             ) : visibleGrocery.length === 0 ? (
@@ -262,7 +395,7 @@ function DeliveryAvailable() {
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">📍 {o.delivery_address}</p>
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">${Number(o.total).toFixed(2)}</span>
+                      <span className="font-medium">₹{Number(o.total).toFixed(2)}</span>
                       <div className="flex gap-2">
                         <Button size="sm" className="min-h-11" onClick={() => acceptGrocery(o.id)}>
                           Accept
@@ -280,6 +413,26 @@ function DeliveryAvailable() {
                   </div>
                 ))}
               </div>
+            )}
+                </TabsContent>
+              </Tabs>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="history">
+            {loadingHistory ? (
+              <p className="mt-4 text-muted-foreground">Loading history...</p>
+            ) : (
+              <Tabs defaultValue="food_history">
+                <TabsList>
+                  <TabsTrigger value="food_history">Food ({historyFood.length})</TabsTrigger>
+                  <TabsTrigger value="grocery_history">
+                    Grocery ({historyGrocery.length})
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="food_history">{renderHistory(historyFood)}</TabsContent>
+                <TabsContent value="grocery_history">{renderHistory(historyGrocery)}</TabsContent>
+              </Tabs>
             )}
           </TabsContent>
         </Tabs>

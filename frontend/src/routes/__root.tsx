@@ -1,7 +1,9 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth-context";
+import { LocationProvider } from "@/lib/location-context";
 import { Toaster } from "@/components/ui/sonner";
-import { LiquidBackground } from "@/components/liquid-background";
+import { SystemThemeSync } from "@/components/system-theme-sync";
+import { AndroidAppDownloadPrompt } from "@/components/android-app-download-prompt";
 
 import appCss from "../styles.css?url";
 
@@ -32,6 +34,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "color-scheme", content: "light dark" },
       { title: "Rweezy — Food, Rides, Packages & Grocery" },
       {
         name: "description",
@@ -56,9 +59,14 @@ export const Route = createRootRoute({
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{localStorage.removeItem("rweezy-theme");if(window.matchMedia("(prefers-color-scheme: dark)").matches){document.documentElement.classList.add("dark");}}catch(e){}})();`,
+          }}
+        />
       </head>
       <body>
         {children}
@@ -71,10 +79,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   return (
     <AuthProvider>
-      <LiquidBackground />
-      <Outlet />
-      <Toaster richColors position="top-right" />
+      <LocationProvider>
+        <SystemThemeSync />
+        <AndroidAppDownloadPrompt />
+        <Outlet />
+        <Toaster richColors position="top-right" />
+      </LocationProvider>
     </AuthProvider>
   );
 }
-

@@ -48,20 +48,78 @@ export const api = {
           body: payload,
         },
       ),
+    sendPhoneOtp: (payload: {
+      phone: string;
+      purpose: "login" | "register" | "reset_password";
+      email?: string;
+    }) =>
+      apiRequest<{ ok: true; message: string }>("/api/auth/phone/send-otp", {
+        method: "POST",
+        body: payload,
+      }),
+    verifyPhoneOtp: (payload: {
+      phone: string;
+      code: string;
+      purpose: "login" | "register" | "reset_password";
+      email?: string;
+    }) =>
+      apiRequest<{
+        ok?: true;
+        phoneVerificationToken?: string;
+        user?: { id: string; email?: string | null };
+        roles?: string[];
+      }>("/api/auth/phone/verify-otp", {
+        method: "POST",
+        body: payload,
+      }),
+    resendEmailVerification: (payload: { email: string }) =>
+      apiRequest<{ ok: true; message: string }>("/api/auth/email/resend-verification", {
+        method: "POST",
+        body: payload,
+      }),
+    requestPasswordReset: (payload: { phone: string }) =>
+      apiRequest<{ ok: true; message: string; phoneHint?: string | null }>(
+        "/api/auth/password-reset/request",
+        {
+          method: "POST",
+          body: payload,
+        },
+      ),
+    completePasswordReset: (payload: {
+      phone: string;
+      phone_verification_token: string;
+      password: string;
+    }) =>
+      apiRequest<{
+        ok: true;
+        message: string;
+        user: { id: string; email?: string | null };
+        roles: string[];
+      }>("/api/auth/password-reset/complete", {
+        method: "POST",
+        body: payload,
+      }),
     register: (payload: {
       full_name: string;
-      email: string;
+      email?: string;
       phone: string;
       password: string;
+      phone_verification_token: string;
       role?: string;
       requested_role?: string;
       business_name?: string;
+      business_address?: string;
+      business_lat?: number;
+      business_lng?: number;
+      town_name?: string;
+      pincode?: string;
       role_message?: string;
     }) =>
       apiRequest<{
         user: { id: string; email?: string | null } | null;
         roles: string[];
         authenticated: boolean;
+        emailVerificationRequired?: boolean;
         roleRequestPending?: boolean;
         roleRequestWarning?: string | null;
       }>("/api/auth/register", {
@@ -72,6 +130,14 @@ export const api = {
     getMe: () =>
       apiRequest<{ user: { id: string; email?: string | null } | null; roles: string[] }>(
         "/api/auth/me",
+      ),
+    loginWithFirebaseGoogle: (payload: { id_token: string }) =>
+      apiRequest<{ user: { id: string; email?: string | null }; roles: string[] }>(
+        "/api/auth/firebase-google",
+        {
+          method: "POST",
+          body: payload,
+        },
       ),
   },
 
@@ -114,7 +180,11 @@ export const api = {
       platform?: "web" | "android" | "ios";
       user_agent?: string;
       device_label?: string;
-    }) => apiRequest<{ pushToken: unknown }>("/api/notifications/token", { method: "POST", body: payload }),
+    }) =>
+      apiRequest<{ pushToken: unknown }>("/api/notifications/token", {
+        method: "POST",
+        body: payload,
+      }),
     sendTest: (payload: {
       token?: string;
       user_id?: string;
@@ -148,19 +218,28 @@ export const api = {
   },
 
   catalog: {
-    getRestaurants: () =>
-      apiRequest<{ restaurants: unknown[]; location: null }>("/api/catalog/restaurants"),
+    getRestaurants: (location?: { lat: number; lng: number }) =>
+      apiRequest<{ restaurants: unknown[]; location: null }>(
+        `/api/catalog/restaurants${location ? `?lat=${location.lat}&lng=${location.lng}` : ""}`,
+      ),
     getRestaurant: (restaurantId: string) =>
       apiRequest<{ restaurant: unknown | null; items: unknown[] }>(
         `/api/catalog/restaurants/${restaurantId}`,
       ),
-    getStores: () => apiRequest<{ stores: unknown[]; location: null }>("/api/catalog/stores"),
+    getStores: (location?: { lat: number; lng: number }) =>
+      apiRequest<{ stores: unknown[]; location: null }>(
+        `/api/catalog/stores${location ? `?lat=${location.lat}&lng=${location.lng}` : ""}`,
+      ),
     getStore: (storeId: string) =>
       apiRequest<{ store: unknown | null; items: unknown[] }>(`/api/catalog/stores/${storeId}`),
-    getPopularFoodItems: () =>
-      apiRequest<{ items: any[] }>("/api/catalog/items/food"),
-    getPopularGroceryItems: () =>
-      apiRequest<{ items: any[] }>("/api/catalog/items/grocery"),
+    getPopularFoodItems: (location?: { lat: number; lng: number }) =>
+      apiRequest<{ items: unknown[] }>(
+        `/api/catalog/items/food${location ? `?lat=${location.lat}&lng=${location.lng}` : ""}`,
+      ),
+    getPopularGroceryItems: (location?: { lat: number; lng: number }) =>
+      apiRequest<{ items: unknown[] }>(
+        `/api/catalog/items/grocery${location ? `?lat=${location.lat}&lng=${location.lng}` : ""}`,
+      ),
   },
 
   orders: {

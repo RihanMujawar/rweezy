@@ -146,15 +146,15 @@ function MyOrders() {
     cta: string;
     to: "/app/food" | "/app/grocery" | "/app/ride" | "/app/package";
   }) => (
-    <div className="mt-6 rounded-lg border bg-card p-8 text-center">
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-        <ShoppingBag className="h-8 w-8 text-primary" />
+    <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed bg-card/50 p-12 text-center backdrop-blur-sm">
+      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 ring-8 ring-primary/5">
+        <ShoppingBag className="h-10 w-10 text-primary" />
       </div>
-      <p className="mt-3 font-medium">{msg}</p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Your new orders will appear here as they move.
+      <h3 className="mt-6 text-xl font-semibold tracking-tight">{msg}</h3>
+      <p className="mt-2 max-w-xs text-sm text-muted-foreground">
+        You haven't placed any orders in this category yet. Start exploring our services!
       </p>
-      <Button asChild className="mt-4 min-h-11">
+      <Button asChild size="lg" className="mt-8 rounded-full px-8 shadow-lg shadow-primary/20">
         <Link to={to}>{cta}</Link>
       </Button>
     </div>

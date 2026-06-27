@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import http from "node:http";
+import serverless from "serverless-http";
 import { fileURLToPath } from "node:url";
 import { ROOT_DIR, env } from "./lib/env.mjs";
 import {
@@ -16,15 +17,34 @@ import {
 } from "./lib/http.mjs";
 import {
   createConfirmedUserWithPassword,
+  createSessionForEmail,
+  findUserByEmail,
+  findUserByPhone,
   findUserEmailByPhone,
   getUserFromToken,
   refreshAuthSession,
+  resendSignupConfirmation,
   restRequest,
   revokeSession,
   serviceRoleRestRequest,
   signInWithPassword,
+  signUpWithPassword,
+  updateUserPassword,
 } from "./lib/supabase.mjs";
+import {
+  sendPasswordResetEmailOtp,
+  verifyPasswordResetEmailOtp,
+} from "./lib/email-otp.mjs";
 import { checkRateLimit } from "./lib/rate-limit.mjs";
+import {
+  createPhoneVerificationToken,
+  verifyPhoneVerificationToken,
+} from "./lib/phone-verification.mjs";
+import {
+  sendPhoneVerificationCode,
+  verifyPhoneVerificationCode,
+} from "./lib/twilio.mjs";
+import { verifyFirebaseToken } from "./lib/firebase-admin.mjs";
 import {
   assertStatusAdvance,
   estimateDeliveryAt,
@@ -467,14 +487,14 @@ function requireNumber(value, label) {
 }
 
 function validateRegistration(body) {
-  const email = requireText(body.email, "Email", 320).toLowerCase();
+  const email = cleanText(body.email)?.toLowerCase();
   const fullName = requireText(body.full_name, "Full name", 120);
   const password = typeof body.password === "string" ? body.password : "";
   if (password.length < 8) throw new HttpError(400, "Password must be at least 8 characters");
   if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
     throw new HttpError(400, "Password must include at least one letter and one number");
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Enter a valid email");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Enter a valid email");
 
   const phone = normalizeIndianPhone(body.phone);
   if (!/^\+\d{10,15}$/.test(phone)) {
@@ -608,6 +628,214 @@ async function writeAudit(token, actorId, action, targetType, targetId, message,
   }
 }
 
+function normalizeAuthPurpose(value) {
+  if (value === "register") return "register";
+  if (value === "reset_password") return "reset_password";
+  return "login";
+}
+
+function maskPhoneHint(phone) {
+  const digits = String(phone ?? "").replace(/\D/g, "");
+  if (digits.length < 4) return null;
+  return `••••${digits.slice(-4)}`;
+}
+
+async function resolveAccountForPasswordReset(email) {
+  const user = await findUserByEmail(email);
+  if (!user?.id) return null;
+
+  const rows = await serviceRoleRestRequest(
+    buildPath("/profiles", {
+      select: "phone",
+      id: `eq.${user.id}`,
+      limit: "1",
+    }),
+  );
+  const profilePhone = typeof rows?.[0]?.phone === "string" ? rows[0].phone.trim() : "";
+  const metadataPhone =
+    typeof user?.user_metadata?.phone === "string" ? user.user_metadata.phone.trim() : "";
+  const authPhone = typeof user?.phone === "string" ? user.phone.trim() : "";
+  const phone = profilePhone || metadataPhone || authPhone;
+
+  return {
+    userId: user.id,
+    email: user.email?.toLowerCase() ?? email,
+    phone: phone || null,
+  };
+}
+
+
+async function resolveUserForPhone(phone) {
+  return findUserByPhone(phone);
+}
+
+async function assertPhoneAvailable(phone) {
+  const rows = await serviceRoleRestRequest(
+    buildPath("/profiles", {
+      select: "id",
+      phone: `eq.${phone}`,
+      limit: "1",
+    }),
+  );
+  if (rows?.length) {
+    throw new HttpError(409, "This phone number is already registered");
+  }
+}
+
+async function assertEmailAvailable(email) {
+  const existingUser = await findUserByEmail(email);
+  if (existingUser?.id) {
+    throw new HttpError(409, "This email address is already registered");
+  }
+}
+
+async function completeUserRegistration({
+  email,
+  fullName,
+  password,
+  phone,
+  phoneVerificationToken,
+  requestedRole,
+  businessName,
+  businessAddress,
+  businessLat,
+  businessLng,
+  townName,
+  pincode,
+  roleMessage,
+}) {
+  const isStoreRole = ["hotel_manager", "grocery_manager"].includes(requestedRole);
+  const normalizedBusinessName = cleanText(businessName);
+  const normalizedBusinessAddress = cleanText(businessAddress);
+  const normalizedBusinessLat = Number(businessLat);
+  const normalizedBusinessLng = Number(businessLng);
+  if (isStoreRole && !normalizedBusinessName) {
+    throw new HttpError(400, "Restaurant or store name is required");
+  }
+  if (isStoreRole && !normalizedBusinessAddress) {
+    throw new HttpError(400, "Business address is required");
+  }
+  if (
+    isStoreRole &&
+    (!Number.isFinite(normalizedBusinessLat) ||
+      normalizedBusinessLat < -90 ||
+      normalizedBusinessLat > 90 ||
+      !Number.isFinite(normalizedBusinessLng) ||
+      normalizedBusinessLng < -180 ||
+      normalizedBusinessLng > 180)
+  ) {
+    throw new HttpError(400, "Pin a valid restaurant or store location");
+  }
+
+  verifyPhoneVerificationToken(phoneVerificationToken, phone);
+  if (email) await assertEmailAvailable(email);
+  await assertPhoneAvailable(phone);
+
+  const role = "customer";
+  let createdUserId = null;
+  let emailVerificationRequired = email ? env.authRequireEmailVerification : false;
+
+  if (emailVerificationRequired) {
+    const signup = await signUpWithPassword(email, password, fullName, {
+      role,
+      phone,
+      requested_role: requestedRole,
+    });
+    createdUserId = signup?.user?.id ?? signup?.id ?? null;
+    if (!createdUserId) {
+      throw new HttpError(500, "Account was created but no user id was returned");
+    }
+  } else {
+    const createdUser = await createConfirmedUserWithPassword(email, password, fullName, {
+      role,
+      phone,
+      requested_role: requestedRole,
+    });
+    createdUserId = createdUser?.id ?? createdUser?.user?.id;
+    emailVerificationRequired = false;
+    if (!createdUserId) {
+      throw new HttpError(500, "Account was created but no user id was returned");
+    }
+  }
+
+  await serviceRoleRestRequest(buildPath("/profiles", { on_conflict: "id" }), {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: {
+      id: createdUserId,
+      full_name: fullName,
+      phone,
+    },
+  });
+
+  await serviceRoleRestRequest(buildPath("/user_roles", { on_conflict: "user_id,role" }), {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates" },
+    body: {
+      user_id: createdUserId,
+      role,
+    },
+  });
+
+  let roleRequestPending = false;
+  let roleRequestWarning = null;
+
+  if (requestedRole) {
+    try {
+      await serviceRoleRestRequest("/role_requests", {
+        method: "POST",
+        body: {
+          user_id: createdUserId,
+          requested_role: requestedRole,
+          business_name: normalizedBusinessName || null,
+          business_address: normalizedBusinessAddress || null,
+          business_lat: isStoreRole ? normalizedBusinessLat : null,
+          business_lng: isStoreRole ? normalizedBusinessLng : null,
+          town_name: cleanText(townName) || null,
+          pincode: cleanText(pincode) || null,
+          message: cleanText(roleMessage) || "Requested during registration",
+        },
+      });
+      roleRequestPending = true;
+    } catch (error) {
+      if (!isMissingTableError(error, "role_requests")) throw error;
+      roleRequestWarning =
+        "Account created, but role request storage is not available. Apply the latest Supabase migrations.";
+      console.warn(`Role request skipped: ${error.message}`);
+    }
+  }
+
+  if (emailVerificationRequired) {
+    return {
+      user: { id: createdUserId, email: email || null },
+      roles: [role],
+      authenticated: false,
+      emailVerificationRequired: true,
+      roleRequestPending,
+      roleRequestWarning,
+    };
+  }
+
+  const session = await signInWithPassword(email ? { email } : { phone }, password);
+  const normalized = normalizeAuthSession(session);
+  const roles =
+    normalized.accessToken && normalized.user
+      ? await getRoles(normalized.accessToken, normalized.user.id)
+      : [role];
+
+  return {
+    user: normalized.user,
+    roles,
+    authenticated: Boolean(normalized.accessToken),
+    emailVerificationRequired: false,
+    roleRequestPending,
+    roleRequestWarning,
+    __responseHeaders: {
+      "Set-Cookie": buildSessionCookies(session),
+    },
+  };
+}
+
 function normalizeAuthSession(payload) {
   const session = payload?.session ?? payload;
 
@@ -708,6 +936,47 @@ async function getRoles(token, userId) {
   return (rows ?? []).map((row) => row.role);
 }
 
+async function getProfileMap(token, ids) {
+  const uniqueIds = [...new Set((ids ?? []).filter(Boolean))];
+  if (uniqueIds.length === 0) return new Map();
+
+  const path = buildPath("/profiles", {
+    select: "id,full_name,phone",
+    id: `in.(${uniqueIds.join(",")})`,
+  });
+
+  try {
+    const rows = env.supabaseServiceRoleKey
+      ? await serviceRoleRestRequest(path)
+      : await restRequest(token, path);
+    return new Map((rows ?? []).map((profile) => [profile.id, profile]));
+  } catch (error) {
+    console.warn(`Profile lookup unavailable: ${error.message}`);
+    return new Map();
+  }
+}
+
+async function attachUserProfiles(token, rows, mappings) {
+  const list = Array.isArray(rows) ? rows : rows ? [rows] : [];
+  const ids = list.flatMap((row) => Object.values(mappings).map((column) => row?.[column]));
+  const profileMap = await getProfileMap(token, ids);
+
+  const hydrated = list.map((row) => {
+    const profiles = {};
+    for (const [key, column] of Object.entries(mappings)) {
+      profiles[key] = profileMap.get(row?.[column]) ?? null;
+    }
+
+    return {
+      ...row,
+      ...profiles,
+      profiles: profiles.customer ?? profiles.rider ?? row.profiles ?? null,
+    };
+  });
+
+  return Array.isArray(rows) ? hydrated : (hydrated[0] ?? null);
+}
+
 async function jsonBody(req) {
   return readJson(req);
 }
@@ -806,41 +1075,195 @@ const routes = [
       readyFoodWithoutRider: unassignedFood?.length ?? 0,
     };
   }),
+  route("POST", /^\/api\/auth\/phone\/send-otp$/, async ({ body }) => {
+    const phone = normalizeIndianPhone(body.phone);
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+      throw new HttpError(400, "Enter a valid phone number with country code");
+    }
+
+    const purpose = normalizeAuthPurpose(cleanText(body.purpose));
+    if (purpose === "login") {
+      const user = await findUserByPhone(phone);
+      if (!user) {
+        throw new HttpError(404, "No account found for this phone number");
+      }
+    } else if (purpose === "reset_password") {
+      const email = cleanText(body.email)?.toLowerCase();
+      if (!email) {
+        throw new HttpError(400, "Email is required for password reset");
+      }
+      const account = await resolveAccountForPasswordReset(email);
+      if (!account?.phone) {
+        throw new HttpError(404, "No account found for this email, or no phone on file");
+      }
+      if (account.phone !== phone) {
+        throw new HttpError(400, "Phone number does not match the account for this email");
+      }
+    } else {
+      await assertPhoneAvailable(phone);
+    }
+
+    await sendPhoneVerificationCode(phone);
+
+    return {
+      ok: true,
+      purpose,
+      provider: "twilio",
+      message: "Verification code sent to your phone",
+    };
+  }),
+  route("POST", /^\/api\/auth\/phone\/verify-otp$/, async ({ body }) => {
+    const phone = normalizeIndianPhone(body.phone);
+    const code = cleanText(body.code);
+    const purpose = normalizeAuthPurpose(cleanText(body.purpose));
+
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+      throw new HttpError(400, "Enter a valid phone number with country code");
+    }
+    if (!/^\d{4,10}$/.test(code)) {
+      throw new HttpError(400, "Enter the verification code");
+    }
+
+    await verifyPhoneVerificationCode(phone, code);
+
+    if (purpose === "register" || purpose === "reset_password") {
+      return {
+        ok: true,
+        phoneVerificationToken: createPhoneVerificationToken(phone),
+      };
+    }
+
+    const user = await findUserByPhone(phone);
+    if (!user) {
+      throw new HttpError(404, "No account found for this phone number");
+    }
+
+    if (!user.email) {
+      throw new HttpError(400, "This account does not have an email address for passwordless sign-in. Please use your password.");
+    }
+
+    const session = await createSessionForEmail(user.email);
+    const normalized = normalizeAuthSession(session);
+    if (!normalized.user) {
+      throw new HttpError(401, "Unable to sign in with this phone number");
+    }
+
+    const roles = normalized.accessToken
+      ? await getRoles(normalized.accessToken, normalized.user.id)
+      : [];
+
+    return {
+      user: normalized.user,
+      roles,
+      __responseHeaders: {
+        "Set-Cookie": buildSessionCookies(session),
+      },
+    };
+  }),
+  route("POST", /^\/api\/auth\/password-reset\/request$/, async ({ body }) => {
+    const phone = normalizeIndianPhone(body.phone);
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+      throw new HttpError(400, "Enter a valid phone number with country code");
+    }
+
+    const user = await findUserByPhone(phone);
+    if (!user) {
+      throw new HttpError(404, "No account found for this phone number");
+    }
+
+    await sendPhoneVerificationCode(phone);
+
+    return {
+      ok: true,
+      message: "Verification code sent to your phone",
+    };
+  }),
+  route("POST", /^\/api\/auth\/password-reset\/complete$/, async ({ body }) => {
+    const phone = normalizeIndianPhone(body.phone);
+    const phoneVerificationToken = cleanText(body.phone_verification_token);
+    const password = typeof body.password === "string" ? body.password : "";
+
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+      throw new HttpError(400, "Enter a valid phone number with country code");
+    }
+    if (password.length < 8) {
+      throw new HttpError(400, "Password must be at least 8 characters");
+    }
+    if (!phoneVerificationToken) {
+      throw new HttpError(400, "Phone verification is required");
+    }
+
+    verifyPhoneVerificationToken(phoneVerificationToken, phone);
+
+    const user = await findUserByPhone(phone);
+    if (!user) throw new HttpError(404, "Account not found");
+
+    await updateUserPassword(user.id, password);
+
+    // Password reset complete, now sign the user in.
+    // signInWithPassword works for both phone (via user metadata or auth phone) and email.
+    const identifier = user.email ? { email: user.email } : { phone };
+    const session = await signInWithPassword(identifier, password);
+    const normalized = normalizeAuthSession(session);
+    if (!normalized.accessToken || !normalized.user?.id) {
+      throw new HttpError(500, "Password updated, but sign-in session could not be created");
+    }
+    const roles = await getRoles(normalized.accessToken, normalized.user.id);
+
+    return {
+      ok: true,
+      user: normalized.user,
+      roles,
+      message: "Password updated. You are now signed in.",
+      __responseHeaders: {
+        "Set-Cookie": buildSessionCookies(session),
+      },
+    };
+  }),
+  route("POST", /^\/api\/auth\/email\/resend-verification$/, async ({ body }) => {
+    const email = cleanText(body.email)?.toLowerCase();
+    if (!email) {
+      throw new HttpError(400, "Email is required");
+    }
+
+    await resendSignupConfirmation(email);
+    return {
+      ok: true,
+      message: "Verification email sent. Check your inbox and spam folder.",
+    };
+  }),
   route("POST", /^\/api\/auth\/login$/, async ({ body }) => {
     const email = cleanText(body.email);
     const phone = normalizeIndianPhone(body.phone);
-    let identifier = { email };
+    let identifier = email ? { email } : { phone };
 
-    if (phone) {
-      let foundEmail = null;
-
-      try {
-        const rows = await serviceRoleRestRequest("/rpc/email_for_phone_login", {
-          method: "POST",
-          body: { lookup_phone: phone },
-        });
-        foundEmail = typeof rows === "string" ? rows : null;
-      } catch (error) {
-        if (!(error instanceof HttpError) || error.status !== 404) {
-          throw error;
-        }
+    if (phone && !email) {
+      const user = await resolveUserForPhone(phone);
+      if (!user) {
+        throw new HttpError(404, "No account found for this phone number");
       }
-
-      if (!foundEmail) {
-        foundEmail = await findUserEmailByPhone(phone);
+      // If user has email but we only have phone, we use the resolved email for better compatibility.
+      if (user.email) {
+        identifier = { email: user.email };
       }
-
-      if (!foundEmail) {
-        throw new HttpError(401, "No account found for this phone number");
-      }
-      identifier = { email: foundEmail };
     }
 
-    if (!identifier.email) {
-      throw new HttpError(400, "Email or phone is required");
+    if (!identifier.email && !identifier.phone) {
+      throw new HttpError(400, "Email or phone number is required");
     }
 
-    const session = await signInWithPassword(identifier, body.password);
+    let session;
+    try {
+      session = await signInWithPassword(identifier, body.password);
+    } catch (error) {
+      if (error instanceof HttpError && /confirm/i.test(error.message)) {
+        throw new HttpError(
+          403,
+          "Verify your email before signing in. Check your inbox or request a new verification email.",
+        );
+      }
+      throw error;
+    }
     const normalized = normalizeAuthSession(session);
 
     if (!normalized.user) {
@@ -862,74 +1285,79 @@ const routes = [
   route("POST", /^\/api\/auth\/register$/, async ({ body }) => {
     const { email, fullName, password, phone } = validateRegistration(body);
     const requestedRole = normalizeBusinessRole(body.requested_role);
-    const role = "customer";
+    const phoneVerificationToken = cleanText(body.phone_verification_token);
 
-    const createdUser = await createConfirmedUserWithPassword(email, password, fullName, {
-      role,
+    return completeUserRegistration({
+      email,
+      fullName,
+      password,
       phone,
-      requested_role: requestedRole,
+      phoneVerificationToken,
+      requestedRole,
+      businessName: body.business_name,
+      businessAddress: body.business_address,
+      businessLat: body.business_lat,
+      businessLng: body.business_lng,
+      townName: body.town_name,
+      pincode: body.pincode,
+      roleMessage: body.role_message,
     });
-    const createdUserId = createdUser?.id ?? createdUser?.user?.id;
+  }),
+  route("POST", /^\/api\/auth\/firebase-google$/, async ({ body }) => {
+    const idToken = cleanText(body.id_token);
+    if (!idToken) throw new HttpError(400, "Firebase ID token is required");
 
-    if (!createdUserId) {
-      throw new HttpError(500, "Account was created but no user id was returned");
+    let decoded;
+    try {
+      decoded = await verifyFirebaseToken(idToken);
+    } catch (error) {
+      throw new HttpError(401, `Invalid Firebase token: ${error.message}`);
     }
 
-    await serviceRoleRestRequest(buildPath("/profiles", { on_conflict: "id" }), {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates" },
-      body: {
-        id: createdUserId,
-        full_name: fullName,
-        phone,
-      },
-    });
+    const email = decoded.email?.toLowerCase();
+    if (!email) throw new HttpError(400, "Google account must have an email address");
 
-    await serviceRoleRestRequest(buildPath("/user_roles", { on_conflict: "user_id,role" }), {
-      method: "POST",
-      headers: { Prefer: "resolution=ignore-duplicates" },
-      body: {
-        user_id: createdUserId,
-        role,
-      },
-    });
+    let user = await findUserByEmail(email);
+    let session;
 
-    let roleRequestPending = false;
-    let roleRequestWarning = null;
+    if (!user) {
+      // Auto-register new Google users
+      user = await createConfirmedUserWithPassword(email, crypto.randomUUID(), decoded.name || "Google User", {
+        role: "customer",
+        provider: "google",
+      });
 
-    if (requestedRole) {
-      try {
-        await serviceRoleRestRequest("/role_requests", {
+      const userId = user?.id ?? user?.user?.id;
+      if (userId) {
+        await serviceRoleRestRequest(buildPath("/profiles", { on_conflict: "id" }), {
           method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates" },
           body: {
-            user_id: createdUserId,
-            requested_role: requestedRole,
-            business_name: cleanText(body.business_name) || null,
-            message: cleanText(body.role_message) || "Requested during registration",
+            id: userId,
+            full_name: decoded.name || "Google User",
           },
         });
-        roleRequestPending = true;
-      } catch (error) {
-        if (!isMissingTableError(error, "role_requests")) throw error;
-        roleRequestWarning =
-          "Account created, but role request storage is not available. Apply the latest Supabase migrations.";
-        console.warn(`Role request skipped: ${error.message}`);
+
+        await serviceRoleRestRequest(buildPath("/user_roles", { on_conflict: "user_id,role" }), {
+          method: "POST",
+          headers: { Prefer: "resolution=ignore-duplicates" },
+          body: {
+            user_id: userId,
+            role: "customer",
+          },
+        });
       }
     }
 
-    const session = await signInWithPassword({ email }, password);
+    session = await createSessionForEmail(email);
     const normalized = normalizeAuthSession(session);
-    const roles =
-      normalized.accessToken && normalized.user
-        ? await getRoles(normalized.accessToken, normalized.user.id)
-        : [];
+    const roles = normalized.accessToken
+      ? await getRoles(normalized.accessToken, normalized.user.id)
+      : ["customer"];
 
     return {
       user: normalized.user,
       roles,
-      authenticated: Boolean(normalized.accessToken),
-      roleRequestPending,
-      roleRequestWarning,
       __responseHeaders: {
         "Set-Cookie": buildSessionCookies(session),
       },
@@ -1135,11 +1563,16 @@ const routes = [
 
     return { row: firstRow(rows) };
   }),
-  route("GET", /^\/api\/catalog\/restaurants$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
+  route("GET", /^\/api\/catalog\/restaurants$/, async ({ token, user, url }) => {
+    let location = await getUserCatalogLocation(token, user.id);
+    const radiusKm = await getCatalogRadiusKm(token);
+
+    const latParam = url.searchParams.get("lat");
+    const lngParam = url.searchParams.get("lng");
+    if (latParam && lngParam) {
+      location = { ...location, lat: Number(latParam), lng: Number(lngParam) };
+    }
+
     const restaurants = await restRequest(
       token,
       buildPath("/restaurants", {
@@ -1179,11 +1612,16 @@ const routes = [
       items: itemRows ?? [],
     };
   }),
-  route("GET", /^\/api\/catalog\/items\/food$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
+  route("GET", /^\/api\/catalog\/items\/food$/, async ({ token, user, url }) => {
+    let location = await getUserCatalogLocation(token, user.id);
+    const radiusKm = await getCatalogRadiusKm(token);
+
+    const latParam = url.searchParams.get("lat");
+    const lngParam = url.searchParams.get("lng");
+    if (latParam && lngParam) {
+      location = { ...location, lat: Number(latParam), lng: Number(lngParam) };
+    }
+
     const restaurants = await restRequest(
       token,
       buildPath("/restaurants", {
@@ -1207,11 +1645,16 @@ const routes = [
     );
     return { items: items ?? [] };
   }),
-  route("GET", /^\/api\/catalog\/items\/grocery$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
+  route("GET", /^\/api\/catalog\/items\/grocery$/, async ({ token, user, url }) => {
+    let location = await getUserCatalogLocation(token, user.id);
+    const radiusKm = await getCatalogRadiusKm(token);
+
+    const latParam = url.searchParams.get("lat");
+    const lngParam = url.searchParams.get("lng");
+    if (latParam && lngParam) {
+      location = { ...location, lat: Number(latParam), lng: Number(lngParam) };
+    }
+
     const stores = await restRequest(
       token,
       buildPath("/grocery_stores", {
@@ -1235,11 +1678,16 @@ const routes = [
     );
     return { items: items ?? [] };
   }),
-  route("GET", /^\/api\/catalog\/stores$/, async ({ token, user }) => {
-    const [location, radiusKm] = await Promise.all([
-      getUserCatalogLocation(token, user.id),
-      getCatalogRadiusKm(token),
-    ]);
+  route("GET", /^\/api\/catalog\/stores$/, async ({ token, user, url }) => {
+    let location = await getUserCatalogLocation(token, user.id);
+    const radiusKm = await getCatalogRadiusKm(token);
+
+    const latParam = url.searchParams.get("lat");
+    const lngParam = url.searchParams.get("lng");
+    if (latParam && lngParam) {
+      location = { ...location, lat: Number(latParam), lng: Number(lngParam) };
+    }
+
     const stores = await restRequest(
       token,
       buildPath("/grocery_stores", {
@@ -1481,7 +1929,7 @@ const routes = [
         token,
         buildPath("/food_orders", {
           select:
-            "id,status,total,delivery_address,created_at,rider_id:delivery_boy_id,payment_method,restaurants(name)",
+            "id,status,total,delivery_address,created_at,customer_id,rider_id:delivery_boy_id,payment_method,restaurants(name)",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -1490,7 +1938,7 @@ const routes = [
         token,
         buildPath("/grocery_orders", {
           select:
-            "id,status,total,delivery_address,created_at,rider_id:delivery_boy_id,payment_method,grocery_stores(name)",
+            "id,status,total,delivery_address,created_at,customer_id,rider_id:delivery_boy_id,payment_method,grocery_stores(name)",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -1499,7 +1947,7 @@ const routes = [
         token,
         buildPath("/rides", {
           select:
-            "id,status,fare_estimate,pickup_address,drop_address,created_at,rider_id,vehicle_type,payment_method",
+            "id,status,fare_estimate,pickup_address,drop_address,created_at,customer_id,rider_id,vehicle_type,payment_method",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -1508,7 +1956,7 @@ const routes = [
         token,
         buildPath("/package_deliveries", {
           select:
-            "id,status,fare_estimate,pickup_address,drop_address,created_at,rider_id,package_size,payment_method",
+            "id,status,fare_estimate,pickup_address,drop_address,created_at,customer_id,rider_id,package_size,payment_method",
           customer_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -1516,10 +1964,10 @@ const routes = [
     ]);
 
     return {
-      food: food ?? [],
-      grocery: grocery ?? [],
-      rides: rides ?? [],
-      packages: packages ?? [],
+      food: await attachUserProfiles(token, food ?? [], { customer: "customer_id", rider: "rider_id" }),
+      grocery: await attachUserProfiles(token, grocery ?? [], { customer: "customer_id", rider: "rider_id" }),
+      rides: await attachUserProfiles(token, rides ?? [], { customer: "customer_id", rider: "rider_id" }),
+      packages: await attachUserProfiles(token, packages ?? [], { customer: "customer_id", rider: "rider_id" }),
     };
   }),
   route(
@@ -1574,31 +2022,37 @@ const routes = [
       grocery: "grocery_orders",
     }[kind];
 
+    const select = kind === "food"
+      ? "*,restaurants(name)"
+      : kind === "grocery"
+        ? "*,grocery_stores(name)"
+        : "*";
+
     const rows = await restRequest(
       token,
       buildPath(`/${table}`, {
-        select: "*",
+        select,
         id: `eq.${id}`,
       }),
     );
 
     const row = firstRow(rows);
-    const normalizedRow = kind === "food" || kind === "grocery" ? normalizeDeliveryOrder(row) : row;
-    let partner = null;
-    if (normalizedRow?.rider_id) {
-      const profileRows = await restRequest(
-        token,
-        buildPath("/profiles", {
-          select: "id,full_name,phone",
-          id: `eq.${normalizedRow.rider_id}`,
-          limit: "1",
-        }),
-      );
-      partner = firstRow(profileRows);
-    }
+    if (!row) return { row: null };
 
+    const normalizedRow = kind === "food" || kind === "grocery" ? normalizeDeliveryOrder(row) : row;
+    const hydratedRow = await attachUserProfiles(token, normalizedRow, {
+      customer: "customer_id",
+      rider: "rider_id",
+    });
+    const partner = hydratedRow.rider || null;
+
+    // Backwards compatibility for frontend expectations
     return {
-      row: normalizedRow ? { ...normalizedRow, partner } : null,
+      row: {
+        ...hydratedRow,
+        partner: partner || hydratedRow.customer || null,
+        profiles: hydratedRow.customer || null
+      },
     };
   }),
   route(
@@ -2305,6 +2759,39 @@ const routes = [
           headers: { Prefer: "resolution=ignore-duplicates" },
           body: { user_id: request.user_id, role: request.requested_role },
         });
+
+        const listingTable =
+          request.requested_role === "hotel_manager"
+            ? "restaurants"
+            : request.requested_role === "grocery_manager"
+              ? "grocery_stores"
+              : null;
+        if (listingTable) {
+          const existing = await restRequest(
+            token,
+            buildPath(`/${listingTable}`, {
+              select: "id",
+              manager_id: `eq.${request.user_id}`,
+              limit: "1",
+            }),
+          );
+          if (!firstRow(existing)) {
+            await restRequest(token, buildPath(`/${listingTable}`, { select: "*" }), {
+              method: "POST",
+              headers: { Prefer: "return=representation" },
+              body: {
+                manager_id: request.user_id,
+                name: request.business_name,
+                address: request.business_address,
+                town_name: request.town_name,
+                pincode: request.pincode,
+                lat: request.business_lat,
+                lng: request.business_lng,
+                is_open: true,
+              },
+            });
+          }
+        }
       }
 
       const rows = await restRequest(
@@ -2375,6 +2862,10 @@ const routes = [
       name: body.name,
       description: body.description ?? null,
       address: body.address ?? null,
+      town_name: body.town_name ?? null,
+      pincode: body.pincode ?? null,
+      lat: body.lat ?? null,
+      lng: body.lng ?? null,
       image_url: body.image_url ?? null,
       is_open: body.is_open ?? true,
       manager_id: user.id,
@@ -2497,13 +2988,16 @@ const routes = [
       token,
       buildPath("/food_orders", {
         select:
-          "id,status,total,delivery_address,notes,created_at,food_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer_id,food_order_items(id,name,quantity,price)",
         restaurant_id: `eq.${restaurant.id}`,
         order: "created_at.desc",
       }),
     );
 
-    return { restaurantId: restaurant.id, orders: orders ?? [] };
+    return {
+      restaurantId: restaurant.id,
+      orders: await attachUserProfiles(token, orders ?? [], { customer: "customer_id" }),
+    };
   }),
   route("POST", /^\/api\/hotel\/orders\/([^/]+)\/advance$/, async ({ token, match, body }) => {
     const id = decodeURIComponent(match[1]);
@@ -2552,14 +3046,17 @@ const routes = [
       token,
       buildPath("/food_orders", {
         select:
-          "id,status,total,delivery_address,notes,created_at,food_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer_id,food_order_items(id,name,quantity,price)",
         restaurant_id: `eq.${restaurant.id}`,
         order: "created_at.desc",
         limit: "100",
       }),
     );
 
-    return { restaurantId: restaurant.id, orders: orders ?? [] };
+    return {
+      restaurantId: restaurant.id,
+      orders: await attachUserProfiles(token, orders ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/grocery\/dashboard$/, async ({ token, user }) => {
     const storeRows = await restRequest(
@@ -2602,6 +3099,10 @@ const routes = [
       name: body.name,
       description: body.description ?? null,
       address: body.address ?? null,
+      town_name: body.town_name ?? null,
+      pincode: body.pincode ?? null,
+      lat: body.lat ?? null,
+      lng: body.lng ?? null,
       image_url: body.image_url ?? null,
       is_open: body.is_open ?? true,
       manager_id: user.id,
@@ -2726,13 +3227,16 @@ const routes = [
       token,
       buildPath("/grocery_orders", {
         select:
-          "id,status,total,delivery_address,notes,created_at,grocery_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer_id,grocery_order_items(id,name,quantity,price)",
         store_id: `eq.${store.id}`,
         order: "created_at.desc",
       }),
     );
 
-    return { storeId: store.id, orders: orders ?? [] };
+    return {
+      storeId: store.id,
+      orders: await attachUserProfiles(token, orders ?? [], { customer: "customer_id" }),
+    };
   }),
   route("POST", /^\/api\/grocery\/orders\/([^/]+)\/advance$/, async ({ token, match, body }) => {
     const id = decodeURIComponent(match[1]);
@@ -2763,21 +3267,24 @@ const routes = [
       token,
       buildPath("/grocery_orders", {
         select:
-          "id,status,total,delivery_address,notes,created_at,grocery_order_items(id,name,quantity,price)",
+          "id,status,total,delivery_address,delivery_lat,delivery_lng,notes,created_at,customer_id,grocery_order_items(id,name,quantity,price)",
         store_id: `eq.${store.id}`,
         order: "created_at.desc",
         limit: "100",
       }),
     );
 
-    return { storeId: store.id, orders: orders ?? [] };
+    return {
+      storeId: store.id,
+      orders: await attachUserProfiles(token, orders ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/delivery\/available$/, async ({ token }) => {
     const [food, grocery] = await Promise.all([
       restRequest(
         token,
         buildPath("/food_orders", {
-          select: "id,status,total,delivery_address,created_at,restaurants(name)",
+          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,created_at,customer_id,restaurants(name)",
           delivery_boy_id: "is.null",
           status: "in.(ready,preparing)",
           order: "created_at.desc",
@@ -2786,7 +3293,7 @@ const routes = [
       restRequest(
         token,
         buildPath("/grocery_orders", {
-          select: "id,status,total,delivery_address,created_at,grocery_stores(name)",
+          select: "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,created_at,customer_id,grocery_stores(name)",
           delivery_boy_id: "is.null",
           status: "in.(ready,preparing)",
           order: "created_at.desc",
@@ -2794,7 +3301,10 @@ const routes = [
       ),
     ]);
 
-    return { food: food ?? [], grocery: grocery ?? [] };
+    return {
+      food: await attachUserProfiles(token, food ?? [], { customer: "customer_id" }),
+      grocery: await attachUserProfiles(token, grocery ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/delivery\/active$/, async ({ token, user }) => {
     const [food, grocery] = await Promise.all([
@@ -2802,7 +3312,7 @@ const routes = [
         token,
         buildPath("/food_orders", {
           select:
-            "id,status,total,delivery_address,delivery_lat,delivery_lng,rider_lat,rider_lng,delivery_pin,customer_id,restaurants(name)",
+            "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,rider_lat,rider_lng,delivery_pin,customer_id,restaurants(name)",
           delivery_boy_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
@@ -2811,38 +3321,24 @@ const routes = [
         token,
         buildPath("/grocery_orders", {
           select:
-            "id,status,total,delivery_address,delivery_lat,delivery_lng,rider_lat,rider_lng,delivery_pin,customer_id,grocery_stores(name)",
+            "id,status,total,delivery_address,delivery_lat,delivery_lng,pickup_address,pickup_lat,pickup_lng,rider_lat,rider_lng,delivery_pin,customer_id,grocery_stores(name)",
           delivery_boy_id: `eq.${user.id}`,
           order: "created_at.desc",
         }),
       ),
     ]);
 
-    const customerIds = [
-      ...new Set(
-        [...(food ?? []), ...(grocery ?? [])].map((order) => order.customer_id).filter(Boolean),
-      ),
-    ];
-    let profileById = new Map();
-    if (customerIds.length > 0) {
-      const profiles = await restRequest(
-        token,
-        buildPath("/profiles", {
-          select: "id,full_name,phone",
-          id: `in.(${customerIds.join(",")})`,
-        }),
-      );
-      profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-    }
+    const hydratedFood = await attachUserProfiles(token, food ?? [], { customer: "customer_id" });
+    const hydratedGrocery = await attachUserProfiles(token, grocery ?? [], { customer: "customer_id" });
 
-    const attachCustomer = (order) => ({
+    const normalize = (order) => ({
       ...normalizeDeliveryOrder(order),
-      customer: profileById.get(order.customer_id) ?? null,
+      profiles: order.customer || null,
     });
 
     return {
-      food: (food ?? []).map(attachCustomer),
-      grocery: (grocery ?? []).map(attachCustomer),
+      food: hydratedFood.map(normalize),
+      grocery: hydratedGrocery.map(normalize),
     };
   }),
   route(
@@ -2921,6 +3417,7 @@ const routes = [
         buildPath("/food_orders", {
           select: "id,status,total,delivery_address,created_at,restaurants(name)",
           delivery_boy_id: `eq.${user.id}`,
+          status: "in.(delivered,completed,cancelled)",
           order: "created_at.desc",
           limit: "100",
         }),
@@ -2930,6 +3427,7 @@ const routes = [
         buildPath("/grocery_orders", {
           select: "id,status,total,delivery_address,created_at,grocery_stores(name)",
           delivery_boy_id: `eq.${user.id}`,
+          status: "in.(delivered,completed,cancelled)",
           order: "created_at.desc",
           limit: "100",
         }),
@@ -2944,7 +3442,7 @@ const routes = [
         token,
         buildPath("/rides", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,vehicle_type",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,drop_lat,drop_lng,fare_estimate,status,created_at,customer_id,rider_id,vehicle_type",
           or: `(rider_id.is.null,rider_id.eq.${user.id})`,
           status: "not.in.(completed,cancelled)",
           order: "created_at.desc",
@@ -2954,7 +3452,7 @@ const routes = [
         token,
         buildPath("/package_deliveries", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,package_size,receiver_name",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,drop_lat,drop_lng,fare_estimate,status,created_at,customer_id,rider_id,package_size,receiver_name",
           or: `(rider_id.is.null,rider_id.eq.${user.id})`,
           status: "not.in.(completed,cancelled)",
           order: "created_at.desc",
@@ -2962,7 +3460,10 @@ const routes = [
       ),
     ]);
 
-    return { rides: rides ?? [], packages: packages ?? [] };
+    return {
+      rides: await attachUserProfiles(token, rides ?? [], { customer: "customer_id" }),
+      packages: await attachUserProfiles(token, packages ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/rider\/active$/, async ({ token, user, url }) => {
     const id = url.searchParams.get("id");
@@ -2993,7 +3494,10 @@ const routes = [
 
       const job = firstRow(rows);
       if (job) {
-        return { job, table };
+        return {
+          job: await attachUserProfiles(token, job, { customer: "customer_id" }),
+          table,
+        };
       }
     }
 
@@ -3093,7 +3597,7 @@ const routes = [
         token,
         buildPath("/rides", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,vehicle_type",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,customer_id,rider_id,vehicle_type",
           rider_id: `eq.${user.id}`,
           order: "created_at.desc",
           limit: "100",
@@ -3103,7 +3607,7 @@ const routes = [
         token,
         buildPath("/package_deliveries", {
           select:
-            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,rider_id,package_size,receiver_name",
+            "id,pickup_address,pickup_lat,pickup_lng,drop_address,fare_estimate,status,created_at,customer_id,rider_id,package_size,receiver_name",
           rider_id: `eq.${user.id}`,
           order: "created_at.desc",
           limit: "100",
@@ -3111,7 +3615,10 @@ const routes = [
       ),
     ]);
 
-    return { rides: rides ?? [], packages: packages ?? [] };
+    return {
+      rides: await attachUserProfiles(token, rides ?? [], { customer: "customer_id" }),
+      packages: await attachUserProfiles(token, packages ?? [], { customer: "customer_id" }),
+    };
   }),
   route("GET", /^\/api\/admin\/commissions$/, async ({ token }) => ({
     commissions: await getPlatformCommissions(token),
@@ -3463,7 +3970,7 @@ async function serveFrontend(req, res, url) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+async function mainHandler(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
 
   try {
@@ -3476,6 +3983,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith("/api/")) {
       await handleApi(req, res, url);
       return;
+    }
+
+    if (process.env.LAMBDA_TASK_ROOT) {
+       throw new HttpError(404, "Not Found");
     }
 
     await serveFrontend(req, res, url);
@@ -3494,8 +4005,14 @@ const server = http.createServer(async (req, res) => {
 
     sendJson(res, status, { error: message, requestId }, headers);
   }
-});
+}
 
-server.listen(env.port, env.host, () => {
-  console.log(`Backend listening on http://${env.host}:${env.port}`);
-});
+const server = http.createServer(mainHandler);
+
+export const handler = serverless(server);
+
+if (!process.env.LAMBDA_TASK_ROOT) {
+  server.listen(env.port, env.host, () => {
+    console.log(`Backend listening on http://${env.host}:${env.port}`);
+  });
+}

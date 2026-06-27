@@ -8,8 +8,10 @@ export const ROOT_DIR = path.resolve(BACKEND_DIR, "..");
 
 function parseEnvFile(raw) {
   const result = {};
+  const lines = raw.split(/\r?\n/);
 
-  for (const line of raw.split(/\r?\n/)) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
 
@@ -18,6 +20,18 @@ function parseEnvFile(raw) {
 
     const key = trimmed.slice(0, eq).trim();
     let value = trimmed.slice(eq + 1).trim();
+    const jsonOpener = value === "{" || value === '"{' || value === "'{";
+    if (jsonOpener) {
+      const closingLine =
+        value === '"{' ? '}"' : value === "'{" ? "}'" : "}";
+      const parts = [value];
+      while (index + 1 < lines.length) {
+        index += 1;
+        parts.push(lines[index]);
+        if (lines[index].trim() === closingLine) break;
+      }
+      value = parts.join("\n").trim();
+    }
 
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
@@ -77,4 +91,16 @@ export const env = {
   corsAllowedOrigins: parseCsv(process.env.CORS_ALLOWED_ORIGINS),
   cookieSecure: process.env.COOKIE_SECURE === "true" || process.env.NODE_ENV === "production",
   fcmServerKey: process.env.FCM_SERVER_KEY || "",
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID || "",
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || "",
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || "",
+  twilioVerifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID || "",
+  phoneVerificationSecret: process.env.PHONE_VERIFICATION_SECRET || "",
+  emailOtpSecret: process.env.EMAIL_OTP_SECRET || "",
+  smtpHost: process.env.SMTP_HOST || "smtp.gmail.com",
+  smtpPort: Number(process.env.SMTP_PORT || 465),
+  smtpUser: process.env.SMTP_USER || "",
+  smtpPass: process.env.SMTP_PASS || "",
+  smtpFrom: process.env.SMTP_FROM || process.env.SMTP_USER || "",
+  authRequireEmailVerification: process.env.AUTH_REQUIRE_EMAIL_VERIFICATION !== "false",
 };

@@ -44,7 +44,7 @@ function ProtectedLayout() {
               <SidebarTrigger />
               <ShellActions />
             </header>
-          <main className="flex-1 bg-transparent pb-32 md:pb-0 animate-fade-in-up">
+            <main className="flex-1 bg-transparent pb-32 md:pb-0 animate-fade-in-up">
               <Outlet />
             </main>
             <MobileBottomNav />

@@ -3,20 +3,37 @@ import assert from "node:assert/strict";
 import {
   checkoutSchema,
   fieldErrors,
-  loginEmailSchema,
+  loginPhonePasswordSchema,
   loginPhoneSchema,
+  passwordResetCompleteSchema,
+  passwordResetRequestSchema,
   packageBookingSchema,
   registerSchema,
   rideBookingSchema,
 } from "../frontend/src/lib/validation.ts";
 
-test("loginEmailSchema rejects invalid email", () => {
-  const result = loginEmailSchema.safeParse({ email: "bad", password: "secret1" });
+test("loginPhonePasswordSchema rejects invalid phone", () => {
+  const result = loginPhonePasswordSchema.safeParse({ phone: "bad", password: "secret1" });
+  assert.equal(result.success, false);
+});
+
+test("passwordResetRequestSchema rejects invalid phone", () => {
+  const result = passwordResetRequestSchema.safeParse({ phone: "bad" });
+  assert.equal(result.success, false);
+});
+
+test("passwordResetCompleteSchema requires matching passwords", () => {
+  const result = passwordResetCompleteSchema.safeParse({
+    phone: "+919876543210",
+    password: "secret1",
+    confirmPassword: "other",
+    phoneVerificationToken: "token",
+  });
   assert.equal(result.success, false);
 });
 
 test("loginPhoneSchema accepts normalized Indian phone", () => {
-  const result = loginPhoneSchema.safeParse({ phone: "+919876543210", password: "secret1" });
+  const result = loginPhoneSchema.safeParse({ phone: "+919876543210" });
   assert.equal(result.success, true);
 });
 
@@ -65,10 +82,10 @@ test("packageBookingSchema validates receiver phone", () => {
 });
 
 test("fieldErrors maps zod issues to first message", () => {
-  const parsed = loginEmailSchema.safeParse({ email: "bad", password: "x" });
+  const parsed = loginPhonePasswordSchema.safeParse({ phone: "bad", password: "x" });
   assert.equal(parsed.success, false);
   if (!parsed.success) {
     const errors = fieldErrors(parsed.error);
-    assert.ok(errors.email || errors.password);
+    assert.ok(errors.phone || errors.password);
   }
 });

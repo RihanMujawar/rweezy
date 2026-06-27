@@ -79,6 +79,9 @@ export function useOrderSummary() {
             created_at: order.created_at,
           })),
         ]);
+      } catch {
+        // A failed background refresh (for example, an expired session) should
+        // not surface as an unhandled promise rejection.
       } finally {
         if (alive) setLoading(false);
       }

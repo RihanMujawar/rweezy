@@ -1,12 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { fieldErrors, registerSchema } from "@/lib/validation";
+import { fieldErrors, phoneSchema, registerSchema } from "@/lib/validation";
+import { PhoneOtpVerification } from "@/components/phone-otp-verification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ManualLocationDialog } from "@/components/manual-location-dialog";
+import { useLocation } from "@/lib/location-context";
+import { LocateFixed, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/register-partner")({
@@ -22,7 +26,13 @@ const roleOptions = [
 
 function PartnerRegisterPage() {
   const navigate = useNavigate();
-  const { refreshAuth } = useAuth();
+  const { setAuthenticatedUser } = useAuth();
+  const {
+    location: businessLocation,
+    address: detectedAddress,
+    detectLocation,
+    loading: locationLoading,
+  } = useLocation();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
@@ -32,13 +42,28 @@ function PartnerRegisterPage() {
   const [requestedRole, setRequestedRole] =
     useState<(typeof roleOptions)[number]["value"]>("rider");
   const [businessName, setBusinessName] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
+  const [townName, setTownName] = useState("");
+  const [pincode, setPincode] = useState("");
+  const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [roleMessage, setRoleMessage] = useState("");
+  const [phoneVerificationToken, setPhoneVerificationToken] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
+  const fullPhone = `${countryCode}${phoneSuffix.replace(/\D/g, "")}`;
+  const isStoreRole = requestedRole === "hotel_manager" || requestedRole === "grocery_manager";
+
+  useEffect(() => {
+    setPhoneVerificationToken("");
+  }, [fullPhone]);
+
+  useEffect(() => {
+    if (detectedAddress) setBusinessAddress(detectedAddress);
+  }, [detectedAddress]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const fullPhone = `${countryCode}${phoneSuffix.replace(/\D/g, "")}`;
     const parsed = registerSchema.safeParse({
       fullName,
       email,
@@ -47,6 +72,10 @@ function PartnerRegisterPage() {
       confirmPassword,
       requestedRole,
       businessName,
+      businessAddress,
+      townName,
+      pincode,
+      businessLocation,
       roleMessage,
     });
 
@@ -57,21 +86,56 @@ function PartnerRegisterPage() {
       return;
     }
 
+    if (!phoneVerificationToken) {
+      toast.error("Verify your phone number with the OTP code before signing up");
+      return;
+    }
+
     setErrors({});
     setLoading(true);
     try {
+      const {
+        fullName: parsedFullName,
+        email: parsedEmail,
+        phone: parsedPhone,
+        requestedRole: parsedRequestedRole,
+        businessName: parsedBusinessName,
+        businessAddress: parsedBusinessAddress,
+        townName: parsedTownName,
+        pincode: parsedPincode,
+        businessLocation: parsedBusinessLocation,
+        roleMessage: parsedRoleMessage,
+      } = parsed.data;
+
+      if (!parsedEmail) {
+        toast.error("Email is required");
+        return;
+      }
+
       const result = await api.auth.register({
-        full_name: parsed.data.fullName,
-        email: parsed.data.email.toLowerCase(),
-        phone: parsed.data.phone,
+        full_name: parsedFullName,
+        email: parsedEmail.toLowerCase(),
+        phone: parsedPhone,
         password,
-        requested_role: parsed.data.requestedRole,
-        business_name: parsed.data.businessName,
-        role_message: parsed.data.roleMessage,
+        phone_verification_token: phoneVerificationToken,
+        requested_role: parsedRequestedRole,
+        business_name: parsedBusinessName,
+        business_address: parsedBusinessAddress,
+        business_lat: parsedBusinessLocation?.lat,
+        business_lng: parsedBusinessLocation?.lng,
+        town_name: parsedTownName,
+        pincode: parsedPincode,
+        role_message: parsedRoleMessage,
       });
 
+      if (result.emailVerificationRequired) {
+        toast.success("Account created! Verify your email, then sign in.");
+        navigate({ to: "/login" });
+        return;
+      }
+
       if (result.authenticated) {
-        await refreshAuth();
+        setAuthenticatedUser(result);
         toast.warning(
           result.roleRequestWarning ??
             "Account created! Your role request is pending admin approval.",
@@ -91,15 +155,15 @@ function PartnerRegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-transparent px-4 py-12 animate-fade-in-up">
       <div className="w-full max-w-lg rounded-2xl border bg-card/60 p-8 shadow-2xl backdrop-blur-xl">
-        <Link 
-          to="/" 
+        <Link
+          to="/"
           className="text-2xl font-extrabold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent hover:opacity-90 transition-opacity"
         >
           Rweezy
         </Link>
         <h1 className="mt-6 text-2xl font-bold tracking-tight">Create a partner account</h1>
         <p className="text-sm text-muted-foreground">
-          Use this page for rider, delivery partner, restaurant manager, or grocery manager access.
+          Verify your phone with SMS OTP. An email verification link is sent after signup.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -148,6 +212,13 @@ function PartnerRegisterPage() {
             {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
           </div>
 
+          <PhoneOtpVerification
+            phone={fullPhone}
+            purpose="register"
+            onVerified={setPhoneVerificationToken}
+            disabled={!phoneSchema.safeParse(fullPhone).success}
+          />
+
           <div className="space-y-2">
             <Label htmlFor="requestedRole">Choose role</Label>
             <select
@@ -169,7 +240,9 @@ function PartnerRegisterPage() {
 
           <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
             <div className="space-y-2">
-              <Label htmlFor="businessName">Business or vehicle details</Label>
+              <Label htmlFor="businessName">
+                {isStoreRole ? "Restaurant or store name" : "Business or vehicle details"}
+              </Label>
               <Input
                 id="businessName"
                 value={businessName}
@@ -180,6 +253,78 @@ function PartnerRegisterPage() {
                 <p className="text-xs text-destructive">{errors.businessName}</p>
               )}
             </div>
+            {isStoreRole && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="businessAddress">Complete business address</Label>
+                  <Textarea
+                    id="businessAddress"
+                    value={businessAddress}
+                    onChange={(e) => setBusinessAddress(e.target.value)}
+                    placeholder="Shop number, street, locality, town and pincode"
+                  />
+                  {errors.businessAddress && (
+                    <p className="text-xs text-destructive">{errors.businessAddress}</p>
+                  )}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="townName">Town / city</Label>
+                    <Input
+                      id="townName"
+                      value={townName}
+                      onChange={(e) => setTownName(e.target.value)}
+                      placeholder="Your town"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pincode">Pincode</Label>
+                    <Input
+                      id="pincode"
+                      inputMode="numeric"
+                      value={pincode}
+                      onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                      placeholder="110001"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Pin business location</Label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={locationLoading}
+                      onClick={() =>
+                        detectLocation().catch(() =>
+                          toast.error("Location access failed. Search the address manually."),
+                        )
+                      }
+                    >
+                      <LocateFixed className="mr-2 h-4 w-4" />
+                      {locationLoading ? "Detecting..." : "Use current location"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setLocationDialogOpen(true)}>
+                      <MapPin className="mr-2 h-4 w-4" />
+                      Search location
+                    </Button>
+                  </div>
+                  {businessLocation ? (
+                    <p className="text-xs text-emerald-600">
+                      Location pinned ({businessLocation.lat.toFixed(5)},{" "}
+                      {businessLocation.lng.toFixed(5)})
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Pin the exact entrance so nearby customers can discover your business.
+                    </p>
+                  )}
+                  {errors.businessLocation && (
+                    <p className="text-xs text-destructive">{errors.businessLocation}</p>
+                  )}
+                </div>
+              </>
+            )}
             <div className="space-y-2">
               <Label htmlFor="roleMessage">Message for admin</Label>
               <Textarea
@@ -219,7 +364,7 @@ function PartnerRegisterPage() {
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading || !phoneVerificationToken}>
             {loading ? "Creating account..." : "Request access"}
           </Button>
         </form>
@@ -239,6 +384,7 @@ function PartnerRegisterPage() {
           </p>
         </div>
       </div>
+      <ManualLocationDialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen} />
     </div>
   );
 }

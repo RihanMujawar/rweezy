@@ -15,6 +15,8 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -90,12 +92,6 @@ export function AppSidebar() {
     return next;
   }, [roles]);
   const hasBusinessMode = businessGroups.length > 0;
-  const pathSuggestsBusiness =
-    path.startsWith("/hotel") ||
-    path.startsWith("/grocery-admin") ||
-    path.startsWith("/delivery") ||
-    path.startsWith("/rider") ||
-    path.startsWith("/admin");
 
   const groups: { label: string; items: NavItem[] }[] =
     mode === "business" && hasBusinessMode
@@ -103,48 +99,70 @@ export function AppSidebar() {
       : [{ label: "Customer", items: customerNav }];
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <Link to="/" className="px-2 py-2 text-lg font-extrabold tracking-tight bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+    <Sidebar collapsible="icon" className="border-r border-border/50 bg-sidebar/50 backdrop-blur-2xl">
+      <SidebarHeader className="border-b border-border/10 pb-4">
+        <Link
+          to="/"
+          className="px-4 py-3 text-2xl font-black tracking-tighter bg-gradient-to-br from-foreground to-foreground/50 bg-clip-text text-transparent"
+        >
           Rweezy
         </Link>
         {hasBusinessMode && (
-          <div className="mx-2 grid grid-cols-2 rounded-lg bg-muted p-1">
+          <div className="mx-4 grid grid-cols-2 rounded-xl bg-foreground/5 p-1 backdrop-blur-md border border-foreground/5">
             <Button
               type="button"
               size="sm"
               variant={mode === "customer" ? "default" : "ghost"}
-              className="h-9 px-2 text-xs"
+              className="h-8 rounded-lg text-xs font-semibold transition-all"
               onClick={() => setMode("customer")}
             >
-              <User className="mr-1 h-3.5 w-3.5" />
+              <User className="mr-1 h-3 w-3" />
               Customer
             </Button>
             <Button
               type="button"
               size="sm"
               variant={mode === "business" ? "default" : "ghost"}
-              className="h-9 px-2 text-xs"
+              className="h-8 rounded-lg text-xs font-semibold transition-all"
               onClick={() => setMode("business")}
             >
-              <BriefcaseBusiness className="mr-1 h-3.5 w-3.5" />
+              <BriefcaseBusiness className="mr-1 h-3 w-3" />
               Business
             </Button>
           </div>
         )}
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="px-2">
         {groups.map((g) => (
           <SidebarGroup key={g.label}>
-            <SidebarGroupLabel>{g.label}</SidebarGroupLabel>
+            <SidebarGroupLabel className="px-4 text-[10px] font-bold uppercase tracking-widest text-foreground/40">
+              {g.label}
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {g.items.map((item) => (
                   <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                      <Link to={item.url} className="flex items-center gap-2">
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(item.url)}
+                      className="group relative h-10 px-4 rounded-xl transition-all duration-300 hover:bg-foreground/5 active:scale-95"
+                    >
+                      <Link to={item.url} className="flex items-center gap-3">
+                        <item.icon className={cn(
+                          "h-4 w-4 transition-transform duration-300 group-hover:scale-110",
+                          isActive(item.url) ? "text-primary-foreground" : "text-foreground/60"
+                        )} />
+                        <span className={cn(
+                          "font-medium tracking-tight",
+                          isActive(item.url) ? "text-primary-foreground" : "text-foreground/80"
+                        )}>{item.title}</span>
+                        {isActive(item.url) && (
+                          <motion.div
+                            layoutId="active-nav"
+                            className="absolute inset-0 bg-primary rounded-xl -z-10 shadow-lg shadow-primary/20"
+                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                          />
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -154,10 +172,19 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter>
-        <div className="px-2 py-2 text-xs text-muted-foreground truncate">{user?.email}</div>
-        <Button variant="ghost" size="sm" onClick={signOut} className="justify-start">
-          <LogOut className="mr-2 h-4 w-4" /> Sign out
+      <SidebarFooter className="border-t border-border/10 p-4">
+        <div className="mb-4 px-2">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 mb-1">Signed in as</div>
+          <div className="text-sm font-semibold text-foreground/80 truncate">{user?.phone || user?.email}</div>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={signOut}
+          className="w-full justify-start h-10 rounded-xl hover:bg-destructive/10 hover:text-destructive transition-colors"
+        >
+          <LogOut className="mr-3 h-4 w-4" />
+          <span className="font-semibold">Sign out</span>
         </Button>
       </SidebarFooter>
     </Sidebar>

@@ -19,6 +19,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
+    "serverless": "^4.38.1",
+    "serverless-s3-sync": "^3.5.1",
     "supabase": "^2.98.2"
   }
 }

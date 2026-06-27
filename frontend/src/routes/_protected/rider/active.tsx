@@ -33,6 +33,7 @@ type Job = {
   status: string;
   rider_id: string | null;
   customer_id: string;
+  profiles?: { full_name: string; phone: string };
 };
 
 const NEXT_STATUS: Record<
@@ -140,7 +141,12 @@ function ActiveRide() {
 
             <div className="mt-4 rounded-2xl border bg-card p-6">
               <div className="flex items-center justify-between">
-                <Badge>{job.status}</Badge>
+                <div className="flex flex-col gap-1">
+                  <Badge className="w-fit">{job.status}</Badge>
+                  {job.profiles?.full_name && (
+                    <span className="text-sm font-medium">{job.profiles.full_name}</span>
+                  )}
+                </div>
                 {job.fare_estimate && (
                   <span className="font-semibold">₹{Number(job.fare_estimate).toFixed(0)}</span>
                 )}
@@ -160,6 +166,11 @@ function ActiveRide() {
                 {job.status !== "completed" && job.status !== "cancelled" && (
                   <Button variant="outline" onClick={cancel}>
                     Cancel
+                  </Button>
+                )}
+                {job.profiles?.phone && (
+                  <Button variant="outline" asChild>
+                    <a href={`tel:${job.profiles.phone}`}>Call customer</a>
                   </Button>
                 )}
               </div>

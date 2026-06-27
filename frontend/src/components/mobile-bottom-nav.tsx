@@ -1,4 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Bike,
   BriefcaseBusiness,
@@ -105,60 +106,75 @@ export function MobileBottomNav() {
         ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:hidden">
-      <div
+    <nav className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:hidden pointer-events-none">
+      <motion.div
+        layout
         className={cn(
-          "mx-auto grid max-w-lg rounded-2xl border border-white/25 bg-background/55 p-1.5 shadow-2xl shadow-black/15 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/45",
+          "mx-auto grid max-w-lg rounded-3xl border border-white/20 bg-background/60 p-2 shadow-2xl backdrop-blur-3xl pointer-events-auto",
           items.length === 5 && "grid-cols-5",
           items.length === 6 && "grid-cols-6",
           items.length === 7 && "grid-cols-7",
         )}
       >
-        {items.map((item, idx) => {
-          const Icon = item.icon;
-          const active = item.type === "link" ? isActive(pathname, item.to) : mode === "business";
-          const key = item.type === "link" ? item.to : `action-${idx}-${item.title}`;
+        <AnimatePresence mode="popLayout">
+          {items.map((item, idx) => {
+            const Icon = item.icon;
+            const active = item.type === "link" ? isActive(pathname, item.to) : mode === "business";
+            const key = item.type === "link" ? item.to : `action-${idx}-${item.title}`;
 
-          const commonClass = cn(
-            "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium text-muted-foreground transition btn-interactive",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            active
-              ? "bg-primary/95 text-primary-foreground shadow-lg shadow-primary/25 scale-105"
-              : "hover:bg-white/10 dark:hover:bg-white/5 hover:text-foreground",
-          );
-
-          if (item.type === "action") {
-            return (
-              <button
+            const content = (
+              <motion.div
                 key={key}
-                type="button"
-                onClick={item.onClick}
-                className={commonClass}
-                aria-pressed={mode === "business"}
+                layout
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                whileTap={{ scale: 0.9 }}
+                className={cn(
+                  "relative flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 transition-all duration-300",
+                  active ? "text-primary-foreground" : "text-foreground/50 hover:text-foreground/80"
+                )}
               >
+                {active && (
+                  <motion.div
+                    layoutId="mobile-nav-active"
+                    className="absolute inset-0 bg-primary rounded-2xl -z-10 shadow-lg shadow-primary/30"
+                    transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
+                  />
+                )}
                 <Icon className="h-5 w-5" />
-                <span className="max-w-full truncate text-[9px] leading-none sm:text-[10px]">
+                <span className="max-w-full truncate text-[9px] font-bold leading-none uppercase tracking-tighter">
                   {item.title}
                 </span>
-              </button>
+              </motion.div>
             );
-          }
 
-          return (
-            <Link
-              key={key}
-              to={item.to}
-              aria-current={active ? "page" : undefined}
-              className={commonClass}
-            >
-              <Icon className="h-5 w-5" />
-              <span className="max-w-full truncate text-[9px] leading-none sm:text-[10px]">
-                {item.title}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
+            if (item.type === "action") {
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={item.onClick}
+                  className="focus:outline-none"
+                  aria-pressed={mode === "business"}
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            return (
+              <Link
+                key={key}
+                to={item.to}
+                className="focus:outline-none"
+              >
+                {content}
+              </Link>
+            );
+          })}
+        </AnimatePresence>
+      </motion.div>
     </nav>
   );
 }

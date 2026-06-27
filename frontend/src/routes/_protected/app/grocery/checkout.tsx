@@ -138,26 +138,26 @@ function GroceryCheckout() {
         {addresses.length > 0 && (
           <div className="space-y-2">
             <Label>Saved address</Label>
-            <select
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              onChange={(e) => {
-                const selected = addresses.find((item) => item.id === e.target.value);
-                if (!selected) return;
-                setAddress(selected.address);
-                if (selected.lat != null && selected.lng != null)
-                  setDeliveryLocation({ lat: selected.lat, lng: selected.lng });
-              }}
-              defaultValue=""
-            >
-              <option value="" disabled>
-                Choose saved address
-              </option>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {addresses.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
+                <Button
+                  key={item.id}
+                  variant={address === item.address ? "default" : "outline"}
+                  className="h-auto flex-col items-start p-3 text-left"
+                  onClick={() => {
+                    setAddress(item.address);
+                    if (item.lat != null && item.lng != null) {
+                      setDeliveryLocation({ lat: item.lat, lng: item.lng });
+                    }
+                  }}
+                >
+                  <span className="font-semibold">{item.label}</span>
+                  <span className="mt-1 line-clamp-1 text-[10px] opacity-70">
+                    {item.address}
+                  </span>
+                </Button>
               ))}
-            </select>
+            </div>
           </div>
         )}
         <div className="space-y-2">

@@ -29,13 +29,7 @@ function inferModeFromPath(pathname: string) {
     : "customer";
 }
 
-export function AppModeProvider({
-  children,
-  roles,
-}: {
-  children: ReactNode;
-  roles: AppRole[];
-}) {
+export function AppModeProvider({ children, roles }: { children: ReactNode; roles: AppRole[] }) {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const hasBusinessMode = useMemo(
     () => roles.some((role) => BUSINESS_ROLES.includes(role)),
@@ -74,4 +68,3 @@ export function useAppMode() {
   if (!ctx) throw new Error("useAppMode must be used within AppModeProvider");
   return ctx;
 }
-

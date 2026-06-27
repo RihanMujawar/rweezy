@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "@/lib/location-context";
 import { api } from "@/lib/api";
 import { Search, ShoppingBasket } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,13 +34,15 @@ function GroceryStores() {
   const [query, setQuery] = useState("");
   const [openOnly, setOpenOnly] = useState(false);
 
+  const { location: gpsLocation } = useLocation();
+
   useEffect(() => {
-    api.catalog.getStores().then(({ stores: data, location }) => {
+    api.catalog.getStores(gpsLocation || undefined).then(({ stores: data, location }) => {
       setStores((data as Store[]) ?? []);
       setLocation((location as Location | null) ?? null);
       setLoading(false);
     });
-  }, []);
+  }, [gpsLocation]);
 
   const filteredStores = useMemo(() => {
     const needle = query.trim().toLowerCase();

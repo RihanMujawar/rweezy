@@ -9,8 +9,9 @@ import { toast } from "sonner";
 import { RoleGate } from "@/components/coming-soon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
-import { Bell, BellOff, ClipboardList, IndianRupee, PackageCheck, Phone } from "lucide-react";
+import { Bell, BellOff, ClipboardList, IndianRupee, PackageCheck, Phone, Map as MapIcon } from "lucide-react";
 import { useAlertsPreference } from "@/hooks/use-alerts-preference";
+import { OrdersMap, MapOrder } from "@/components/orders-map";
 
 export const Route = createFileRoute("/_protected/grocery-admin/orders")({
   component: GroceryOrders,
@@ -21,8 +22,11 @@ type Order = {
   status: string;
   total: number;
   delivery_address: string;
+  delivery_lat?: number;
+  delivery_lng?: number;
   notes: string | null;
   created_at: string;
+  profiles?: { full_name: string; phone?: string | null };
   grocery_order_items: { id: string; name: string; quantity: number; price: number }[];
 };
 
@@ -64,6 +68,7 @@ function GroceryOrders() {
   const { alertsEnabled, setAlertsEnabled } = useAlertsPreference();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState("active");
+  const [mapFilter, setMapFilter] = useState<string>("all");
 
   const load = useCallback(async () => {
     const { orders } = await api.groceryAdmin.getOrders();
@@ -98,8 +103,8 @@ function GroceryOrders() {
   }, [user, load]);
 
   useEffect(() => {
-    if (activeTab === "history" && history.length === 0) loadHistory();
-  }, [activeTab, history.length, loadHistory]);
+    if (activeTab === "history") loadHistory();
+  }, [activeTab, loadHistory]);
 
   const advance = async (order: Order) => {
     const next = NEXT[order.status];
@@ -159,10 +164,15 @@ function GroceryOrders() {
             />
           )}
           <div>
-            <Badge variant="secondary" className={statusColor(o.status)}>
-              {o.status}
-            </Badge>
-            <span className="ml-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className={statusColor(o.status)}>
+                {o.status}
+              </Badge>
+              {o.profiles?.full_name && (
+                <span className="font-medium text-sm">{o.profiles.full_name}</span>
+              )}
+            </div>
+            <span className="text-[10px] text-muted-foreground">
               {new Date(o.created_at).toLocaleString()}
             </span>
           </div>
@@ -185,14 +195,22 @@ function GroceryOrders() {
               Mark as {NEXT[o.status]}
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="min-h-11"
-            onClick={() => toast.message("Customer phone is not attached to this order yet.")}
-          >
-            <Phone className="mr-2 h-4 w-4" /> Call customer
-          </Button>
+          {o.profiles?.phone ? (
+            <Button size="sm" variant="outline" className="min-h-11" asChild>
+              <a href={`tel:${o.profiles.phone}`}>
+                <Phone className="mr-2 h-4 w-4" /> Call customer
+              </a>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="min-h-11"
+              onClick={() => toast.message("Customer phone is not attached to this order yet.")}
+            >
+              <Phone className="mr-2 h-4 w-4" /> Call customer
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -218,6 +236,20 @@ function GroceryOrders() {
     ) : (
       <div className="mt-4 space-y-3">{list.map((o) => renderOrderCard(o, true))}</div>
     );
+
+  const mapOrders: MapOrder[] = orders
+    .filter((o) => o.delivery_lat && o.delivery_lng)
+    .filter((o) => mapFilter === "all" || o.status === mapFilter)
+    .map((o) => ({
+      id: o.id,
+      lat: o.delivery_lat!,
+      lng: o.delivery_lng!,
+      customerName: o.profiles?.full_name,
+      status: o.status,
+      total: o.total,
+      items: o.grocery_order_items,
+      type: "grocery",
+    }));
 
   return (
     <RoleGate
@@ -293,6 +325,9 @@ function GroceryOrders() {
 
             <TabsList className="mt-4 flex-wrap">
               <TabsTrigger value="active">All active ({orders.length})</TabsTrigger>
+              <TabsTrigger value="map">
+                <MapIcon className="mr-2 h-4 w-4" /> Map View
+              </TabsTrigger>
               <TabsTrigger value="new">New ({pendingOrders.length})</TabsTrigger>
               <TabsTrigger value="accepted">Accepted ({acceptedOrders.length})</TabsTrigger>
               <TabsTrigger value="preparing">Packing ({preparingOrders.length})</TabsTrigger>
@@ -303,6 +338,48 @@ function GroceryOrders() {
             </TabsList>
 
             <TabsContent value="active">{renderOrderList(orders)}</TabsContent>
+            <TabsContent value="map">
+              <div className="mt-4 space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant={mapFilter === "all" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setMapFilter("all")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    variant={mapFilter === "pending" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setMapFilter("pending")}
+                  >
+                    New
+                  </Button>
+                  <Button
+                    variant={mapFilter === "accepted" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setMapFilter("accepted")}
+                  >
+                    Accepted
+                  </Button>
+                  <Button
+                    variant={mapFilter === "preparing" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setMapFilter("preparing")}
+                  >
+                    Packing
+                  </Button>
+                  <Button
+                    variant={mapFilter === "ready" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setMapFilter("ready")}
+                  >
+                    Ready
+                  </Button>
+                </div>
+                <OrdersMap orders={mapOrders} height={600} />
+              </div>
+            </TabsContent>
             <TabsContent value="new">{renderOrderList(pendingOrders)}</TabsContent>
             <TabsContent value="accepted">{renderOrderList(acceptedOrders)}</TabsContent>
             <TabsContent value="preparing">{renderOrderList(preparingOrders)}</TabsContent>
@@ -342,7 +419,12 @@ function GroceryOrders() {
                 </p>
               ) : (
                 <div className="mt-4 space-y-3">
-                  {history.map((o) => renderOrderCard(o, false))}
+                  <div className="mb-4 rounded-lg bg-muted p-3 text-sm">
+                    Showing completed, delivered, and cancelled orders.
+                  </div>
+                  {history
+                    .filter((o) => ["completed", "delivered", "cancelled"].includes(o.status))
+                    .map((o) => renderOrderCard(o, false))}
                 </div>
               )}
             </TabsContent>
