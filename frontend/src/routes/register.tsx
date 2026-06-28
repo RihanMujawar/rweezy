@@ -138,7 +138,7 @@ function RegisterPage() {
         </Link>
         <h1 className="mt-6 text-2xl font-bold tracking-tight">Create your customer account</h1>
         <p className="text-sm text-muted-foreground">
-          Verify your phone with SMS OTP and create your account.
+          Verify your phone with WhatsApp OTP and create your account.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">

@@ -67,7 +67,7 @@ export function PhoneOtpVerification({
       });
       setOtpSent(true);
       setCooldown(30);
-      toast.success("Verification code sent to your phone");
+      toast.success("Verification code sent to your WhatsApp");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to send verification code";
       setError(message);
@@ -125,7 +125,7 @@ export function PhoneOtpVerification({
       <div className="space-y-1">
         <p className="text-sm font-medium">Phone verification</p>
         <p className="text-xs text-muted-foreground">
-          We&apos;ll send a one-time code by SMS to confirm this number.
+          We&apos;ll send a one-time code by WhatsApp to confirm this number.
         </p>
       </div>
 

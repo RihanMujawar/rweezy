@@ -41,9 +41,9 @@ import {
   verifyPhoneVerificationToken,
 } from "./lib/phone-verification.mjs";
 import {
-  sendPhoneVerificationCode,
-  verifyPhoneVerificationCode,
-} from "./lib/twilio.mjs";
+  sendWhatsAppOtp,
+  verifyWhatsAppOtp,
+} from "./lib/whatsapp-otp.mjs";
 import { verifyFirebaseToken } from "./lib/firebase-admin.mjs";
 import {
   assertStatusAdvance,
@@ -1103,13 +1103,13 @@ const routes = [
       await assertPhoneAvailable(phone);
     }
 
-    await sendPhoneVerificationCode(phone);
+    const result = await sendWhatsAppOtp(phone);
 
     return {
       ok: true,
       purpose,
-      provider: "twilio",
-      message: "Verification code sent to your phone",
+      provider: "whatsapp",
+      message: "Verification code sent to your WhatsApp",
     };
   }),
   route("POST", /^\/api\/auth\/phone\/verify-otp$/, async ({ body }) => {
@@ -1124,7 +1124,7 @@ const routes = [
       throw new HttpError(400, "Enter the verification code");
     }
 
-    await verifyPhoneVerificationCode(phone, code);
+    verifyWhatsAppOtp(phone, code);
 
     if (purpose === "register" || purpose === "reset_password") {
       return {
@@ -1171,11 +1171,11 @@ const routes = [
       throw new HttpError(404, "No account found for this phone number");
     }
 
-    await sendPhoneVerificationCode(phone);
+    await sendWhatsAppOtp(phone);
 
     return {
       ok: true,
-      message: "Verification code sent to your phone",
+      message: "Verification code sent to your WhatsApp",
     };
   }),
   route("POST", /^\/api\/auth\/password-reset\/complete$/, async ({ body }) => {
