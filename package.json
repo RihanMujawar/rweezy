@@ -22,5 +22,8 @@
     "serverless": "^4.38.1",
     "serverless-s3-sync": "^3.5.1",
     "supabase": "^2.98.2"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }
