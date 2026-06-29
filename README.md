@@ -111,13 +111,27 @@ The platform consists of three main components:
 │   ├── lib/
 │   │   ├── env.mjs
 │   │   ├── http.mjs
+│   │   ├── kv-store.mjs             # Scalable state management provider
 │   │   ├── logger.mjs
 │   │   ├── phone-verification.mjs
 │   │   ├── platform-helpers.mjs
 │   │   ├── rate-limit.mjs
 │   │   ├── request-utils.mjs
 │   │   ├── supabase.mjs
-│   │   └── twilio.mjs
+│   │   ├── validation.mjs           # Centralized Zod schemas
+│   │   └── whatsapp-otp.mjs
+│   ├── routes/                      # Modular feature-based routes
+│   │   ├── admin.mjs
+│   │   ├── auth.mjs
+│   │   ├── catalog.mjs
+│   │   ├── chat.mjs
+│   │   ├── merchant.mjs
+│   │   ├── notifications.mjs
+│   │   ├── orders.mjs
+│   │   ├── partner.mjs
+│   │   ├── profile.mjs
+│   │   ├── reviews.mjs
+│   │   └── rides.mjs
 │   ├── server.mjs
 │   ├── supabase/
 │   │   ├── config.toml
