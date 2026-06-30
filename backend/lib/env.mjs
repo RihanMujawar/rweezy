@@ -94,6 +94,8 @@ export const env = {
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID || "",
   phoneVerificationSecret: process.env.PHONE_VERIFICATION_SECRET || "",
   emailOtpSecret: process.env.EMAIL_OTP_SECRET || "",
+  waapiBaseUrl: process.env.WAAPI_BASE_URL || "http://127.0.0.1:3001",
+  waapiApiKey: process.env.WAAPI_API_KEY || "",
   openwaBaseUrl: process.env.OPENWA_BASE_URL || "",
   openwaApiKey: process.env.OPENWA_API_KEY || "",
   openwaSessionId: process.env.OPENWA_SESSION_ID || "",

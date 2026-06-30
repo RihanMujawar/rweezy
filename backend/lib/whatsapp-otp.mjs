@@ -18,35 +18,29 @@ function generateCode() {
   return String(crypto.randomInt(100000, 1000000));
 }
 
-function toWhatsAppJid(phone) {
-  const digits = String(phone).replace(/\D/g, "");
-  return `${digits}@c.us`;
-}
-
-function openwaConfigured() {
-  return Boolean(env.openwaBaseUrl && env.openwaApiKey && env.openwaSessionId);
+function waapiConfigured() {
+  return Boolean(env.waapiBaseUrl);
 }
 
 async function sendWhatsAppMessage(phone, text) {
-  if (!openwaConfigured()) {
+  if (!waapiConfigured()) {
     throw new HttpError(
       500,
-      "WhatsApp OTP is not configured. Add OPENWA_BASE_URL, OPENWA_API_KEY, and OPENWA_SESSION_ID to backend .env.",
+      "WhatsApp service is not configured. Add WAAPI_BASE_URL and WAAPI_API_KEY to backend .env.",
     );
   }
 
-  const chatId = toWhatsAppJid(phone);
-  const url = `${env.openwaBaseUrl.replace(/\/+$/, "")}/api/sessions/${env.openwaSessionId}/messages/send-text`;
+  const url = `${env.waapiBaseUrl.replace(/\/+$/, "")}/send`;
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-API-Key": env.openwaApiKey,
+      "X-API-Key": env.waapiApiKey,
     },
     body: JSON.stringify({
-      chatId,
-      text,
+      phone,
+      message: text,
     }),
     signal: AbortSignal.timeout(20000),
   });
