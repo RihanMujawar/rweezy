@@ -76,7 +76,30 @@ export const rideRoutes = [
         },
       });
 
-      return { ride: firstRow(rows) };
+      const ride = firstRow(rows);
+      if (ride) {
+        void (async () => {
+          try {
+            const { sendNotification, notifyUsersWithRole } = await import("../lib/notifications.mjs");
+            // Notify Customer
+            await sendNotification(user.id, {
+              title: "Ride Requested",
+              body: `Your ride request for ${validated.vehicle_type} has been placed. Searching for a rider nearby.`,
+              data: { type: "ride_requested", id: ride.id },
+            });
+            // Notify Riders (broadcast)
+            await notifyUsersWithRole("rider", {
+              title: "New Ride Job Available",
+              body: `New ${validated.vehicle_type} ride request from ${validated.pickup_address}.`,
+              data: { type: "job_available", kind: "ride", id: ride.id },
+            });
+          } catch (error) {
+            console.warn("Failed to send ride notifications:", error.message);
+          }
+        })();
+      }
+
+      return { ride };
     },
   },
   {
@@ -113,7 +136,30 @@ export const rideRoutes = [
         },
       });
 
-      return { packageDelivery: firstRow(rows) };
+      const packageDelivery = firstRow(rows);
+      if (packageDelivery) {
+        void (async () => {
+          try {
+            const { sendNotification, notifyUsersWithRole } = await import("../lib/notifications.mjs");
+            // Notify Customer
+            await sendNotification(user.id, {
+              title: "Package Delivery Requested",
+              body: "Your package delivery request has been placed. Searching for a rider nearby.",
+              data: { type: "package_requested", id: packageDelivery.id },
+            });
+            // Notify Riders (broadcast)
+            await notifyUsersWithRole("rider", {
+              title: "New Package Job Available",
+              body: `New package delivery request from ${validated.pickup_address}.`,
+              data: { type: "job_available", kind: "package", id: packageDelivery.id },
+            });
+          } catch (error) {
+            console.warn("Failed to send package notifications:", error.message);
+          }
+        })();
+      }
+
+      return { packageDelivery };
     },
   },
 ];

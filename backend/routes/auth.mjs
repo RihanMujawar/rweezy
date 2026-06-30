@@ -215,8 +215,9 @@ async function completeUserRegistration({
 
   if (requestedRole) {
     try {
-      await serviceRoleRestRequest("/role_requests", {
+      const roleRequestRows = await serviceRoleRestRequest("/role_requests", {
         method: "POST",
+        headers: { Prefer: "return=representation" },
         body: {
           user_id: createdUserId,
           requested_role: requestedRole,
@@ -230,6 +231,21 @@ async function completeUserRegistration({
         },
       });
       roleRequestPending = true;
+
+      // Notify Admins
+      void (async () => {
+        try {
+          const { notifyUsersWithRole } = await import("../lib/notifications.mjs");
+          const roleLabel = requestedRole.replace(/_/g, " ");
+          await notifyUsersWithRole("admin", {
+            title: "New Role Request",
+            body: `${fullName} has requested the ${roleLabel} role.`,
+            data: { type: "new_role_request", user_id: createdUserId, role: requestedRole },
+          });
+        } catch (error) {
+          console.warn("Failed to send admin role request notification:", error.message);
+        }
+      })();
     } catch (error) {
       if (!isMissingTableError(error, "role_requests")) throw error;
       roleRequestWarning = "Account created, but role request storage is not available.";

@@ -312,7 +312,24 @@ export const merchantRoutes = [
         },
       );
 
-      return { order: firstRow(rows) };
+      const order = firstRow(rows);
+      if (order) {
+        // Notify Customer
+        void (async () => {
+          try {
+            const { sendNotification } = await import("../lib/notifications.mjs");
+            const statusLabel = body.status.replace(/_/g, " ");
+            await sendNotification(order.customer_id, {
+              title: "Food Order Update",
+              body: `Your order status is now: ${statusLabel}.`,
+              data: { type: "order_status_update", kind: "food", id: order.id, status: body.status },
+            });
+          } catch (error) {
+            console.warn("Failed to send food order status update notification:", error.message);
+          }
+        })();
+      }
+      return { order };
     },
   },
   {
@@ -339,7 +356,24 @@ export const merchantRoutes = [
         },
       );
 
-      return { order: firstRow(rows) };
+      const order = firstRow(rows);
+      if (order) {
+        // Notify Customer
+        void (async () => {
+          try {
+            const { sendNotification } = await import("../lib/notifications.mjs");
+            const statusLabel = body.status.replace(/_/g, " ");
+            await sendNotification(order.customer_id, {
+              title: "Grocery Order Update",
+              body: `Your order status is now: ${statusLabel}.`,
+              data: { type: "order_status_update", kind: "grocery", id: order.id, status: body.status },
+            });
+          } catch (error) {
+            console.warn("Failed to send grocery order status update notification:", error.message);
+          }
+        })();
+      }
+      return { order };
     },
   },
   {

@@ -13,6 +13,7 @@ function trimToken(value) {
 }
 
 async function sendFcmNotification({ token, title, body, data = {} }) {
+  const { cleanText } = await import("../lib/request-utils.mjs");
   if (!env.fcmServerKey) {
     throw new HttpError(
       500,

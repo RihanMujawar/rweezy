@@ -87,58 +87,6 @@ function trimToken(value) {
   return String(value ?? "").trim();
 }
 
-async function getPushTokensForUsers(userIds) {
-  const uniqueIds = [...new Set(userIds.filter(Boolean))];
-  if (uniqueIds.length === 0) return [];
-
-  const rows = await serviceRoleRestRequest(
-    buildPath("/user_push_tokens", {
-      select: "token,user_id",
-      user_id: `in.(${uniqueIds.join(",")})`,
-      order: "updated_at.desc",
-      limit: "50",
-    }),
-  );
-
-  const seen = new Set();
-  return (rows ?? [])
-    .map((row) => trimToken(row.token))
-    .filter((token) => {
-      if (!token || seen.has(token)) return false;
-      seen.add(token);
-      return true;
-    });
-}
-
-async function trySendFcmNotification({ token, title, body, data = {} }) {
-  if (!env.fcmServerKey) return { ok: false, skipped: true };
-  try {
-     const response = await fetch("https://fcm.googleapis.com/fcm/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `key=${env.fcmServerKey}`,
-      },
-      body: JSON.stringify({
-        to: token,
-        priority: "high",
-        notification: {
-          title: cleanText(title) || "Rweezy",
-          body: cleanText(body) || "You have a new update.",
-        },
-        data: Object.fromEntries(
-          Object.entries(data ?? {}).map(([key, value]) => [String(key), String(value ?? "")]),
-        ),
-      }),
-    });
-    return { ok: response.ok };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Failed to send push notification",
-    };
-  }
-}
 
 function chatKindLabel(kind) {
   return (
@@ -168,31 +116,22 @@ async function notifyChatRecipients({ senderId, context, kind, serviceId, messag
   const recipientIds = getChatRecipientUserIds(context, senderId);
   if (recipientIds.length === 0) return;
 
-  const [senderName, tokens] = await Promise.all([
-    getProfileDisplayName(senderId),
-    getPushTokensForUsers(recipientIds),
-  ]);
-  if (tokens.length === 0) return;
+  const { sendNotification } = await import("../lib/notifications.mjs");
+  const senderName = await getProfileDisplayName(senderId);
 
-  const preview =
-    messageBody.length > 120 ? `${messageBody.slice(0, 117)}...` : messageBody;
+  const preview = messageBody.length > 120 ? `${messageBody.slice(0, 117)}...` : messageBody;
   const title = `${senderName} · ${chatKindLabel(kind)}`;
 
-  await Promise.all(
-    tokens.map((token) =>
-      trySendFcmNotification({
-        token,
-        title,
-        body: preview,
-        data: {
-          type: "chat",
-          service_kind: kind,
-          service_id: serviceId,
-          sender_id: senderId,
-        },
-      }),
-    ),
-  );
+  await sendNotification(recipientIds, {
+    title,
+    body: preview,
+    data: {
+      type: "chat",
+      service_kind: kind,
+      service_id: serviceId,
+      sender_id: senderId,
+    },
+  });
 }
 
 export const chatRoutes = [

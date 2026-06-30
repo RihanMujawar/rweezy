@@ -210,6 +210,35 @@ export const orderRoutes = [
         throw new HttpError(500, "Failed to create food order");
       }
 
+      // Notify relevant parties
+      void (async () => {
+        try {
+          const { sendNotification, notifyUsersWithRole } = await import("../lib/notifications.mjs");
+          // Notify Customer
+          await sendNotification(user.id, {
+            title: "Order Placed",
+            body: `Your food order from ${restaurant.name} has been placed successfully!`,
+            data: { type: "order_placed", kind: "food", id: order.id },
+          });
+          // Notify Restaurant Manager
+          if (restaurant.manager_id) {
+            await sendNotification(restaurant.manager_id, {
+              title: "New Order Received",
+              body: `You have a new food order from ${user.user_metadata?.full_name || "a customer"}.`,
+              data: { type: "new_order", kind: "food", id: order.id },
+            });
+          }
+          // Notify Delivery Boys (broadcast)
+          await notifyUsersWithRole("delivery_boy", {
+            title: "New Delivery Job Available",
+            body: `New food delivery job available from ${restaurant.name}.`,
+            data: { type: "job_available", kind: "food", id: order.id },
+          });
+        } catch (error) {
+          console.warn("Failed to send order notifications:", error.message);
+        }
+      })();
+
       const orderItems = items.map((item) => ({
         order_id: order.id,
         menu_item_id: item.id,
@@ -307,6 +336,35 @@ export const orderRoutes = [
       if (!order) {
         throw new HttpError(500, "Failed to create grocery order");
       }
+
+      // Notify relevant parties
+      void (async () => {
+        try {
+          const { sendNotification, notifyUsersWithRole } = await import("../lib/notifications.mjs");
+          // Notify Customer
+          await sendNotification(user.id, {
+            title: "Order Placed",
+            body: `Your grocery order from ${store.name} has been placed successfully!`,
+            data: { type: "order_placed", kind: "grocery", id: order.id },
+          });
+          // Notify Store Manager
+          if (store.manager_id) {
+            await sendNotification(store.manager_id, {
+              title: "New Order Received",
+              body: `You have a new grocery order from ${user.user_metadata?.full_name || "a customer"}.`,
+              data: { type: "new_order", kind: "grocery", id: order.id },
+            });
+          }
+          // Notify Delivery Boys (broadcast)
+          await notifyUsersWithRole("delivery_boy", {
+            title: "New Delivery Job Available",
+            body: `New grocery delivery job available from ${store.name}.`,
+            data: { type: "job_available", kind: "grocery", id: order.id },
+          });
+        } catch (error) {
+          console.warn("Failed to send order notifications:", error.message);
+        }
+      })();
 
       try {
         await deductGroceryStock(token, validated.store_id, items);

@@ -727,6 +727,24 @@ export const adminRoutes = [
         });
       }
 
+      const reviewedRequest = firstRow(rows);
+      if (reviewedRequest) {
+        // Notify User
+        void (async () => {
+          try {
+            const { sendNotification } = await import("../lib/notifications.mjs");
+            const roleLabel = reviewedRequest.requested_role.replace(/_/g, " ");
+            await sendNotification(reviewedRequest.user_id, {
+              title: `Role Request ${decision.charAt(0).toUpperCase() + decision.slice(1)}`,
+              body: `Your request for the ${roleLabel} role has been ${decision}.`,
+              data: { type: "role_request_review", status: decision, role: reviewedRequest.requested_role },
+            });
+          } catch (error) {
+            console.warn("Failed to send role request review notification:", error.message);
+          }
+        })();
+      }
+
       await writeAudit(
         token,
         user.id,
@@ -826,7 +844,7 @@ export const adminRoutes = [
         { user_id: request.user_id, requested_role: request.requested_role },
       );
 
-      return { request: firstRow(rows) };
+      return { request: reviewedRequest };
     },
   },
   {

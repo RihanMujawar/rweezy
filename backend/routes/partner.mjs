@@ -193,6 +193,20 @@ export const partnerRoutes = [
         throw new HttpError(404, "Delivery not found or already assigned");
       }
 
+      // Notify Customer
+      void (async () => {
+        try {
+          const { sendNotification } = await import("../lib/notifications.mjs");
+          await sendNotification(order.customer_id, {
+            title: "Rider Assigned",
+            body: `A rider has accepted your ${kind} order and is on the way!`,
+            data: { type: "rider_accepted", kind, id: order.id },
+          });
+        } catch (error) {
+          console.warn("Failed to send assignment notification:", error.message);
+        }
+      })();
+
       return { order: { ...order, rider_id: order.rider_id ?? order.delivery_boy_id ?? null } };
     },
   },
@@ -243,6 +257,21 @@ export const partnerRoutes = [
       if (!order) {
         throw new HttpError(404, "Delivery not found or you are not assigned to it");
       }
+
+      // Notify Customer
+      void (async () => {
+        try {
+          const { sendNotification } = await import("../lib/notifications.mjs");
+          const statusLabel = body.status.replace(/_/g, " ");
+          await sendNotification(order.customer_id, {
+            title: "Order Update",
+            body: `Your ${kind} order status is now: ${statusLabel}.`,
+            data: { type: "order_status_update", kind, id: order.id, status: body.status },
+          });
+        } catch (error) {
+          console.warn("Failed to send status update notification:", error.message);
+        }
+      })();
 
       return { order: { ...order, rider_id: order.rider_id ?? order.delivery_boy_id ?? null } };
     },
@@ -371,7 +400,23 @@ export const partnerRoutes = [
         },
       );
 
-      return { ride: firstRow(rows) };
+      const ride = firstRow(rows);
+      if (ride) {
+        // Notify Customer
+        void (async () => {
+          try {
+            const { sendNotification } = await import("../lib/notifications.mjs");
+            await sendNotification(ride.customer_id, {
+              title: "Ride Accepted",
+              body: "A rider has accepted your ride request and is coming to pick you up!",
+              data: { type: "ride_accepted", id: ride.id },
+            });
+          } catch (error) {
+            console.warn("Failed to send ride acceptance notification:", error.message);
+          }
+        })();
+      }
+      return { ride };
     },
   },
   {
@@ -393,7 +438,23 @@ export const partnerRoutes = [
         },
       );
 
-      return { packageDelivery: firstRow(rows) };
+      const packageDelivery = firstRow(rows);
+      if (packageDelivery) {
+        // Notify Customer
+        void (async () => {
+          try {
+            const { sendNotification } = await import("../lib/notifications.mjs");
+            await sendNotification(packageDelivery.customer_id, {
+              title: "Package Job Accepted",
+              body: "A rider has accepted your package delivery request!",
+              data: { type: "package_accepted", id: packageDelivery.id },
+            });
+          } catch (error) {
+            console.warn("Failed to send package acceptance notification:", error.message);
+          }
+        })();
+      }
+      return { packageDelivery };
     },
   },
   {
@@ -433,7 +494,25 @@ export const partnerRoutes = [
         },
       );
 
-      return { job: firstRow(rows) };
+      const job = firstRow(rows);
+      if (job) {
+        // Notify Customer
+        void (async () => {
+          try {
+            const { sendNotification } = await import("../lib/notifications.mjs");
+            const kind = table === "rides" ? "ride" : "package";
+            const statusLabel = body.status.replace(/_/g, " ");
+            await sendNotification(job.customer_id, {
+              title: `${kind.charAt(0).toUpperCase() + kind.slice(1)} Update`,
+              body: `Your ${kind} status is now: ${statusLabel}.`,
+              data: { type: "job_status_update", kind, id: job.id, status: body.status },
+            });
+          } catch (error) {
+            console.warn("Failed to send job status notification:", error.message);
+          }
+        })();
+      }
+      return { job };
     },
   },
   {

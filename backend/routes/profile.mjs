@@ -119,7 +119,25 @@ export const profileRoutes = [
         },
       });
 
-      return { request: firstRow(rows) };
+      const request = firstRow(rows);
+      if (request) {
+        // Notify Admins
+        void (async () => {
+          try {
+            const { notifyUsersWithRole } = await import("../lib/notifications.mjs");
+            const roleLabel = requestedRole.replace(/_/g, " ");
+            await notifyUsersWithRole("admin", {
+              title: "New Role Request",
+              body: `${user.user_metadata?.full_name || "A user"} has requested the ${roleLabel} role.`,
+              data: { type: "new_role_request", user_id: user.id, role: requestedRole },
+            });
+          } catch (error) {
+            console.warn("Failed to send admin role request notification:", error.message);
+          }
+        })();
+      }
+
+      return { request };
     },
   },
 ];
