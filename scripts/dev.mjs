@@ -25,6 +25,7 @@ function run(label, args) {
 const children = [
   run("backend", ["--prefix", "backend", "run", "dev"]),
   run("frontend", ["--prefix", "frontend", "run", "dev"]),
+  run("waapi", ["--prefix", "WAapi", "run", "start"]),
 ];
 
 let stopping = false;
