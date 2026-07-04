@@ -1,4 +1,4 @@
-import { serviceRoleRestRequest } from "./supabase.mjs";
+import { prisma } from "./prisma.mjs";
 import { env } from "./env.mjs";
 import { logEvent } from "./logger.mjs";
 import { cleanText } from "./request-utils.mjs";
@@ -67,11 +67,14 @@ async function getPushTokensForUsers(userIds) {
   if (uniqueIds.length === 0) return [];
 
   try {
-    const rows = await serviceRoleRestRequest(
-      `/user_push_tokens?select=token,user_id&user_id=in.(${uniqueIds.join(",")})&order=updated_at.desc&limit=50`,
-    );
+    const tokens = await prisma.userPushToken.findMany({
+      where: { user_id: { in: uniqueIds } },
+      orderBy: { updated_at: "desc" },
+      take: 50,
+      select: { token: true }
+    });
     const seen = new Set();
-    return (rows ?? [])
+    return (tokens ?? [])
       .map((row) => String(row.token ?? "").trim())
       .filter((token) => {
         if (!token || seen.has(token)) return false;
@@ -89,10 +92,11 @@ async function getPhonesForUsers(userIds) {
   if (uniqueIds.length === 0) return [];
 
   try {
-    const rows = await serviceRoleRestRequest(
-      `/profiles?select=phone&id=in.(${uniqueIds.join(",")})`,
-    );
-    return (rows ?? [])
+    const profiles = await prisma.profile.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { phone: true }
+    });
+    return (profiles ?? [])
       .map((row) => String(row.phone ?? "").trim())
       .filter(Boolean);
   } catch (error) {
@@ -126,10 +130,11 @@ export async function sendNotification(userIds, { title, body, data = {} }) {
 
 export async function notifyUsersWithRole(role, notification) {
   try {
-    const rows = await serviceRoleRestRequest(
-      `/user_roles?select=user_id&role=eq.${role}`,
-    );
-    const userIds = (rows ?? []).map((row) => row.user_id);
+    const userRoles = await prisma.userRole.findMany({
+      where: { role },
+      select: { user_id: true }
+    });
+    const userIds = (userRoles ?? []).map((row) => row.user_id);
     if (userIds.length > 0) {
       await sendNotification(userIds, notification);
     }

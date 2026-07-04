@@ -7,7 +7,7 @@ const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
 function signingSecret() {
-  return env.whatsappOtpSecret || env.supabaseServiceRoleKey || "dev-whatsapp-otp-secret";
+  return env.whatsappOtpSecret || env.jwtSecret || "dev-whatsapp-otp-secret";
 }
 
 function hashOtp(phone, code) {

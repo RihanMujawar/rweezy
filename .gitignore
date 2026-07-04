@@ -22,7 +22,6 @@ frontend/.output
 frontend/.nitro
 .config/
 backend/.env
-backend/supabase/.temp/
 
 # Playwright
 test-results/
