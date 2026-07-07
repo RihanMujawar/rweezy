@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { env } from "./env.mjs";
 import { HttpError } from "./http.mjs";
+import { OpenWAError, sendWhatsAppText } from "./openwa.mjs";
 
 const otpStore = new Map();
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -18,48 +19,6 @@ function generateCode() {
   return String(crypto.randomInt(100000, 1000000));
 }
 
-function toWhatsAppJid(phone) {
-  const digits = String(phone).replace(/\D/g, "");
-  return `${digits}@c.us`;
-}
-
-function openwaConfigured() {
-  return Boolean(env.openwaBaseUrl && env.openwaApiKey && env.openwaSessionId);
-}
-
-async function sendWhatsAppMessage(phone, text) {
-  if (!openwaConfigured()) {
-    throw new HttpError(
-      500,
-      "WhatsApp OTP is not configured. Add OPENWA_BASE_URL, OPENWA_API_KEY, and OPENWA_SESSION_ID to backend .env.",
-    );
-  }
-
-  const chatId = toWhatsAppJid(phone);
-  const url = `${env.openwaBaseUrl.replace(/\/+$/, "")}/api/sessions/${env.openwaSessionId}/messages/send-text`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": env.openwaApiKey,
-    },
-    body: JSON.stringify({
-      chatId,
-      text,
-    }),
-    signal: AbortSignal.timeout(20000),
-  });
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    const message = payload?.message || payload?.error || "Failed to send WhatsApp OTP";
-    throw new HttpError(response.status >= 500 ? 502 : 400, message);
-  }
-
-  return response.json();
-}
-
 export async function sendWhatsAppOtp(phone) {
   const code = generateCode();
   otpStore.set(phone, {
@@ -68,14 +27,23 @@ export async function sendWhatsAppOtp(phone) {
     attempts: 0,
   });
 
-  if (env.whatsappOtpDevBypass === "true") {
+  if (env.whatsappOtpDevBypass) {
     return { ok: true, provider: "whatsapp", devCode: code };
   }
 
-  await sendWhatsAppMessage(
-    phone,
-    `Your Rweezy verification code is ${code}. It expires in 10 minutes. Do not share this code with anyone.`,
-  );
+  try {
+    await sendWhatsAppText(
+      phone,
+      `Your Rweezy verification code is ${code}. It expires in 10 minutes. Do not share this code with anyone.`,
+      { timeoutMs: 20_000 },
+    );
+  } catch (error) {
+    otpStore.delete(phone);
+    if (error instanceof OpenWAError) {
+      throw new HttpError(error.status, error.message);
+    }
+    throw error;
+  }
 
   return { ok: true, provider: "whatsapp" };
 }
@@ -84,7 +52,7 @@ export function verifyWhatsAppOtp(phone, code) {
   const normalizedCode = String(code ?? "").trim();
   const record = otpStore.get(phone);
 
-  if (env.whatsappOtpDevBypass === "true" && env.whatsappOtpDevBypassCode) {
+  if (env.whatsappOtpDevBypass && env.whatsappOtpDevBypassCode) {
     if (normalizedCode === String(env.whatsappOtpDevBypassCode).trim()) {
       otpStore.delete(phone);
       return phone;

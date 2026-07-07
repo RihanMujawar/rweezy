@@ -6,17 +6,13 @@ export const phoneSchema = z
   .regex(/^\+\d{10,15}$/, "Enter a valid phone number with country code");
 
 export const loginSchema = z.object({
-  email: z.string().trim().email("Enter a valid email").optional(),
-  phone: phoneSchema.optional(),
+  phone: phoneSchema,
   password: z.string().min(1, "Password is required"),
-}).refine(data => data.email || data.phone, {
-  message: "Email or phone number is required",
 });
 
 export const phoneOtpSendSchema = z.object({
   phone: phoneSchema,
   purpose: z.enum(["login", "register", "reset_password"]),
-  email: z.string().trim().email().optional(),
 });
 
 export const phoneOtpVerifySchema = z.object({
@@ -37,7 +33,6 @@ export const passwordResetCompleteSchema = z.object({
 
 export const registerSchema = z.object({
   full_name: z.string().trim().min(2, "Full name is too short").max(120),
-  email: z.string().trim().email("Enter a valid email").optional().or(z.literal("")),
   phone: phoneSchema,
   password: z.string().min(8, "Password must be at least 8 characters")
     .regex(/[A-Za-z]/, "Password must include at least one letter")

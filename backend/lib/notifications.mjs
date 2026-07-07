@@ -2,33 +2,14 @@ import { prisma } from "./prisma.mjs";
 import { env } from "./env.mjs";
 import { logEvent } from "./logger.mjs";
 import { cleanText } from "./request-utils.mjs";
-
-function toWhatsAppJid(phone) {
-  const digits = String(phone).replace(/\D/g, "");
-  return `${digits}@c.us`;
-}
-
-function openwaConfigured() {
-  return Boolean(env.openwaBaseUrl && env.openwaApiKey && env.openwaSessionId);
-}
+import { isOpenWAConfigured, sendWhatsAppText } from "./openwa.mjs";
 
 async function sendWhatsAppMessage(phone, text) {
-  if (!openwaConfigured()) return { ok: false, error: "OpenWA not configured" };
-
-  const chatId = toWhatsAppJid(phone);
-  const url = `${env.openwaBaseUrl.replace(/\/+$/, "")}/api/sessions/${env.openwaSessionId}/messages/send-text`;
+  if (!isOpenWAConfigured()) return { ok: false, error: "OpenWA not configured" };
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": env.openwaApiKey,
-      },
-      body: JSON.stringify({ chatId, text }),
-      signal: AbortSignal.timeout(10000),
-    });
-    return { ok: response.ok };
+    await sendWhatsAppText(phone, text);
+    return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }

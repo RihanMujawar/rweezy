@@ -14,14 +14,9 @@ import {
   sendJson,
   sendText,
   serializeCookie,
-  isMissingTableError, // keep it if still used, but probably not needed with Prisma
 } from "./lib/http.mjs";
 import { prisma } from "./lib/prisma.mjs";
 import { hashPassword, comparePassword, generateToken, verifyToken } from "./lib/auth.mjs";
-import {
-  sendPasswordResetEmailOtp,
-  verifyPasswordResetEmailOtp,
-} from "./lib/email-otp.mjs";
 import { checkRateLimit } from "./lib/rate-limit.mjs";
 import {
   createPhoneVerificationToken,
@@ -31,7 +26,6 @@ import {
   sendWhatsAppOtp,
   verifyWhatsAppOtp,
 } from "./lib/whatsapp-otp.mjs";
-import { verifyFirebaseToken } from "./lib/firebase-admin.mjs";
 import {
   assertStatusAdvance,
   estimateDeliveryAt,
@@ -439,21 +433,18 @@ function requireNumber(value, label) {
 }
 
 function validateRegistration(body) {
-  const email = cleanText(body.email)?.toLowerCase();
   const fullName = requireText(body.full_name, "Full name", 120);
   const password = typeof body.password === "string" ? body.password : "";
   if (password.length < 8) throw new HttpError(400, "Password must be at least 8 characters");
   if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
     throw new HttpError(400, "Password must include at least one letter and one number");
   }
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Enter a valid email");
-
   const phone = normalizeIndianPhone(body.phone);
   if (!/^\+\d{10,15}$/.test(phone)) {
     throw new HttpError(400, "Enter a valid phone number with country code");
   }
 
-  return { email, fullName, password, phone };
+  return { fullName, password, phone };
 }
 
 function validateCartItems(items) {
@@ -584,33 +575,10 @@ function maskPhoneHint(phone) {
   return `••••${digits.slice(-4)}`;
 }
 
-async function resolveAccountForPasswordReset(email) {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: { profile: true }
-  });
-  if (!user) return null;
-
-  const phone = user.profile?.phone || user.phone;
-
-  return {
-    userId: user.id,
-    email: user.email?.toLowerCase() ?? email,
-    phone: phone || null,
-  };
-}
-
 async function assertPhoneAvailable(phone) {
   const user = await prisma.user.findUnique({ where: { phone } });
   if (user) {
     throw new HttpError(409, "This phone number is already registered");
-  }
-}
-
-async function assertEmailAvailable(email) {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (user) {
-    throw new HttpError(409, "This email address is already registered");
   }
 }
 
@@ -794,16 +762,9 @@ const routes = [
         throw new HttpError(404, "No account found for this phone number");
       }
     } else if (purpose === "reset_password") {
-      const email = cleanText(body.email)?.toLowerCase();
-      if (!email) {
-        throw new HttpError(400, "Email is required for password reset");
-      }
-      const account = await resolveAccountForPasswordReset(email);
-      if (!account?.phone) {
-        throw new HttpError(404, "No account found for this email, or no phone on file");
-      }
-      if (account.phone !== phone) {
-        throw new HttpError(400, "Phone number does not match the account for this email");
+      const user = await prisma.user.findUnique({ where: { phone } });
+      if (!user) {
+        throw new HttpError(404, "No account found for this phone number");
       }
     } else {
       await assertPhoneAvailable(phone);
@@ -918,30 +879,16 @@ const routes = [
       },
     };
   }),
-  route("POST", /^\/api\/auth\/email\/resend-verification$/, async ({ body }) => {
-    const email = cleanText(body.email)?.toLowerCase();
-    if (!email) {
-      throw new HttpError(400, "Email is required");
-    }
-
-    // Since we removed Supabase, we don't have its built-in email verification for now.
-    // We could implement it using Nodemailer if needed.
-    return {
-      ok: true,
-      message: "Custom email verification not implemented yet.",
-    };
-  }),
   route("POST", /^\/api\/auth\/login$/, async ({ body }) => {
-    const email = cleanText(body.email);
     const phone = normalizeIndianPhone(body.phone);
     const password = body.password;
 
-    if (!email && !phone) {
-      throw new HttpError(400, "Email or phone number is required");
+    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+      throw new HttpError(400, "Enter a valid phone number with country code");
     }
 
-    const user = await prisma.user.findFirst({
-      where: email ? { email } : { phone },
+    const user = await prisma.user.findUnique({
+      where: { phone },
       include: { roles: true }
     });
 
@@ -961,25 +908,22 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/register$/, async ({ body }) => {
-    const { email, fullName, password, phone } = validateRegistration(body);
+    const { fullName, password, phone } = validateRegistration(body);
     const requestedRole = normalizeBusinessRole(body.requested_role);
     const phoneVerificationToken = cleanText(body.phone_verification_token);
 
     verifyPhoneVerificationToken(phoneVerificationToken, phone);
 
-    const existingUser = await prisma.user.findFirst({
-      where: { OR: [{ email: email || undefined }, { phone }] }
-    });
+    const existingUser = await prisma.user.findUnique({ where: { phone } });
 
     if (existingUser) {
-      throw new HttpError(409, "User already exists with this email or phone");
+      throw new HttpError(409, "This phone number is already registered");
     }
 
     const passwordHash = await hashPassword(password);
 
     const user = await prisma.user.create({
       data: {
-        email,
         phone,
         password_hash: passwordHash,
         profile: {
@@ -1020,55 +964,6 @@ const routes = [
       user: { id: user.id, email: user.email, phone: user.phone },
       roles,
       authenticated: true,
-      __responseHeaders: {
-        "Set-Cookie": buildSessionCookies(token),
-      },
-    };
-  }),
-  route("POST", /^\/api\/auth\/firebase-google$/, async ({ body }) => {
-    const idToken = cleanText(body.id_token);
-    if (!idToken) throw new HttpError(400, "Firebase ID token is required");
-
-    let firebaseDecoded;
-    try {
-      firebaseDecoded = await verifyFirebaseToken(idToken);
-    } catch (error) {
-      throw new HttpError(401, `Invalid Firebase token: ${error.message}`);
-    }
-
-    const email = firebaseDecoded.email?.toLowerCase();
-    if (!email) throw new HttpError(400, "Google account must have an email address");
-
-    let user = await prisma.user.findUnique({
-      where: { email },
-      include: { roles: true }
-    });
-
-    if (!user) {
-      // Auto-register new Google users
-      user = await prisma.user.create({
-        data: {
-          email,
-          password_hash: await hashPassword(crypto.randomUUID()),
-          profile: {
-            create: {
-              full_name: firebaseDecoded.name || "Google User",
-            }
-          },
-          roles: {
-            create: { role: "customer" }
-          }
-        },
-        include: { roles: true }
-      });
-    }
-
-    const token = generateToken(user);
-    const roles = user.roles.map(r => r.role);
-
-    return {
-      user: { id: user.id, email: user.email, phone: user.phone },
-      roles,
       __responseHeaders: {
         "Set-Cookie": buildSessionCookies(token),
       },
@@ -1310,7 +1205,7 @@ const routes = [
       },
       take: 12
     });
-    // Flatten Prisma's relation structure to match Supabase's structure
+    // Flatten Prisma's relation structure to match the expected API response structure
     const flattenedItems = items.map(item => ({
       ...item,
       restaurants: item.restaurant
@@ -1354,7 +1249,7 @@ const routes = [
       },
       take: 12
     });
-    // Flatten Prisma's relation structure to match Supabase's structure
+    // Flatten Prisma's relation structure to match the expected API response structure
     const flattenedItems = items.map(item => ({
       ...item,
       grocery_stores: item.store
@@ -1574,7 +1469,7 @@ const routes = [
       }),
     ]);
 
-    // Format Prisma includes to match Supabase response structure
+    // Format Prisma includes to match expected API response structure
     const formatFood = (list) => list.map(o => ({ ...o, restaurants: o.restaurant, rider_id: o.delivery_boy_id }));
     const formatGrocery = (list) => list.map(o => ({ ...o, grocery_stores: o.store, rider_id: o.delivery_boy_id }));
 
@@ -1609,10 +1504,7 @@ const routes = [
         where: { id, customer_id: user.id },
         data: {
           status: "cancelled",
-          // cancellation_reason and cancelled_at are not in schema but were in Supabase migrations sometimes.
-          // Checking schema.prisma: they are NOT there. I will just update status for now or add them to schema.
-          // Wait, I should have added them to schema.prisma if they were in migrations.
-          // Let me check my schema.prisma again.
+          // cancellation_reason and cancelled_at are not in the schema.
         },
       });
 
@@ -2469,7 +2361,7 @@ const routes = [
       include: { items: true }
     });
 
-    // Map Prisma include name to match Supabase name
+    // Map Prisma include name to match expected API structure
     const formattedOrders = orders.map(o => ({ ...o, food_order_items: o.items }));
 
     return {
@@ -3113,8 +3005,10 @@ const routes = [
 ];
 
 async function matchApiRoute(req, url) {
+  const method = req.method === "HEAD" ? "GET" : req.method;
+
   for (const entry of routes) {
-    if (entry.method !== req.method) continue;
+    if (entry.method !== method) continue;
     const match = url.pathname.match(entry.pattern);
     if (!match) continue;
     return { entry, match };
@@ -3159,7 +3053,8 @@ async function handleApi(req, res, url) {
     return;
   }
 
-  const isPublic = isPublicApiRoute(req.method || "GET", url.pathname);
+  const authMethod = req.method === "HEAD" ? "GET" : (req.method || "GET");
+  const isPublic = isPublicApiRoute(authMethod, url.pathname);
   const context = isPublic ? {} : await requestContext(req);
   const body = ["POST", "PUT", "PATCH"].includes(req.method) ? await jsonBody(req) : {};
 
