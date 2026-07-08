@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { env } from "./env.mjs";
 import { HttpError } from "./http.mjs";
 import { BaileysError, sendWhatsAppText } from "./baileys.mjs";
+import { logEvent } from "./logger.mjs";
 
 const otpStore = new Map();
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -19,6 +20,11 @@ function generateCode() {
   return String(crypto.randomInt(100000, 1000000));
 }
 
+function maskPhone(phone) {
+  const digits = String(phone ?? "").replace(/\D/g, "");
+  return digits ? `***${digits.slice(-4)}` : "";
+}
+
 export async function sendWhatsAppOtp(phone) {
   const code = generateCode();
   otpStore.set(phone, {
@@ -27,16 +33,31 @@ export async function sendWhatsAppOtp(phone) {
     attempts: 0,
   });
 
+  logEvent("info", "whatsapp_otp_requested", {
+    phoneHint: maskPhone(phone),
+    devBypass: env.whatsappOtpDevBypass,
+  });
+
   if (env.whatsappOtpDevBypass) {
+    logEvent("warn", "whatsapp_otp_dev_bypass_enabled", {
+      phoneHint: maskPhone(phone),
+      message: "OTP was not sent through Baileys because WHATSAPP_OTP_DEV_BYPASS is true.",
+    });
     return { ok: true, provider: "whatsapp", devCode: code };
   }
 
   try {
+    logEvent("info", "whatsapp_otp_baileys_send_attempt", {
+      phoneHint: maskPhone(phone),
+    });
     await sendWhatsAppText(
       phone,
       `Your Rweezy verification code is ${code}. It expires in 10 minutes. Do not share this code with anyone.`,
       { timeoutMs: 20_000 },
     );
+    logEvent("info", "whatsapp_otp_baileys_sent", {
+      phoneHint: maskPhone(phone),
+    });
   } catch (error) {
     otpStore.delete(phone);
     if (error instanceof BaileysError) {

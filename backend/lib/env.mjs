@@ -94,6 +94,7 @@ export const env = {
   phoneVerificationSecret: process.env.PHONE_VERIFICATION_SECRET || "",
   emailOtpSecret: process.env.EMAIL_OTP_SECRET || "",
   baileysAuthDir: process.env.BAILEYS_AUTH_DIR || "",
+  baileysPhone: process.env.BAILEYS_PHONE || "",
   whatsappOtpSecret: process.env.WHATSAPP_OTP_SECRET || "",
   whatsappOtpDevBypass: process.env.WHATSAPP_OTP_DEV_BYPASS === "true",
   whatsappOtpDevBypassCode: process.env.WHATSAPP_OTP_DEV_BYPASS_CODE || "",

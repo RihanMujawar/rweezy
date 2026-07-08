@@ -22,6 +22,7 @@ import {
   createPhoneVerificationToken,
   verifyPhoneVerificationToken,
 } from "./lib/phone-verification.mjs";
+import { warmupBaileys } from "./lib/baileys.mjs";
 import {
   sendWhatsAppOtp,
   verifyWhatsAppOtp,
@@ -3219,5 +3220,10 @@ export const handler = serverless(server);
 if (!process.env.LAMBDA_TASK_ROOT) {
   server.listen(env.port, env.host, () => {
     console.log(`Backend listening on http://${env.host}:${env.port}`);
+    warmupBaileys().catch((error) => {
+      logEvent("warn", "baileys_warmup_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   });
 }
