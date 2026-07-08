@@ -2,10 +2,10 @@ import { prisma } from "./prisma.mjs";
 import { env } from "./env.mjs";
 import { logEvent } from "./logger.mjs";
 import { cleanText } from "./request-utils.mjs";
-import { isOpenWAConfigured, sendWhatsAppText } from "./openwa.mjs";
+import { isBaileysConfigured, sendWhatsAppText } from "./baileys.mjs";
 
 async function sendWhatsAppMessage(phone, text) {
-  if (!isOpenWAConfigured()) return { ok: false, error: "OpenWA not configured" };
+  if (!isBaileysConfigured()) return { ok: false, error: "Baileys not configured" };
 
   try {
     await sendWhatsAppText(phone, text);

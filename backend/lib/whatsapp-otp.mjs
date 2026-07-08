@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { env } from "./env.mjs";
 import { HttpError } from "./http.mjs";
-import { OpenWAError, sendWhatsAppText } from "./openwa.mjs";
+import { BaileysError, sendWhatsAppText } from "./baileys.mjs";
 
 const otpStore = new Map();
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -39,7 +39,7 @@ export async function sendWhatsAppOtp(phone) {
     );
   } catch (error) {
     otpStore.delete(phone);
-    if (error instanceof OpenWAError) {
+    if (error instanceof BaileysError) {
       throw new HttpError(error.status, error.message);
     }
     throw error;
