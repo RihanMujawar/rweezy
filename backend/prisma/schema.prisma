@@ -55,6 +55,8 @@ model User {
   created_at    DateTime  @default(now()) @db.Timestamptz
   updated_at    DateTime  @default(now()) @db.Timestamptz
 
+  @@map("users")
+
   profile         Profile?
   roles           UserRole[]
   restaurants     Restaurant[]
@@ -79,6 +81,7 @@ model User {
   reviewed_requests   RoleRequest[]    @relation("ReviewerRoleRequests")
   reviews             OrderReview[]
   audit_events        AuditEvent[]
+
 }
 
 model Profile {
