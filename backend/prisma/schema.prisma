@@ -1,10 +1,13 @@
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "library"
+  provider        = "prisma-client-js"
+  engineType      = "library"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["rweezy", "public"]
 }
 
 enum AppRole {
@@ -14,6 +17,8 @@ enum AppRole {
   grocery_manager
   delivery_boy
   rider
+
+  @@schema("rweezy")
 }
 
 enum OrderStatus {
@@ -24,6 +29,8 @@ enum OrderStatus {
   picked_up
   delivered
   cancelled
+
+  @@schema("rweezy")
 }
 
 enum RideStatus {
@@ -32,6 +39,8 @@ enum RideStatus {
   started
   completed
   cancelled
+
+  @@schema("rweezy")
 }
 
 enum ServiceKind {
@@ -39,49 +48,53 @@ enum ServiceKind {
   package
   food
   grocery
+
+  @@schema("rweezy")
 }
 
 enum RoleRequestStatus {
   pending
   approved
   rejected
+
+  @@schema("rweezy")
 }
 
 model User {
-  id            String    @id @default(uuid()) @db.Uuid
-  email         String?   @unique
-  phone         String?   @unique
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String?  @unique
+  phone         String?  @unique
   password_hash String
-  created_at    DateTime  @default(now()) @db.Timestamptz
-  updated_at    DateTime  @default(now()) @db.Timestamptz
+  created_at    DateTime @default(now()) @db.Timestamptz
+  updated_at    DateTime @default(now()) @db.Timestamptz
+
+  profile        Profile?
+  roles          UserRole[]
+  restaurants    Restaurant[]
+  grocery_stores GroceryStore[]
+
+  food_orders   FoodOrder[] @relation("CustomerFoodOrders")
+  assigned_food FoodOrder[] @relation("DeliveryBoyFoodOrders")
+
+  grocery_orders   GroceryOrder[] @relation("CustomerGroceryOrders")
+  assigned_grocery GroceryOrder[] @relation("DeliveryBoyGroceryOrders")
+
+  rides          Ride[] @relation("CustomerRides")
+  assigned_rides Ride[] @relation("RiderRides")
+
+  package_deliveries PackageDelivery[] @relation("CustomerPackages")
+  assigned_packages  PackageDelivery[] @relation("RiderPackages")
+
+  chat_messages ChatMessage[]
+  push_tokens   UserPushToken[]
+  saved_addresses SavedAddress[]
+  role_requests     RoleRequest[] @relation("UserRoleRequests")
+  reviewed_requests RoleRequest[] @relation("ReviewerRoleRequests")
+  reviews           OrderReview[]
+  audit_events      AuditEvent[]
 
   @@map("users")
-
-  profile         Profile?
-  roles           UserRole[]
-  restaurants     Restaurant[]
-  grocery_stores  GroceryStore[]
-
-  food_orders         FoodOrder[]      @relation("CustomerFoodOrders")
-  assigned_food       FoodOrder[]      @relation("DeliveryBoyFoodOrders")
-
-  grocery_orders      GroceryOrder[]   @relation("CustomerGroceryOrders")
-  assigned_grocery    GroceryOrder[]   @relation("DeliveryBoyGroceryOrders")
-
-  rides               Ride[]           @relation("CustomerRides")
-  assigned_rides      Ride[]           @relation("RiderRides")
-
-  package_deliveries  PackageDelivery[] @relation("CustomerPackages")
-  assigned_packages   PackageDelivery[] @relation("RiderPackages")
-
-  chat_messages       ChatMessage[]
-  push_tokens         UserPushToken[]
-  saved_addresses     SavedAddress[]
-  role_requests       RoleRequest[]    @relation("UserRoleRequests")
-  reviewed_requests   RoleRequest[]    @relation("ReviewerRoleRequests")
-  reviews             OrderReview[]
-  audit_events        AuditEvent[]
-
+  @@schema("rweezy")
 }
 
 model Profile {
@@ -96,6 +109,7 @@ model Profile {
   updated_at DateTime @default(now()) @db.Timestamptz
 
   @@map("profiles")
+  @@schema("rweezy")
 }
 
 model UserRole {
@@ -107,6 +121,7 @@ model UserRole {
 
   @@unique([user_id, role])
   @@map("user_roles")
+  @@schema("rweezy")
 }
 
 model Restaurant {
@@ -129,6 +144,7 @@ model Restaurant {
   food_orders FoodOrder[]
 
   @@map("restaurants")
+  @@schema("rweezy")
 }
 
 model MenuItem {
@@ -151,6 +167,7 @@ model MenuItem {
   order_items       FoodOrderItem[]
 
   @@map("menu_items")
+  @@schema("rweezy")
 }
 
 model GroceryStore {
@@ -173,6 +190,7 @@ model GroceryStore {
   grocery_orders GroceryOrder[]
 
   @@map("grocery_stores")
+  @@schema("rweezy")
 }
 
 model GroceryItem {
@@ -183,7 +201,7 @@ model GroceryItem {
   description         String?
   price               Decimal  @db.Decimal(10, 2)
   image_url           String?
-  category          String?
+  category            String?
   is_available        Boolean  @default(true)
   stock_quantity      Int      @default(0)
   low_stock_threshold Int      @default(5)
@@ -196,6 +214,7 @@ model GroceryItem {
   order_items         GroceryOrderItem[]
 
   @@map("grocery_items")
+  @@schema("rweezy")
 }
 
 model FoodOrder {
@@ -229,6 +248,7 @@ model FoodOrder {
   items           FoodOrderItem[]
 
   @@map("food_orders")
+  @@schema("rweezy")
 }
 
 model FoodOrderItem {
@@ -243,6 +263,7 @@ model FoodOrderItem {
   created_at   DateTime @default(now()) @db.Timestamptz
 
   @@map("food_order_items")
+  @@schema("rweezy")
 }
 
 model GroceryOrder {
@@ -276,6 +297,7 @@ model GroceryOrder {
   items           GroceryOrderItem[]
 
   @@map("grocery_orders")
+  @@schema("rweezy")
 }
 
 model GroceryOrderItem {
@@ -290,6 +312,7 @@ model GroceryOrderItem {
   created_at      DateTime    @default(now()) @db.Timestamptz
 
   @@map("grocery_order_items")
+  @@schema("rweezy")
 }
 
 model Ride {
@@ -319,6 +342,7 @@ model Ride {
   updated_at        DateTime   @default(now()) @db.Timestamptz
 
   @@map("rides")
+  @@schema("rweezy")
 }
 
 model PackageDelivery {
@@ -350,6 +374,7 @@ model PackageDelivery {
   updated_at        DateTime   @default(now()) @db.Timestamptz
 
   @@map("package_deliveries")
+  @@schema("rweezy")
 }
 
 model ChatMessage {
@@ -363,6 +388,7 @@ model ChatMessage {
 
   @@index([service_kind, service_id, created_at])
   @@map("chat_messages")
+  @@schema("rweezy")
 }
 
 model UserPushToken {
@@ -377,6 +403,7 @@ model UserPushToken {
 
   @@index([user_id])
   @@map("user_push_tokens")
+  @@schema("rweezy")
 }
 
 model SavedAddress {
@@ -392,6 +419,7 @@ model SavedAddress {
   updated_at DateTime @default(now()) @db.Timestamptz
 
   @@map("saved_addresses")
+  @@schema("rweezy")
 }
 
 model RoleRequest {
@@ -415,6 +443,7 @@ model RoleRequest {
 
   @@unique([user_id, requested_role], name: "idx_role_requests_pending_unique")
   @@map("role_requests")
+  @@schema("rweezy")
 }
 
 model PlatformSetting {
@@ -423,6 +452,7 @@ model PlatformSetting {
   updated_at DateTime @default(now()) @db.Timestamptz
 
   @@map("platform_settings")
+  @@schema("rweezy")
 }
 
 model OrderReview {
@@ -437,6 +467,7 @@ model OrderReview {
 
   @@unique([user_id, service_kind, service_id])
   @@map("order_reviews")
+  @@schema("rweezy")
 }
 
 model AuditEvent {
@@ -451,4 +482,5 @@ model AuditEvent {
   created_at  DateTime @default(now()) @db.Timestamptz
 
   @@map("audit_events")
+  @@schema("rweezy")
 }
