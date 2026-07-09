@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "setup": "node scripts/setup.mjs",
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "npm --prefix backend run dev",
     "start": "npm --prefix backend run start",

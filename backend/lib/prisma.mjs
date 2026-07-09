@@ -1,8 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
+import { env } from "./env.mjs";
 
-const connectionString = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5433/rweezy";
+const connectionString = env.databaseUrl;
 const pool = new pg.Pool({ 
   connectionString,
   // Set search_path to rweezy schema
@@ -10,7 +11,7 @@ const pool = new pg.Pool({
     await client.query('SET search_path = rweezy, public');
   }
 });
-const adapter = new PrismaPg(pool);
+const adapter = new PrismaPg(pool, { schema: "rweezy" });
 const prisma = new PrismaClient({ adapter });
 
 export default prisma;

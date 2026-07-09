@@ -3,6 +3,7 @@ import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
+import qrcodeTerminal from "qrcode-terminal";
 import pino from "pino";
 import fs from "node:fs";
 import path from "node:path";
@@ -87,7 +88,6 @@ async function connect() {
       const newSock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: !env.baileysPhone,
         logger: baileysLogger,
         browser: ["Rweezy", "Chrome", "120.0.0"],
       });
@@ -116,6 +116,7 @@ async function connect() {
 
         if (qr && !env.baileysPhone) {
           logEvent("info", "baileys_qr_received", { hint: "Scan the QR code to link WhatsApp" });
+          qrcodeTerminal.generate(qr, { small: true });
         }
 
         if (connection === "open") {

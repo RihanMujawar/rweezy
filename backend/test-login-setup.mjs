@@ -1,8 +1,8 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import pg from "pg";
-import bcrypt from "bcryptjs";
-import dotenv from "dotenv";
+const { PrismaClient } = require("@prisma/client");
+const { PrismaPg } = require("@prisma/adapter-pg");
+const pg = require("pg");
+const bcrypt = require("bcryptjs");
+const dotenv = require("dotenv");
 
 dotenv.config({ path: "./.env" });
 

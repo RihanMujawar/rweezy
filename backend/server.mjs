@@ -3287,17 +3287,68 @@ async function mainHandler(req, res) {
   }
 }
 
+async function checkDatabaseConnection() {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log("Database connected successfully.");
+    return true;
+  } catch (error) {
+    console.error(
+      "Database connection failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+    console.error("Database not connected. Please check DATABASE_URL and your database server.");
+    return false;
+  }
+}
+
+async function checkDatabaseSchema() {
+  try {
+    const result = await prisma.$queryRaw`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema IN ('rweezy', 'public')
+          AND table_name = 'users'
+      ) AS exists
+    `;
+
+    const exists = Array.isArray(result) ? result[0]?.exists : false;
+    if (!exists) {
+      console.error("Database connected, but Rweezy tables were not found.");
+      console.error("Run the Prisma migrations or push the schema:");
+      console.error("  cd backend && npx prisma migrate dev");
+      console.error("  OR cd backend && npx prisma db push --schema=backend/prisma/schema.prisma");
+      return false;
+    }
+
+    console.log("Rweezy database schema detected.");
+    return true;
+  } catch (error) {
+    console.error("Database schema check failed:", error instanceof Error ? error.message : String(error));
+    return false;
+  }
+}
+
 const server = http.createServer(mainHandler);
 
 export const handler = serverless(server);
 
 if (!process.env.LAMBDA_TASK_ROOT) {
-  server.listen(env.port, env.host, () => {
-    console.log(`Backend listening on http://${env.host}:${env.port}`);
-    warmupBaileys().catch((error) => {
-      logEvent("warn", "baileys_warmup_failed", {
-        error: error instanceof Error ? error.message : String(error),
+  (async () => {
+    const connected = await checkDatabaseConnection();
+    const schemaReady = connected && await checkDatabaseSchema();
+
+    if (!connected || !schemaReady) {
+      process.exit(1);
+    }
+
+    server.listen(env.port, env.host, () => {
+      console.log(`Backend listening on http://${env.host}:${env.port}`);
+      warmupBaileys().catch((error) => {
+        logEvent("warn", "baileys_warmup_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
     });
-  });
+  })();
 }
