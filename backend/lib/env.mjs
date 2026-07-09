@@ -83,7 +83,7 @@ export const env = {
   host: process.env.BACKEND_HOST || "127.0.0.1",
   port: Number(process.env.BACKEND_PORT || 4000),
   frontendDevUrl: process.env.FRONTEND_DEV_URL || "http://127.0.0.1:3000",
-  databaseUrl: required("DATABASE_URL"),
+  databaseUrl: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/rweezy",
   jwtSecret: process.env.JWT_SECRET || "fallback-secret-for-dev-only",
   mapboxAccessToken: process.env.MAPBOX_ACCESS_TOKEN || process.env.VITE_MAPBOX_ACCESS_TOKEN || "",
   corsAllowAll: process.env.CORS_ALLOW_ALL === "true" || process.env.NODE_ENV !== "production",
