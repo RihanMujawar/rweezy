@@ -22,6 +22,19 @@ import {
   createPhoneVerificationToken,
   verifyPhoneVerificationToken,
 } from "./lib/phone-verification.mjs";
+import {
+  loginSchema,
+  phoneOtpSendSchema,
+  phoneOtpVerifySchema,
+  passwordResetRequestSchema,
+  passwordResetCompleteSchema,
+  registerSchema,
+  addressSchema,
+  profileUpdateSchema,
+  reviewSchema,
+  rideBookingSchema,
+  packageBookingSchema,
+} from "./lib/validation.mjs";
 import { warmupBaileys } from "./lib/baileys.mjs";
 import {
   sendWhatsAppOtp,
@@ -751,12 +764,16 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/phone\/send-otp$/, async ({ body }) => {
-    const phone = normalizeIndianPhone(body.phone);
-    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
-      throw new HttpError(400, "Enter a valid phone number with country code");
+    const payload = {
+      phone: normalizeIndianPhone(body.phone),
+      purpose: cleanText(body.purpose),
+    };
+    const parsed = phoneOtpSendSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message || "Invalid inputs");
     }
+    const { phone, purpose } = parsed.data;
 
-    const purpose = normalizeAuthPurpose(cleanText(body.purpose));
     if (purpose === "login") {
       const user = await prisma.user.findUnique({ where: { phone } });
       if (!user) {
@@ -781,16 +798,16 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/phone\/verify-otp$/, async ({ body }) => {
-    const phone = normalizeIndianPhone(body.phone);
-    const code = cleanText(body.code);
-    const purpose = normalizeAuthPurpose(cleanText(body.purpose));
-
-    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
-      throw new HttpError(400, "Enter a valid phone number with country code");
+    const payload = {
+      phone: normalizeIndianPhone(body.phone),
+      code: cleanText(body.code),
+      purpose: cleanText(body.purpose),
+    };
+    const parsed = phoneOtpVerifySchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message || "Invalid inputs");
     }
-    if (!/^\d{4,10}$/.test(code)) {
-      throw new HttpError(400, "Enter the verification code");
-    }
+    const { phone, code, purpose } = parsed.data;
 
     verifyWhatsAppOtp(phone, code);
 
@@ -821,10 +838,14 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/password-reset\/request$/, async ({ body }) => {
-    const phone = normalizeIndianPhone(body.phone);
-    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
-      throw new HttpError(400, "Enter a valid phone number with country code");
+    const payload = {
+      phone: normalizeIndianPhone(body.phone),
+    };
+    const parsed = passwordResetRequestSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message || "Invalid inputs");
     }
+    const { phone } = parsed.data;
 
     const user = await prisma.user.findUnique({ where: { phone } });
     if (!user) {
@@ -839,19 +860,16 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/password-reset\/complete$/, async ({ body }) => {
-    const phone = normalizeIndianPhone(body.phone);
-    const phoneVerificationToken = cleanText(body.phone_verification_token);
-    const password = typeof body.password === "string" ? body.password : "";
-
-    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
-      throw new HttpError(400, "Enter a valid phone number with country code");
+    const payload = {
+      phone: normalizeIndianPhone(body.phone),
+      phone_verification_token: cleanText(body.phone_verification_token),
+      password: body.password,
+    };
+    const parsed = passwordResetCompleteSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message || "Invalid inputs");
     }
-    if (password.length < 8) {
-      throw new HttpError(400, "Password must be at least 8 characters");
-    }
-    if (!phoneVerificationToken) {
-      throw new HttpError(400, "Phone verification is required");
-    }
+    const { phone, phone_verification_token: phoneVerificationToken, password } = parsed.data;
 
     verifyPhoneVerificationToken(phoneVerificationToken, phone);
 
@@ -881,12 +899,15 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/login$/, async ({ body }) => {
-    const phone = normalizeIndianPhone(body.phone);
-    const password = body.password;
-
-    if (!phone || !/^\+\d{10,15}$/.test(phone)) {
-      throw new HttpError(400, "Enter a valid phone number with country code");
+    const payload = {
+      phone: normalizeIndianPhone(body.phone),
+      password: body.password,
+    };
+    const parsed = loginSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message || "Invalid credentials");
     }
+    const { phone, password } = parsed.data;
 
     const user = await prisma.user.findUnique({
       where: { phone },
@@ -909,9 +930,38 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/auth\/register$/, async ({ body }) => {
-    const { fullName, password, phone } = validateRegistration(body);
-    const requestedRole = normalizeBusinessRole(body.requested_role);
-    const phoneVerificationToken = cleanText(body.phone_verification_token);
+    const payload = {
+      full_name: cleanText(body.full_name),
+      phone: normalizeIndianPhone(body.phone),
+      password: body.password,
+      phone_verification_token: cleanText(body.phone_verification_token),
+      requested_role: body.requested_role || undefined,
+      business_name: body.business_name || undefined,
+      business_address: body.business_address || undefined,
+      business_lat: body.business_lat != null ? Number(body.business_lat) : undefined,
+      business_lng: body.business_lng != null ? Number(body.business_lng) : undefined,
+      town_name: body.town_name || undefined,
+      pincode: body.pincode || undefined,
+      role_message: body.role_message || undefined,
+    };
+    const parsed = registerSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message || "Invalid inputs");
+    }
+    const {
+      full_name: fullName,
+      phone,
+      password,
+      phone_verification_token: phoneVerificationToken,
+      requested_role: requestedRole,
+      business_name: businessName,
+      business_address: businessAddress,
+      business_lat: businessLat,
+      business_lng: businessLng,
+      town_name: townName,
+      pincode,
+      role_message: roleMessage,
+    } = parsed.data;
 
     verifyPhoneVerificationToken(phoneVerificationToken, phone);
 
@@ -931,8 +981,8 @@ const routes = [
           create: {
             full_name: fullName,
             phone,
-            town_name: body.town_name,
-            pincode: body.pincode,
+            town_name: townName,
+            pincode,
           }
         },
         roles: {
@@ -947,13 +997,13 @@ const routes = [
         data: {
           user_id: user.id,
           requested_role: requestedRole,
-          business_name: body.business_name,
-          business_address: body.business_address,
-          business_lat: body.business_lat,
-          business_lng: body.business_lng,
-          town_name: body.town_name,
-          pincode: body.pincode,
-          message: body.role_message || "Requested during registration"
+          business_name: businessName,
+          business_address: businessAddress,
+          business_lat: businessLat,
+          business_lng: businessLng,
+          town_name: townName,
+          pincode: pincode,
+          message: roleMessage || "Requested during registration"
         }
       });
     }
@@ -1054,14 +1104,27 @@ const routes = [
     return { addresses };
   }),
   route("POST", /^\/api\/profile\/addresses$/, async ({ user, body }) => {
+    const payload = {
+      label: body.label || undefined,
+      address: body.address,
+      lat: body.lat != null ? Number(body.lat) : undefined,
+      lng: body.lng != null ? Number(body.lng) : undefined,
+      is_default: body.is_default,
+    };
+    const parsed = addressSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message || "Invalid inputs");
+    }
+    const { label, address: addressText, lat, lng, is_default: isDefault } = parsed.data;
+
     const address = await prisma.savedAddress.create({
       data: {
         user_id: user.id,
-        label: requireText(body.label || "Saved address", "Address label", 80),
-        address: requireText(body.address, "Address", 300),
-        lat: body.lat == null ? null : requireNumber(body.lat, "Latitude"),
-        lng: body.lng == null ? null : requireNumber(body.lng, "Longitude"),
-        is_default: !!body.is_default,
+        label: label || "Saved address",
+        address: addressText,
+        lat: lat ?? null,
+        lng: lng ?? null,
+        is_default: !!isDefault,
       }
     });
 
@@ -1073,11 +1136,21 @@ const routes = [
     return { ok: true };
   }),
   route("PUT", /^\/api\/profile$/, async ({ user, body }) => {
+    const payload = {
+      full_name: cleanText(body.full_name),
+      phone: normalizeIndianPhone(body.phone),
+    };
+    const parsed = profileUpdateSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message || "Invalid inputs");
+    }
+    const { full_name: fullName, phone } = parsed.data;
+
     const profile = await prisma.profile.update({
       where: { id: user.id },
       data: {
-        full_name: body.full_name ?? "",
-        phone: body.phone ?? "",
+        full_name: fullName,
+        phone: phone,
       }
     });
 
@@ -2890,16 +2963,17 @@ const routes = [
     };
   }),
   route("POST", /^\/api\/reviews$/, async ({ user, body }) => {
-    const allowed = ["food", "grocery", "ride", "package"];
-    const serviceKind = body.service_kind;
-    if (!allowed.includes(serviceKind)) {
-      throw new HttpError(400, "Invalid service kind for review");
+    const payload = {
+      service_kind: body.service_kind,
+      service_id: body.service_id,
+      rating: body.rating != null ? Number(body.rating) : undefined,
+      comment: body.comment || undefined,
+    };
+    const parsed = reviewSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new HttpError(400, parsed.error.issues[0]?.message || "Invalid inputs");
     }
-    const serviceId = requireText(body.service_id, "Service id", 80);
-    const rating = Number(body.rating);
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      throw new HttpError(400, "Rating must be between 1 and 5");
-    }
+    const { service_kind: serviceKind, service_id: serviceId, rating, comment } = parsed.data;
 
     const review = await prisma.orderReview.create({
       data: {
@@ -2907,7 +2981,7 @@ const routes = [
         service_kind: serviceKind,
         service_id: serviceId,
         rating,
-        comment: sanitizeComment(body.comment),
+        comment: sanitizeComment(comment),
       }
     });
 

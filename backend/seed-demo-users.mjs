@@ -29,7 +29,7 @@ const connectionString = process.env.DATABASE_URL || "postgresql://rweezy:rweezy
 const pool = new pg.Pool({ 
   connectionString,
   onConnect: async (client) => {
-    await client.query('SET search_path = rweezy');
+    await client.query('SET search_path = rweezy, public');
   }
 });
 const adapter = new PrismaPg(pool);

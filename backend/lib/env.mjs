@@ -88,7 +88,7 @@ export const env = {
   mapboxAccessToken: process.env.MAPBOX_ACCESS_TOKEN || process.env.VITE_MAPBOX_ACCESS_TOKEN || "",
   corsAllowAll: process.env.CORS_ALLOW_ALL === "true" || process.env.NODE_ENV !== "production",
   corsAllowedOrigins: parseCsv(process.env.CORS_ALLOWED_ORIGINS),
-  cookieSecure: process.env.COOKIE_SECURE === "true" || process.env.NODE_ENV === "production",
+  cookieSecure: process.env.COOKIE_SECURE === "true",
   fcmServerKey: process.env.FCM_SERVER_KEY || "",
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID || "",
   phoneVerificationSecret: process.env.PHONE_VERIFICATION_SECRET || "",

@@ -7,7 +7,7 @@ const pool = new pg.Pool({
   connectionString,
   // Set search_path to rweezy schema
   onConnect: async (client) => {
-    await client.query('SET search_path = rweezy');
+    await client.query('SET search_path = rweezy, public');
   }
 });
 const adapter = new PrismaPg(pool);
