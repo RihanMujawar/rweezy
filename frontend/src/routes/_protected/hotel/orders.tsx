@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useWebSocket } from "@/lib/websocket-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -60,6 +61,7 @@ const isToday = (date: string) => new Date(date).toDateString() === todayKey;
 
 function HotelOrders() {
   const { user, roles } = useAuth();
+  const { subscribe, isConnected } = useWebSocket();
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [history, setHistory] = useState<Order[]>([]);
@@ -97,9 +99,32 @@ function HotelOrders() {
       }
       setLoading(false);
     })();
-    const timer = window.setInterval(load, 12000);
-    return () => window.clearInterval(timer);
-  }, [user, load]);
+
+    const topic = `dashboard:merchant:${user.id}`;
+    let wsActive = false;
+    let unsubscribeWs: (() => void) | null = null;
+
+    try {
+      unsubscribeWs = subscribe(topic, (data) => {
+        load();
+      });
+      wsActive = isConnected;
+    } catch (err) {
+      console.warn("[WebSocket] Merchant orders subscription failed, falling back to polling", err);
+      wsActive = false;
+    }
+
+    const timer = window.setInterval(() => {
+      if (!wsActive || !isConnected) {
+        load();
+      }
+    }, 12000);
+
+    return () => {
+      window.clearInterval(timer);
+      if (unsubscribeWs) unsubscribeWs();
+    };
+  }, [user, load, subscribe, isConnected]);
 
   useEffect(() => {
     if (activeTab === "history") loadHistory();

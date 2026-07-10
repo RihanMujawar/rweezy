@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { setActiveChat } from "@/lib/active-chat";
+import { useWebSocket } from "@/lib/websocket-context";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ type ChatPanelProps = {
 
 export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }: ChatPanelProps) {
   const { user } = useAuth();
+  const { subscribe, isConnected } = useWebSocket();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
@@ -85,9 +87,32 @@ export function ChatPanel({ kind, serviceId, title = "Chat", disabled = false }:
     }
 
     load(true);
-    const timer = window.setInterval(() => load(), 2500);
-    return () => window.clearInterval(timer);
-  }, [disabled, load, user]);
+
+    const topic = `chat:${kind}:${serviceId}`;
+    let wsActive = false;
+    let unsubscribeWs: (() => void) | null = null;
+
+    try {
+      unsubscribeWs = subscribe(topic, (data) => {
+        load();
+      });
+      wsActive = isConnected;
+    } catch (err) {
+      console.warn("[WebSocket] Chat subscription failed, falling back to polling", err);
+      wsActive = false;
+    }
+
+    const timer = window.setInterval(() => {
+      if (!wsActive || !isConnected) {
+        load();
+      }
+    }, 2500);
+
+    return () => {
+      window.clearInterval(timer);
+      if (unsubscribeWs) unsubscribeWs();
+    };
+  }, [disabled, load, user, subscribe, isConnected, kind, serviceId]);
 
   useEffect(() => {
     const el = listRef.current;

@@ -9,6 +9,7 @@ import { RoleGate } from "@/components/coming-soon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { useAlertsPreference } from "@/hooks/use-alerts-preference";
+import { useWebSocket } from "@/lib/websocket-context";
 import { Bell, BellOff, Filter, Map as MapIcon, History } from "lucide-react";
 import { OrdersMap, MapOrder } from "@/components/orders-map";
 
@@ -42,6 +43,7 @@ type GroceryOrder = {
 
 function DeliveryAvailable() {
   const { user, roles } = useAuth();
+  const { subscribe, isConnected } = useWebSocket();
   const [food, setFood] = useState<FoodOrder[]>([]);
   const [grocery, setGrocery] = useState<GroceryOrder[]>([]);
   const [activeFood, setActiveFood] = useState<FoodOrder[]>([]);
@@ -83,9 +85,32 @@ function DeliveryAvailable() {
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 12000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+
+    const topic = "dashboard:delivery";
+    let wsActive = false;
+    let unsubscribeWs: (() => void) | null = null;
+
+    try {
+      unsubscribeWs = subscribe(topic, (data) => {
+        load();
+      });
+      wsActive = isConnected;
+    } catch (err) {
+      console.warn("[WebSocket] Delivery dashboard subscription failed, falling back to polling", err);
+      wsActive = false;
+    }
+
+    const timer = window.setInterval(() => {
+      if (!wsActive || !isConnected) {
+        load();
+      }
+    }, 12000);
+
+    return () => {
+      window.clearInterval(timer);
+      if (unsubscribeWs) unsubscribeWs();
+    };
+  }, [load, subscribe, isConnected]);
 
   const acceptFood = async (id: string) => {
     if (!user) return;

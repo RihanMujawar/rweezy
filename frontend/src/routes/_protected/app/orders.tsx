@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useWebSocket } from "@/lib/websocket-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -97,6 +98,7 @@ const ACTIVE = (s: string) => s !== "delivered" && s !== "completed" && s !== "c
 
 function MyOrders() {
   const { user } = useAuth();
+  const { subscribe, isConnected } = useWebSocket();
   const [food, setFood] = useState<FoodOrder[]>([]);
   const [grocery, setGrocery] = useState<GroceryOrder[]>([]);
   const [rides, setRides] = useState<Ride[]>([]);
@@ -129,13 +131,35 @@ function MyOrders() {
         if (alive) setLoading(false);
       }
     };
+
     load();
-    const timer = window.setInterval(load, 5000);
+
+    const topic = `dashboard:customer:${user.id}`;
+    let wsActive = false;
+    let unsubscribeWs: (() => void) | null = null;
+
+    try {
+      unsubscribeWs = subscribe(topic, (data) => {
+        load();
+      });
+      wsActive = isConnected;
+    } catch (err) {
+      console.warn("[WebSocket] Orders subscription failed, falling back to polling", err);
+      wsActive = false;
+    }
+
+    const timer = window.setInterval(() => {
+      if (!wsActive || !isConnected) {
+        load();
+      }
+    }, 5000);
+
     return () => {
       alive = false;
       window.clearInterval(timer);
+      if (unsubscribeWs) unsubscribeWs();
     };
-  }, [user]);
+  }, [user, subscribe, isConnected]);
 
   const Empty = ({
     msg,

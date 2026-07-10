@@ -4,6 +4,7 @@ import { LocationProvider } from "@/lib/location-context";
 import { Toaster } from "@/components/ui/sonner";
 import { SystemThemeSync } from "@/components/system-theme-sync";
 import { AndroidAppDownloadPrompt } from "@/components/android-app-download-prompt";
+import { WebSocketProvider } from "@/lib/websocket-context";
 
 import appCss from "../styles.css?url";
 
@@ -79,12 +80,14 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   return (
     <AuthProvider>
-      <LocationProvider>
-        <SystemThemeSync />
-        <AndroidAppDownloadPrompt />
-        <Outlet />
-        <Toaster richColors position="top-right" />
-      </LocationProvider>
+      <WebSocketProvider>
+        <LocationProvider>
+          <SystemThemeSync />
+          <AndroidAppDownloadPrompt />
+          <Outlet />
+          <Toaster richColors position="top-right" />
+        </LocationProvider>
+      </WebSocketProvider>
     </AuthProvider>
   );
 }

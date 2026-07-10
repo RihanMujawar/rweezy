@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useWebSocket } from "@/lib/websocket-context";
 import { RoleGate } from "@/components/coming-soon";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -97,6 +98,7 @@ function statusColor(status: string) {
 
 function RiderList() {
   const { user, roles } = useAuth();
+  const { subscribe, isConnected } = useWebSocket();
   const [rides, setRides] = useState<Ride[]>([]);
   const [pkgs, setPkgs] = useState<Pkg[]>([]);
   const [historyRides, setHistoryRides] = useState<HistoryRide[]>([]);
@@ -141,9 +143,32 @@ function RiderList() {
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 4000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+
+    const topic = "dashboard:rider";
+    let wsActive = false;
+    let unsubscribeWs: (() => void) | null = null;
+
+    try {
+      unsubscribeWs = subscribe(topic, (data) => {
+        load();
+      });
+      wsActive = isConnected;
+    } catch (err) {
+      console.warn("[WebSocket] Rider dashboard subscription failed, falling back to polling", err);
+      wsActive = false;
+    }
+
+    const timer = window.setInterval(() => {
+      if (!wsActive || !isConnected) {
+        load();
+      }
+    }, 4000);
+
+    return () => {
+      window.clearInterval(timer);
+      if (unsubscribeWs) unsubscribeWs();
+    };
+  }, [load, subscribe, isConnected]);
 
   useEffect(() => {
     if (user) loadHistory();

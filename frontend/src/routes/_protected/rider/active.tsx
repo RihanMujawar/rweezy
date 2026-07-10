@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth-context";
+import { useWebSocket } from "@/lib/websocket-context";
 import { RoleGate } from "@/components/coming-soon";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,7 @@ const NEXT_STATUS: Record<
 
 function ActiveRide() {
   const { user, roles } = useAuth();
+  const { subscribe, isConnected } = useWebSocket();
   const { id, kind } = Route.useSearch();
   const [mounted, setMounted] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
@@ -77,13 +79,35 @@ function ActiveRide() {
       setTable(nextTable);
       setLoading(false);
     };
+
     load();
-    const timer = window.setInterval(load, 4000);
+
+    const topic = id && kind ? `track:${kind}:${id}` : "dashboard:rider";
+    let wsActive = false;
+    let unsubscribeWs: (() => void) | null = null;
+
+    try {
+      unsubscribeWs = subscribe(topic, (data) => {
+        load();
+      });
+      wsActive = isConnected;
+    } catch (err) {
+      console.warn("[WebSocket] Active rider subscription failed, falling back to polling", err);
+      wsActive = false;
+    }
+
+    const timer = window.setInterval(() => {
+      if (!wsActive || !isConnected) {
+        load();
+      }
+    }, 4000);
+
     return () => {
       alive = false;
       window.clearInterval(timer);
+      if (unsubscribeWs) unsubscribeWs();
     };
-  }, [user, id, kind]);
+  }, [user, id, kind, subscribe, isConnected]);
 
   const advance = async () => {
     if (!job) return;

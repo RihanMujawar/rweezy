@@ -3,6 +3,7 @@ import path from "node:path";
 import http from "node:http";
 import serverless from "serverless-http";
 import { fileURLToPath } from "node:url";
+import { initWebSocketServer, broadcastUpdate } from "./lib/ws.mjs";
 import { ROOT_DIR, env } from "./lib/env.mjs";
 import {
   createRequestId,
@@ -1561,7 +1562,21 @@ const routes = [
       },
     );
 
-    return { row: firstRow(rows) };
+    const row = firstRow(rows);
+    if (row) {
+      const tableToKind = {
+        rides: "ride",
+        package_deliveries: "package",
+        food_orders: "food",
+        grocery_orders: "grocery",
+      };
+      const kind = tableToKind[body.table];
+      if (kind) {
+        broadcastUpdate(`track:${kind}:${body.row_id}`, { row });
+      }
+    }
+
+    return { row };
   }),
   route("GET", /^\/api\/catalog\/restaurants$/, async ({ token, user, url }) => {
     let location = await getUserCatalogLocation(token, user.id);
@@ -1732,7 +1747,7 @@ const routes = [
     const restaurantRows = await restRequest(
       token,
       buildPath("/restaurants", {
-        select: "id,name,address,town_name,pincode,lat,lng,is_open",
+        select: "id,name,address,town_name,pincode,lat,lng,is_open,manager_id",
         id: `eq.${body.restaurant_id}`,
         limit: "1",
       }),
@@ -1806,6 +1821,14 @@ const routes = [
       throw new HttpError(500, "Failed to create food order");
     }
 
+    if (order) {
+      broadcastUpdate(`dashboard:customer:${user.id}`, { type: "order_placed", order });
+      broadcastUpdate(`dashboard:delivery`, { type: "order_available", order });
+      if (restaurant?.manager_id) {
+        broadcastUpdate(`dashboard:merchant:${restaurant.manager_id}`, { type: "order_received", order });
+      }
+    }
+
     const orderItems = items.map((item) => ({
       order_id: order.id,
       menu_item_id: item.id,
@@ -1828,7 +1851,7 @@ const routes = [
     const storeRows = await restRequest(
       token,
       buildPath("/grocery_stores", {
-        select: "id,name,address,town_name,pincode,lat,lng,is_open",
+        select: "id,name,address,town_name,pincode,lat,lng,is_open,manager_id",
         id: `eq.${body.store_id}`,
         limit: "1",
       }),
@@ -1898,6 +1921,14 @@ const routes = [
     const order = firstRow(orderRows);
     if (!order) {
       throw new HttpError(500, "Failed to create grocery order");
+    }
+
+    if (order) {
+      broadcastUpdate(`dashboard:customer:${user.id}`, { type: "order_placed", order });
+      broadcastUpdate(`dashboard:delivery`, { type: "order_available", order });
+      if (store?.manager_id) {
+        broadcastUpdate(`dashboard:merchant:${store.manager_id}`, { type: "order_received", order });
+      }
     }
 
     try {
@@ -2009,7 +2040,15 @@ const routes = [
         },
       );
 
-      return { row: firstRow(rows) };
+      const row = firstRow(rows);
+      if (row) {
+        broadcastUpdate(`track:${kind}:${id}`, { row });
+        broadcastUpdate(`dashboard:customer:${user.id}`, { type: "order_cancelled", id });
+        broadcastUpdate(`dashboard:delivery`, { type: "order_cancelled", id });
+        broadcastUpdate(`dashboard:rider`, { type: "order_cancelled", id });
+      }
+
+      return { row };
     },
   ),
   route("GET", /^\/api\/track\/(ride|package|food|grocery)\/([^/]+)$/, async ({ token, match }) => {
@@ -2112,6 +2151,9 @@ const routes = [
       });
 
       const saved = firstRow(rows);
+      if (saved) {
+        broadcastUpdate(`chat:${kind}:${serviceId}`, { message: saved });
+      }
       void notifyChatRecipients({
         senderId: user.id,
         context,
@@ -2164,7 +2206,13 @@ const routes = [
       },
     });
 
-    return { ride: firstRow(rows) };
+    const ride = firstRow(rows);
+    if (ride) {
+      broadcastUpdate(`dashboard:customer:${user.id}`, { type: "ride_placed", ride });
+      broadcastUpdate(`dashboard:rider`, { type: "ride_available", ride });
+    }
+
+    return { ride };
   }),
   route("POST", /^\/api\/packages$/, async ({ token, user, body }) => {
     const pickupLat = requireNumber(body.pickup_lat, "Pickup latitude");
@@ -2205,7 +2253,13 @@ const routes = [
       },
     });
 
-    return { packageDelivery: firstRow(rows) };
+    const packageDelivery = firstRow(rows);
+    if (packageDelivery) {
+      broadcastUpdate(`dashboard:customer:${user.id}`, { type: "package_placed", packageDelivery });
+      broadcastUpdate(`dashboard:rider`, { type: "package_available", packageDelivery });
+    }
+
+    return { packageDelivery };
   }),
   route("POST", /^\/api\/admin\/notifications\/test$/, async ({ token, user, body }) => {
     const roles = await getRoles(token, user.id);
@@ -3011,7 +3065,14 @@ const routes = [
       },
     );
 
-    return { order: firstRow(rows) };
+    const order = firstRow(rows);
+    if (order) {
+      broadcastUpdate(`track:food:${id}`, { row: order });
+      broadcastUpdate(`dashboard:customer:${order.customer_id}`, { type: "order_advanced", id, status: order.status });
+      broadcastUpdate(`dashboard:delivery`, { type: "order_advanced", id, status: order.status });
+    }
+
+    return { order };
   }),
   route("POST", /^\/api\/hotel\/orders\/([^/]+)\/reject$/, async ({ token, match, body }) => {
     const id = decodeURIComponent(match[1]);
@@ -3029,7 +3090,14 @@ const routes = [
       },
     );
 
-    return { order: firstRow(rows) };
+    const order = firstRow(rows);
+    if (order) {
+      broadcastUpdate(`track:food:${id}`, { row: order });
+      broadcastUpdate(`dashboard:customer:${order.customer_id}`, { type: "order_cancelled", id });
+      broadcastUpdate(`dashboard:delivery`, { type: "order_cancelled", id });
+    }
+
+    return { order };
   }),
   route("GET", /^\/api\/hotel\/history$/, async ({ token, user }) => {
     const restaurantRows = await restRequest(
@@ -3250,6 +3318,13 @@ const routes = [
       },
     );
 
+    const order = firstRow(rows);
+    if (order) {
+      broadcastUpdate(`track:grocery:${id}`, { row: order });
+      broadcastUpdate(`dashboard:customer:${order.customer_id}`, { type: "order_advanced", id, status: order.status });
+      broadcastUpdate(`dashboard:delivery`, { type: "order_advanced", id, status: order.status });
+    }
+
     return { order: firstRow(rows) };
   }),
   route("GET", /^\/api\/grocery\/history$/, async ({ token, user }) => {
@@ -3363,6 +3438,12 @@ const routes = [
         throw new HttpError(404, "Delivery not found or already assigned");
       }
 
+      if (order) {
+        broadcastUpdate(`track:${kind}:${id}`, { row: order });
+        broadcastUpdate(`dashboard:customer:${order.customer_id}`, { type: "order_accepted", id });
+        broadcastUpdate(`dashboard:delivery`, { type: "order_accepted", id });
+      }
+
       return { order: normalizeDeliveryOrder(order) };
     },
   ),
@@ -3405,6 +3486,12 @@ const routes = [
       const order = firstRow(rows);
       if (!order) {
         throw new HttpError(404, "Delivery not found or you are not assigned to it");
+      }
+
+      if (order) {
+        broadcastUpdate(`track:${kind}:${id}`, { row: order });
+        broadcastUpdate(`dashboard:customer:${order.customer_id}`, { type: "order_advanced", id, status: order.status });
+        broadcastUpdate(`dashboard:delivery`, { type: "order_advanced", id, status: order.status });
       }
 
       return { order: normalizeDeliveryOrder(order) };
@@ -3519,7 +3606,14 @@ const routes = [
       },
     );
 
-    return { ride: firstRow(rows) };
+    const ride = firstRow(rows);
+    if (ride) {
+      broadcastUpdate(`track:ride:${id}`, { row: ride });
+      broadcastUpdate(`dashboard:customer:${ride.customer_id}`, { type: "ride_accepted", id });
+      broadcastUpdate(`dashboard:rider`, { type: "ride_accepted", id });
+    }
+
+    return { ride };
   }),
   route("POST", /^\/api\/rider\/packages\/([^/]+)\/accept$/, async ({ token, user, match }) => {
     const id = decodeURIComponent(match[1]);
@@ -3537,7 +3631,14 @@ const routes = [
       },
     );
 
-    return { packageDelivery: firstRow(rows) };
+    const packageDelivery = firstRow(rows);
+    if (packageDelivery) {
+      broadcastUpdate(`track:package:${id}`, { row: packageDelivery });
+      broadcastUpdate(`dashboard:customer:${packageDelivery.customer_id}`, { type: "package_accepted", id });
+      broadcastUpdate(`dashboard:rider`, { type: "package_accepted", id });
+    }
+
+    return { packageDelivery };
   }),
   route(
     "POST",
@@ -3569,7 +3670,15 @@ const routes = [
         },
       );
 
-      return { job: firstRow(rows) };
+      const job = firstRow(rows);
+      if (job) {
+        const kind = table === "rides" ? "ride" : "package";
+        broadcastUpdate(`track:${kind}:${id}`, { row: job });
+        broadcastUpdate(`dashboard:customer:${job.customer_id}`, { type: "job_advanced", id, status: job.status });
+        broadcastUpdate(`dashboard:rider`, { type: "job_advanced", id, status: job.status });
+      }
+
+      return { job };
     },
   ),
   route(
@@ -3588,7 +3697,15 @@ const routes = [
         },
       );
 
-      return { job: firstRow(rows) };
+      const job = firstRow(rows);
+      if (job) {
+        const kind = table === "rides" ? "ride" : "package";
+        broadcastUpdate(`track:${kind}:${id}`, { row: job });
+        broadcastUpdate(`dashboard:customer:${job.customer_id}`, { type: "job_cancelled", id });
+        broadcastUpdate(`dashboard:rider`, { type: "job_cancelled", id });
+      }
+
+      return { job };
     },
   ),
   route("GET", /^\/api\/rider\/history$/, async ({ token, user }) => {
@@ -4008,6 +4125,7 @@ async function mainHandler(req, res) {
 }
 
 const server = http.createServer(mainHandler);
+initWebSocketServer(server);
 
 export const handler = serverless(server);
 

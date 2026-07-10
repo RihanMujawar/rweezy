@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useRef, useState } from "react";
+import { useWebSocket } from "@/lib/websocket-context";
 
 type Options = {
   table: string;
@@ -7,6 +7,13 @@ type Options = {
   onChange: () => void;
   enabled?: boolean;
   fallbackMs?: number;
+};
+
+const tableToKind: Record<string, string> = {
+  rides: "ride",
+  package_deliveries: "package",
+  food_orders: "food",
+  grocery_orders: "grocery",
 };
 
 export function useOrderRealtime({
@@ -19,35 +26,38 @@ export function useOrderRealtime({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  const { subscribe, isConnected } = useWebSocket();
+
   useEffect(() => {
     if (!enabled || !id) return;
 
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let pollId: ReturnType<typeof setInterval> | null = null;
-    let realtimeActive = false;
+    const kind = tableToKind[table];
+    if (!kind) return;
+
+    const topic = `track:${kind}:${id}`;
+    let wsActive = false;
+    let unsubscribeWs: (() => void) | null = null;
 
     try {
-      channel = supabase
-        .channel(`order-${table}-${id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table, filter: `id=eq.${id}` },
-          () => onChangeRef.current(),
-        )
-        .subscribe((status) => {
-          if (status === "SUBSCRIBED") realtimeActive = true;
-        });
-    } catch {
-      realtimeActive = false;
+      unsubscribeWs = subscribe(topic, (data) => {
+        onChangeRef.current();
+      });
+      wsActive = isConnected;
+    } catch (err) {
+      console.warn("[WebSocket] Tracking subscription failed, falling back to polling", err);
+      wsActive = false;
     }
 
-    pollId = setInterval(() => {
-      if (!realtimeActive) onChangeRef.current();
+    // Resilience fallback: always run polling fallback if WebSocket is not active
+    const pollId = setInterval(() => {
+      if (!wsActive || !isConnected) {
+        onChangeRef.current();
+      }
     }, fallbackMs);
 
     return () => {
-      if (pollId) clearInterval(pollId);
-      if (channel) void supabase.removeChannel(channel);
+      clearInterval(pollId);
+      if (unsubscribeWs) unsubscribeWs();
     };
-  }, [enabled, fallbackMs, id, table]);
+  }, [enabled, fallbackMs, id, table, subscribe, isConnected]);
 }
