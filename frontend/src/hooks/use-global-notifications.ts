@@ -5,6 +5,7 @@ import { hasRole, useAuth } from "@/lib/auth-context";
 import { isActiveChat } from "@/lib/active-chat";
 import { useAlertsPreference } from "@/hooks/use-alerts-preference";
 import { useLiveAlerts } from "@/hooks/use-live-alerts";
+import { socket } from "@/lib/socket";
 
 const DEFAULT_POLL_MS = 12000;
 const RIDER_POLL_MS = 4000;
@@ -272,6 +273,32 @@ export function useGlobalNotifications() {
     const timer = window.setInterval(poll, intervalMs);
     return () => window.clearInterval(timer);
   }, [enabled, poll, roles, user]);
+
+  useEffect(() => {
+    if (!user || !enabled) return;
+
+    socket.join(`user:${user.id}`);
+    roles.forEach((role) => {
+      socket.join(`role:${role}`);
+    });
+
+    const handleNotification = (data: { type: string; message: string; orderId?: string }) => {
+      if (data && data.message) {
+        toast.info(data.message);
+      }
+      poll();
+    };
+
+    socket.on("notification", handleNotification);
+
+    return () => {
+      socket.leave(`user:${user.id}`);
+      roles.forEach((role) => {
+        socket.leave(`role:${role}`);
+      });
+      socket.off("notification", handleNotification);
+    };
+  }, [user, enabled, roles, poll]);
 
   useLiveAlerts({
     items: deliveryJobs,
