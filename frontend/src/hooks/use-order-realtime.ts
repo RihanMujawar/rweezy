@@ -38,6 +38,7 @@ export function useOrderRealtime({
 
     return () => {
       socket.off("order_updated", handleUpdate);
+      socket.leave(id);
       clearInterval(pollId);
     };
   }, [enabled, fallbackMs, id]);

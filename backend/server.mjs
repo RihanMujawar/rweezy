@@ -4,6 +4,7 @@ import http from "node:http";
 import serverless from "serverless-http";
 import { fileURLToPath } from "node:url";
 import { ROOT_DIR, env } from "./lib/env.mjs";
+import { initWebSocketServer, broadcastToRoom, broadcastToUser, broadcastToRole } from "./lib/websocket.mjs";
 import {
   createRequestId,
   getBearerToken,
@@ -1201,6 +1202,8 @@ const routes = [
       },
     });
 
+    broadcastToRoom(body.row_id, "order_updated", { id: body.row_id, rider_lat: body.rider_lat, rider_lng: body.rider_lng });
+
     return { row };
   }),
   route("GET", /^\/api\/catalog\/restaurants$/, async ({ user, url }) => {
@@ -1373,7 +1376,7 @@ const routes = [
     const items = validateCartItems(body.items);
     const restaurant = await prisma.restaurant.findUnique({
       where: { id: body.restaurant_id },
-      select: { id: true, name: true, address: true, town_name: true, pincode: true, lat: true, lng: true, is_open: true }
+      select: { id: true, name: true, address: true, town_name: true, pincode: true, lat: true, lng: true, is_open: true, manager_id: true }
     });
     if (!restaurant || restaurant.is_open === false) {
       throw new HttpError(400, "This restaurant is not accepting orders right now");
@@ -1443,13 +1446,26 @@ const routes = [
       }
     });
 
+    if (restaurant.manager_id) {
+      broadcastToUser(restaurant.manager_id, "notification", {
+        type: "new_order",
+        message: "New food order received!",
+        orderId: order.id,
+      });
+    }
+    broadcastToRole("delivery_boy", "notification", {
+      type: "new_job",
+      message: "New food delivery job is available!",
+      orderId: order.id,
+    });
+
     return { order };
   }),
   route("POST", /^\/api\/orders\/grocery$/, async ({ user, body }) => {
     const items = validateCartItems(body.items);
     const store = await prisma.groceryStore.findUnique({
       where: { id: body.store_id },
-      select: { id: true, name: true, address: true, town_name: true, pincode: true, lat: true, lng: true, is_open: true }
+      select: { id: true, name: true, address: true, town_name: true, pincode: true, lat: true, lng: true, is_open: true, manager_id: true }
     });
     if (!store || store.is_open === false) {
       throw new HttpError(400, "This store is not accepting orders right now");
@@ -1519,6 +1535,19 @@ const routes = [
 
     await deductGroceryStock(body.store_id, items);
 
+    if (store.manager_id) {
+      broadcastToUser(store.manager_id, "notification", {
+        type: "new_order",
+        message: "New grocery order received!",
+        orderId: order.id,
+      });
+    }
+    broadcastToRole("delivery_boy", "notification", {
+      type: "new_job",
+      message: "New grocery delivery job is available!",
+      orderId: order.id,
+    });
+
     return { order };
   }),
   route("GET", /^\/api\/orders\/me$/, async ({ user }) => {
@@ -1581,6 +1610,8 @@ const routes = [
           // cancellation_reason and cancelled_at are not in the schema.
         },
       });
+
+      broadcastToRoom(id, "order_updated", { id, status: "cancelled" });
 
       return { row };
     },
@@ -1677,6 +1708,10 @@ const routes = [
           body: messageBody,
         }
       });
+
+      broadcastToRoom(serviceId, "chat_message", saved);
+      broadcastToRoom(`chat:${serviceId}`, "chat_message", saved);
+
       void notifyChatRecipients({
         senderId: user.id,
         context,
@@ -1727,6 +1762,12 @@ const routes = [
       }
     });
 
+    broadcastToRole("rider", "notification", {
+      type: "new_job",
+      message: "New ride job is available!",
+      orderId: ride.id,
+    });
+
     return { ride };
   }),
   route("POST", /^\/api\/packages$/, async ({ user, body }) => {
@@ -1764,6 +1805,12 @@ const routes = [
         delivery_pin: deliveryPin,
         estimated_delivery_at: estimatedDeliveryAt,
       }
+    });
+
+    broadcastToRole("rider", "notification", {
+      type: "new_job",
+      message: "New package delivery job is available!",
+      orderId: packageDelivery.id,
     });
 
     return { packageDelivery };
@@ -2450,6 +2497,16 @@ const routes = [
       data: { status: body.status }
     });
 
+    broadcastToRoom(id, "order_updated", { id, status: body.status });
+    if (order.customer_id) {
+      broadcastToUser(order.customer_id, "notification", {
+        type: "order_updated",
+        message: `Your food order is now ${body.status.replace(/_/g, " ")}`,
+        orderId: id,
+        status: body.status,
+      });
+    }
+
     return { order };
   }),
   route("POST", /^\/api\/hotel\/orders\/([^/]+)\/reject$/, async ({ match, body }) => {
@@ -2461,6 +2518,16 @@ const routes = [
         // cancellation_reason and cancelled_at not in schema
       }
     });
+
+    broadcastToRoom(id, "order_updated", { id, status: "cancelled" });
+    if (order.customer_id) {
+      broadcastToUser(order.customer_id, "notification", {
+        type: "order_updated",
+        message: "Your food order was cancelled by the restaurant",
+        orderId: id,
+        status: "cancelled",
+      });
+    }
 
     return { order };
   }),
@@ -2639,6 +2706,16 @@ const routes = [
       data: { status: body.status }
     });
 
+    broadcastToRoom(id, "order_updated", { id, status: body.status });
+    if (order.customer_id) {
+      broadcastToUser(order.customer_id, "notification", {
+        type: "order_updated",
+        message: `Your grocery order is now ${body.status.replace(/_/g, " ")}`,
+        orderId: id,
+        status: body.status,
+      });
+    }
+
     return { order };
   }),
   route("GET", /^\/api\/grocery\/history$/, async ({ user }) => {
@@ -2732,6 +2809,15 @@ const routes = [
         throw new HttpError(404, "Delivery not found or already assigned");
       });
 
+      broadcastToRoom(id, "order_updated", { id, delivery_boy_id: user.id });
+      if (order.customer_id) {
+        broadcastToUser(order.customer_id, "notification", {
+          type: "order_updated",
+          message: "A delivery partner has accepted your order!",
+          orderId: id,
+        });
+      }
+
       return { order: normalizeDeliveryOrder(order) };
     },
   ),
@@ -2763,6 +2849,16 @@ const routes = [
         where: { id },
         data
       });
+
+      broadcastToRoom(id, "order_updated", { id, status: body.status });
+      if (order.customer_id) {
+        broadcastToUser(order.customer_id, "notification", {
+          type: "order_updated",
+          message: `Your order is ${body.status.replace(/_/g, " ")}`,
+          orderId: id,
+          status: body.status,
+        });
+      }
 
       return { order: normalizeDeliveryOrder(order) };
     },
@@ -2847,6 +2943,15 @@ const routes = [
       data: { rider_id: user.id, status: "accepted" }
     });
 
+    broadcastToRoom(id, "order_updated", { id, status: "accepted", rider_id: user.id });
+    if (ride.customer_id) {
+      broadcastToUser(ride.customer_id, "notification", {
+        type: "order_updated",
+        message: "A rider has accepted your ride request!",
+        orderId: id,
+      });
+    }
+
     return { ride };
   }),
   route("POST", /^\/api\/rider\/packages\/([^/]+)\/accept$/, async ({ user, match }) => {
@@ -2855,6 +2960,15 @@ const routes = [
       where: { id, rider_id: null },
       data: { rider_id: user.id, status: "accepted" }
     });
+
+    broadcastToRoom(id, "order_updated", { id, status: "accepted", rider_id: user.id });
+    if (packageDelivery.customer_id) {
+      broadcastToUser(packageDelivery.customer_id, "notification", {
+        type: "order_updated",
+        message: "A rider has accepted your package delivery request!",
+        orderId: id,
+      });
+    }
 
     return { packageDelivery };
   }),
@@ -2882,6 +2996,17 @@ const routes = [
         data: { status: body.status }
       });
 
+      broadcastToRoom(id, "order_updated", { id, status: body.status });
+      if (job.customer_id) {
+        const label = table === "rides" ? "ride" : "package delivery";
+        broadcastToUser(job.customer_id, "notification", {
+          type: "order_updated",
+          message: `Your ${label} status is now ${body.status.replace(/_/g, " ")}`,
+          orderId: id,
+          status: body.status,
+        });
+      }
+
       return { job };
     },
   ),
@@ -2897,6 +3022,16 @@ const routes = [
         where: { id },
         data: { status: "cancelled", rider_id: null }
       });
+
+      broadcastToRoom(id, "order_updated", { id, status: "cancelled", rider_id: null });
+      if (job.customer_id) {
+        broadcastToUser(job.customer_id, "notification", {
+          type: "order_updated",
+          message: "Your request was cancelled by the rider.",
+          orderId: id,
+          status: "cancelled",
+        });
+      }
 
       return { job };
     },
@@ -3330,6 +3465,7 @@ async function checkDatabaseSchema() {
 }
 
 const server = http.createServer(mainHandler);
+initWebSocketServer(server);
 
 export const handler = serverless(server);
 
