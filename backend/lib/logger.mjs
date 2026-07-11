@@ -35,7 +35,7 @@ export function logRequestError(req, url, status, error, requestId) {
     requestId,
     error: error instanceof Error ? error.message : String(error),
     provider:
-      error instanceof Error && /mapbox|supabase|auth/i.test(error.message)
+      error instanceof Error && /mapbox|postgres|auth/i.test(error.message)
         ? error.message.split(":")[0]?.trim()
         : undefined,
   });

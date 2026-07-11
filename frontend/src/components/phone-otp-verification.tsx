@@ -9,7 +9,6 @@ import { toast } from "sonner";
 type PhoneOtpVerificationProps = {
   phone: string;
   purpose: "login" | "register" | "reset_password";
-  email?: string;
   onVerified: (
     phoneVerificationToken: string,
     result?: {
@@ -18,17 +17,18 @@ type PhoneOtpVerificationProps = {
     },
   ) => void;
   disabled?: boolean;
+  initialOtpSent?: boolean;
 };
 
 export function PhoneOtpVerification({
   phone,
   purpose,
-  email,
   onVerified,
   disabled = false,
+  initialOtpSent = false,
 }: PhoneOtpVerificationProps) {
   const [code, setCode] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
+  const [otpSent, setOtpSent] = useState(initialOtpSent);
   const [verified, setVerified] = useState(false);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -36,11 +36,11 @@ export function PhoneOtpVerification({
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
-    setOtpSent(false);
+    setOtpSent(initialOtpSent);
     setVerified(false);
     setCode("");
     setError(null);
-  }, [email, phone, purpose]);
+  }, [initialOtpSent, phone, purpose]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -63,11 +63,10 @@ export function PhoneOtpVerification({
       await api.auth.sendPhoneOtp({
         phone: parsedPhone.data,
         purpose,
-        ...(purpose === "reset_password" && email ? { email } : {}),
       });
       setOtpSent(true);
       setCooldown(30);
-      toast.success("Verification code sent to your phone");
+      toast.success("Verification code sent to your WhatsApp");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to send verification code";
       setError(message);
@@ -125,7 +124,7 @@ export function PhoneOtpVerification({
       <div className="space-y-1">
         <p className="text-sm font-medium">Phone verification</p>
         <p className="text-xs text-muted-foreground">
-          We&apos;ll send a one-time code by SMS to confirm this number.
+          We&apos;ll send a one-time code by WhatsApp to confirm this number.
         </p>
       </div>
 
@@ -139,8 +138,7 @@ export function PhoneOtpVerification({
             sending ||
             verified ||
             cooldown > 0 ||
-            !phone ||
-            (purpose === "reset_password" && !email?.trim())
+            !phone
           }
         >
           {sending

@@ -15,9 +15,8 @@ functions:
           path: /api/{proxy+}
           method: '*'
     environment:
-      SUPABASE_URL: ${env:SUPABASE_URL}
-      SUPABASE_PUBLISHABLE_KEY: ${env:SUPABASE_PUBLISHABLE_KEY}
-      SUPABASE_SERVICE_ROLE_KEY: ${env:SUPABASE_SERVICE_ROLE_KEY}
+      DATABASE_URL: ${env:DATABASE_URL}
+      JWT_SECRET: ${env:JWT_SECRET}
       MAPBOX_ACCESS_TOKEN: ${env:MAPBOX_ACCESS_TOKEN}
       FCM_SERVER_KEY: ${env:FCM_SERVER_KEY}
       TWILIO_ACCOUNT_SID: ${env:TWILIO_ACCOUNT_SID}

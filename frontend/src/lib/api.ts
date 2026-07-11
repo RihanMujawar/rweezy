@@ -40,7 +40,7 @@ async function apiRequest<T>(
 
 export const api = {
   auth: {
-    login: (payload: { email?: string; phone?: string; password: string }) =>
+    login: (payload: { phone: string; password: string }) =>
       apiRequest<{ user: { id: string; email?: string | null }; roles: string[] }>(
         "/api/auth/login",
         {
@@ -51,7 +51,6 @@ export const api = {
     sendPhoneOtp: (payload: {
       phone: string;
       purpose: "login" | "register" | "reset_password";
-      email?: string;
     }) =>
       apiRequest<{ ok: true; message: string }>("/api/auth/phone/send-otp", {
         method: "POST",
@@ -61,7 +60,6 @@ export const api = {
       phone: string;
       code: string;
       purpose: "login" | "register" | "reset_password";
-      email?: string;
     }) =>
       apiRequest<{
         ok?: true;
@@ -69,11 +67,6 @@ export const api = {
         user?: { id: string; email?: string | null };
         roles?: string[];
       }>("/api/auth/phone/verify-otp", {
-        method: "POST",
-        body: payload,
-      }),
-    resendEmailVerification: (payload: { email: string }) =>
-      apiRequest<{ ok: true; message: string }>("/api/auth/email/resend-verification", {
         method: "POST",
         body: payload,
       }),
@@ -101,7 +94,6 @@ export const api = {
       }),
     register: (payload: {
       full_name: string;
-      email?: string;
       phone: string;
       password: string;
       phone_verification_token: string;
@@ -119,7 +111,6 @@ export const api = {
         user: { id: string; email?: string | null } | null;
         roles: string[];
         authenticated: boolean;
-        emailVerificationRequired?: boolean;
         roleRequestPending?: boolean;
         roleRequestWarning?: string | null;
       }>("/api/auth/register", {
@@ -130,14 +121,6 @@ export const api = {
     getMe: () =>
       apiRequest<{ user: { id: string; email?: string | null } | null; roles: string[] }>(
         "/api/auth/me",
-      ),
-    loginWithFirebaseGoogle: (payload: { id_token: string }) =>
-      apiRequest<{ user: { id: string; email?: string | null }; roles: string[] }>(
-        "/api/auth/firebase-google",
-        {
-          method: "POST",
-          body: payload,
-        },
       ),
   },
 

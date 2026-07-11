@@ -41,7 +41,6 @@ export const phoneOtpCodeSchema = z.object({
 export const registerSchema = z
   .object({
     fullName: z.string().trim().min(2, "Enter your full name").max(120),
-    email: z.string().trim().email("Enter a valid email").optional().or(z.literal("")),
     phone: phoneSchema,
     password: z
       .string()
