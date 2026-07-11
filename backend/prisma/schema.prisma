@@ -1,0 +1,486 @@
+generator client {
+  provider        = "prisma-client-js"
+  engineType      = "library"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["rweezy", "public"]
+}
+
+enum AppRole {
+  customer
+  admin
+  hotel_manager
+  grocery_manager
+  delivery_boy
+  rider
+
+  @@schema("rweezy")
+}
+
+enum OrderStatus {
+  pending
+  accepted
+  preparing
+  ready
+  picked_up
+  delivered
+  cancelled
+
+  @@schema("rweezy")
+}
+
+enum RideStatus {
+  requested
+  accepted
+  started
+  completed
+  cancelled
+
+  @@schema("rweezy")
+}
+
+enum ServiceKind {
+  ride
+  package
+  food
+  grocery
+
+  @@schema("rweezy")
+}
+
+enum RoleRequestStatus {
+  pending
+  approved
+  rejected
+
+  @@schema("rweezy")
+}
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String?  @unique
+  phone         String?  @unique
+  password_hash String
+  created_at    DateTime @default(now()) @db.Timestamptz
+  updated_at    DateTime @default(now()) @db.Timestamptz
+
+  profile        Profile?
+  roles          UserRole[]
+  restaurants    Restaurant[]
+  grocery_stores GroceryStore[]
+
+  food_orders   FoodOrder[] @relation("CustomerFoodOrders")
+  assigned_food FoodOrder[] @relation("DeliveryBoyFoodOrders")
+
+  grocery_orders   GroceryOrder[] @relation("CustomerGroceryOrders")
+  assigned_grocery GroceryOrder[] @relation("DeliveryBoyGroceryOrders")
+
+  rides          Ride[] @relation("CustomerRides")
+  assigned_rides Ride[] @relation("RiderRides")
+
+  package_deliveries PackageDelivery[] @relation("CustomerPackages")
+  assigned_packages  PackageDelivery[] @relation("RiderPackages")
+
+  chat_messages ChatMessage[]
+  push_tokens   UserPushToken[]
+  saved_addresses SavedAddress[]
+  role_requests     RoleRequest[] @relation("UserRoleRequests")
+  reviewed_requests RoleRequest[] @relation("ReviewerRoleRequests")
+  reviews           OrderReview[]
+  audit_events      AuditEvent[]
+
+  @@map("users")
+  @@schema("rweezy")
+}
+
+model Profile {
+  id         String   @id @db.Uuid
+  user       User     @relation(fields: [id], references: [id], onDelete: Cascade)
+  full_name  String?
+  phone      String?
+  avatar_url String?
+  town_name  String?
+  pincode    String?
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @db.Timestamptz
+
+  @@map("profiles")
+  @@schema("rweezy")
+}
+
+model UserRole {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role       AppRole
+  created_at DateTime @default(now()) @db.Timestamptz
+
+  @@unique([user_id, role])
+  @@map("user_roles")
+  @@schema("rweezy")
+}
+
+model Restaurant {
+  id          String   @id @default(uuid()) @db.Uuid
+  manager_id  String?  @unique @db.Uuid
+  manager     User?    @relation(fields: [manager_id], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+  address     String?
+  image_url   String?
+  is_open     Boolean  @default(true)
+  town_name   String?
+  pincode     String?
+  lat         Float?
+  lng         Float?
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @default(now()) @db.Timestamptz
+
+  menu_items  MenuItem[]
+  food_orders FoodOrder[]
+
+  @@map("restaurants")
+  @@schema("rweezy")
+}
+
+model MenuItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  restaurant_id     String   @db.Uuid
+  restaurant        Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  price             Decimal  @db.Decimal(10, 2)
+  image_url         String?
+  category          String?
+  is_available      Boolean  @default(true)
+  is_veg            Boolean  @default(true)
+  prep_time_minutes Int      @default(15)
+  is_special        Boolean  @default(false)
+  modifiers         Json     @default("[]")
+  created_at        DateTime @default(now()) @db.Timestamptz
+  updated_at        DateTime @default(now()) @db.Timestamptz
+
+  order_items       FoodOrderItem[]
+
+  @@map("menu_items")
+  @@schema("rweezy")
+}
+
+model GroceryStore {
+  id          String   @id @default(uuid()) @db.Uuid
+  manager_id  String?  @unique @db.Uuid
+  manager     User?    @relation(fields: [manager_id], references: [id], onDelete: SetNull)
+  name        String
+  description String?
+  address     String?
+  image_url   String?
+  is_open     Boolean  @default(true)
+  town_name   String?
+  pincode     String?
+  lat         Float?
+  lng         Float?
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @default(now()) @db.Timestamptz
+
+  grocery_items  GroceryItem[]
+  grocery_orders GroceryOrder[]
+
+  @@map("grocery_stores")
+  @@schema("rweezy")
+}
+
+model GroceryItem {
+  id                  String   @id @default(uuid()) @db.Uuid
+  store_id            String   @db.Uuid
+  store               GroceryStore @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  name                String
+  description         String?
+  price               Decimal  @db.Decimal(10, 2)
+  image_url           String?
+  category            String?
+  is_available        Boolean  @default(true)
+  stock_quantity      Int      @default(0)
+  low_stock_threshold Int      @default(5)
+  expiry_date         DateTime? @db.Timestamptz
+  aisle_location      String?
+  unit                String   @default("pcs")
+  created_at          DateTime @default(now()) @db.Timestamptz
+  updated_at          DateTime @default(now()) @db.Timestamptz
+
+  order_items         GroceryOrderItem[]
+
+  @@map("grocery_items")
+  @@schema("rweezy")
+}
+
+model FoodOrder {
+  id              String      @id @default(uuid()) @db.Uuid
+  customer_id     String      @db.Uuid
+  customer        User        @relation("CustomerFoodOrders", fields: [customer_id], references: [id], onDelete: Cascade)
+  restaurant_id   String      @db.Uuid
+  restaurant      Restaurant  @relation(fields: [restaurant_id], references: [id], onDelete: Restrict)
+  delivery_boy_id String?     @db.Uuid
+  delivery_boy    User?       @relation("DeliveryBoyFoodOrders", fields: [delivery_boy_id], references: [id], onDelete: SetNull)
+  status          OrderStatus @default(pending)
+  total           Decimal     @default(0) @db.Decimal(10, 2)
+  delivery_address String
+  delivery_lat    Float?
+  delivery_lng    Float?
+  pickup_address  String?
+  pickup_lat      Float?
+  pickup_lng      Float?
+  notes           String?
+  payment_method  String      @default("cash")
+  payment_status  String      @default("pending")
+  delivery_pin    String?     @db.Char(4)
+  estimated_delivery_at DateTime? @db.Timestamptz
+  contactless_delivery Boolean  @default(false)
+  rider_lat       Float?
+  rider_lng       Float?
+  rider_location_updated_at DateTime? @db.Timestamptz
+  created_at      DateTime    @default(now()) @db.Timestamptz
+  updated_at      DateTime    @default(now()) @db.Timestamptz
+
+  items           FoodOrderItem[]
+
+  @@map("food_orders")
+  @@schema("rweezy")
+}
+
+model FoodOrderItem {
+  id           String   @id @default(uuid()) @db.Uuid
+  order_id     String   @db.Uuid
+  order        FoodOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  menu_item_id String   @db.Uuid
+  menu_item    MenuItem @relation(fields: [menu_item_id], references: [id], onDelete: Restrict)
+  name         String
+  price        Decimal  @db.Decimal(10, 2)
+  quantity     Int
+  created_at   DateTime @default(now()) @db.Timestamptz
+
+  @@map("food_order_items")
+  @@schema("rweezy")
+}
+
+model GroceryOrder {
+  id              String      @id @default(uuid()) @db.Uuid
+  customer_id     String      @db.Uuid
+  customer        User        @relation("CustomerGroceryOrders", fields: [customer_id], references: [id], onDelete: Cascade)
+  store_id        String      @db.Uuid
+  store           GroceryStore @relation(fields: [store_id], references: [id], onDelete: Restrict)
+  delivery_boy_id String?     @db.Uuid
+  delivery_boy    User?       @relation("DeliveryBoyGroceryOrders", fields: [delivery_boy_id], references: [id], onDelete: SetNull)
+  status          OrderStatus @default(pending)
+  total           Decimal     @default(0) @db.Decimal(10, 2)
+  delivery_address String
+  delivery_lat    Float?
+  delivery_lng    Float?
+  pickup_address  String?
+  pickup_lat      Float?
+  pickup_lng      Float?
+  notes           String?
+  payment_method  String      @default("cash")
+  payment_status  String      @default("pending")
+  delivery_pin    String?     @db.Char(4)
+  estimated_delivery_at DateTime? @db.Timestamptz
+  contactless_delivery Boolean  @default(false)
+  rider_lat       Float?
+  rider_lng       Float?
+  rider_location_updated_at DateTime? @db.Timestamptz
+  created_at      DateTime    @default(now()) @db.Timestamptz
+  updated_at      DateTime    @default(now()) @db.Timestamptz
+
+  items           GroceryOrderItem[]
+
+  @@map("grocery_orders")
+  @@schema("rweezy")
+}
+
+model GroceryOrderItem {
+  id              String      @id @default(uuid()) @db.Uuid
+  order_id        String      @db.Uuid
+  order           GroceryOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  grocery_item_id String      @db.Uuid
+  grocery_item    GroceryItem  @relation(fields: [grocery_item_id], references: [id], onDelete: Restrict)
+  name            String
+  price           Decimal     @db.Decimal(10, 2)
+  quantity        Int
+  created_at      DateTime    @default(now()) @db.Timestamptz
+
+  @@map("grocery_order_items")
+  @@schema("rweezy")
+}
+
+model Ride {
+  id                String     @id @default(uuid()) @db.Uuid
+  customer_id       String     @db.Uuid
+  customer          User       @relation("CustomerRides", fields: [customer_id], references: [id], onDelete: Cascade)
+  rider_id          String?    @db.Uuid
+  rider             User?      @relation("RiderRides", fields: [rider_id], references: [id], onDelete: SetNull)
+  pickup_address    String
+  pickup_lat        Float
+  pickup_lng        Float
+  drop_address      String
+  drop_lat          Float
+  drop_lng          Float
+  status            RideStatus @default(requested)
+  fare_estimate     Decimal?   @db.Decimal(10, 2)
+  notes             String?
+  vehicle_type      String     @default("bike")
+  payment_method    String     @default("cash")
+  payment_status    String     @default("pending")
+  delivery_pin      String?    @db.Char(4)
+  estimated_arrival_at DateTime? @db.Timestamptz
+  rider_lat         Float?
+  rider_lng         Float?
+  rider_location_updated_at DateTime? @db.Timestamptz
+  created_at        DateTime   @default(now()) @db.Timestamptz
+  updated_at        DateTime   @default(now()) @db.Timestamptz
+
+  @@map("rides")
+  @@schema("rweezy")
+}
+
+model PackageDelivery {
+  id                String     @id @default(uuid()) @db.Uuid
+  customer_id       String     @db.Uuid
+  customer          User       @relation("CustomerPackages", fields: [customer_id], references: [id], onDelete: Cascade)
+  rider_id          String?    @db.Uuid
+  rider             User?      @relation("RiderPackages", fields: [rider_id], references: [id], onDelete: SetNull)
+  pickup_address    String
+  pickup_lat        Float
+  pickup_lng        Float
+  drop_address      String
+  drop_lat          Float
+  drop_lng          Float
+  package_size      String     @default("small")
+  receiver_name     String?
+  receiver_phone    String?
+  notes             String?
+  status            RideStatus @default(requested)
+  fare_estimate     Decimal?   @db.Decimal(10, 2)
+  payment_method    String     @default("cash")
+  payment_status    String     @default("pending")
+  delivery_pin      String?    @db.Char(4)
+  estimated_delivery_at DateTime? @db.Timestamptz
+  rider_lat         Float?
+  rider_lng         Float?
+  rider_location_updated_at DateTime? @db.Timestamptz
+  created_at        DateTime   @default(now()) @db.Timestamptz
+  updated_at        DateTime   @default(now()) @db.Timestamptz
+
+  @@map("package_deliveries")
+  @@schema("rweezy")
+}
+
+model ChatMessage {
+  id            String      @id @default(uuid()) @db.Uuid
+  service_kind  ServiceKind
+  service_id    String      @db.Uuid
+  sender_id     String      @db.Uuid
+  sender        User        @relation(fields: [sender_id], references: [id], onDelete: Cascade)
+  body          String
+  created_at    DateTime    @default(now()) @db.Timestamptz
+
+  @@index([service_kind, service_id, created_at])
+  @@map("chat_messages")
+  @@schema("rweezy")
+}
+
+model UserPushToken {
+  id           String   @id @default(uuid()) @db.Uuid
+  user_id      String   @db.Uuid
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token        String   @unique
+  platform     String   @default("web")
+  device_label String?
+  created_at   DateTime @default(now()) @db.Timestamptz
+  updated_at   DateTime @default(now()) @db.Timestamptz
+
+  @@index([user_id])
+  @@map("user_push_tokens")
+  @@schema("rweezy")
+}
+
+model SavedAddress {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  label      String
+  address    String
+  lat        Float?
+  lng        Float?
+  is_default Boolean  @default(false)
+  created_at DateTime @default(now()) @db.Timestamptz
+  updated_at DateTime @default(now()) @db.Timestamptz
+
+  @@map("saved_addresses")
+  @@schema("rweezy")
+}
+
+model RoleRequest {
+  id                String            @id @default(uuid()) @db.Uuid
+  user_id           String            @db.Uuid
+  user              User              @relation("UserRoleRequests", fields: [user_id], references: [id], onDelete: Cascade)
+  requested_role    AppRole
+  status            RoleRequestStatus @default(pending)
+  business_name     String?
+  business_address  String?
+  business_lat      Float?
+  business_lng      Float?
+  town_name         String?
+  pincode           String?
+  message           String?
+  reviewed_by       String?           @db.Uuid
+  reviewer          User?             @relation("ReviewerRoleRequests", fields: [reviewed_by], references: [id], onDelete: SetNull)
+  reviewed_at       DateTime?         @db.Timestamptz
+  created_at        DateTime          @default(now()) @db.Timestamptz
+  updated_at        DateTime          @default(now()) @db.Timestamptz
+
+  @@unique([user_id, requested_role], name: "idx_role_requests_pending_unique")
+  @@map("role_requests")
+  @@schema("rweezy")
+}
+
+model PlatformSetting {
+  key        String   @id
+  value      Json     @default("{}")
+  updated_at DateTime @default(now()) @db.Timestamptz
+
+  @@map("platform_settings")
+  @@schema("rweezy")
+}
+
+model OrderReview {
+  id           String      @id @default(uuid()) @db.Uuid
+  user_id      String      @db.Uuid
+  user         User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  service_kind ServiceKind
+  service_id   String      @db.Uuid
+  rating       Int
+  comment      String?
+  created_at   DateTime    @default(now()) @db.Timestamptz
+
+  @@unique([user_id, service_kind, service_id])
+  @@map("order_reviews")
+  @@schema("rweezy")
+}
+
+model AuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  actor_id    String?  @db.Uuid
+  actor       User?    @relation(fields: [actor_id], references: [id], onDelete: SetNull)
+  action      String
+  target_type String
+  target_id   String?
+  message     String
+  metadata    Json     @default("{}")
+  created_at  DateTime @default(now()) @db.Timestamptz
+
+  @@map("audit_events")
+  @@schema("rweezy")
+}

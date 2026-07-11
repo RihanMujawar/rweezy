@@ -5,7 +5,7 @@ import { HttpError } from "./http.mjs";
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 
 function signingSecret() {
-  return env.phoneVerificationSecret || env.supabaseServiceRoleKey || "dev-phone-verification-secret";
+  return env.phoneVerificationSecret || env.jwtSecret || "dev-phone-verification-secret";
 }
 
 export function createPhoneVerificationToken(phone) {

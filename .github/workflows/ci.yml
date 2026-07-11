@@ -9,7 +9,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      # Set to "true" to enable Playwright E2E (requires Supabase + Playwright browser install).
+      # Set to "true" to enable Playwright E2E (requires local PostgreSQL + Playwright browser install).
       RUN_E2E: "false"
     steps:
       - uses: actions/checkout@v4

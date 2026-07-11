@@ -1,1 +1,0 @@
-ALTER TABLE public.rides ADD COLUMN IF NOT EXISTS vehicle_type text NOT NULL DEFAULT 'bike';
