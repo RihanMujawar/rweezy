@@ -61,9 +61,15 @@ const BUSINESS_ROLES: AppRole[] = [
   "rider",
 ];
 
-function isActive(pathname: string, to: string) {
+function isActive(pathname: string, to: string, allItems: MobileNavItem[]) {
   if (to === "/app") return pathname === "/app" || pathname === "/app/";
-  return pathname === to || pathname.startsWith(`${to}/`);
+  const isMatch = pathname === to || pathname.startsWith(`${to}/`);
+  if (!isMatch) return false;
+
+  const hasSpecificMatch = allItems.some(
+    (item) => item.type === "link" && item.to.length > to.length && pathname.startsWith(item.to)
+  );
+  return !hasSpecificMatch;
 }
 
 function pickBusinessItems(pathname: string, roles: string[]) {
@@ -96,7 +102,6 @@ export function MobileBottomNav() {
           { type: "link", title: "Home", to: "/app", icon: Home },
           ...businessItems,
           { type: "action", title: "Business", onClick: toggleMode, icon: BriefcaseBusiness },
-          { type: "link", title: "Profile", to: "/app/profile", icon: User },
         ]
       : [
           ...customerItems,
@@ -106,75 +111,58 @@ export function MobileBottomNav() {
         ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:hidden pointer-events-none">
-      <motion.div
-        layout
-        className={cn(
-          "mx-auto grid max-w-lg rounded-3xl border border-white/20 bg-background/60 p-2 shadow-2xl backdrop-blur-3xl pointer-events-auto",
-          items.length === 5 && "grid-cols-5",
-          items.length === 6 && "grid-cols-6",
-          items.length === 7 && "grid-cols-7",
-        )}
-      >
-        <AnimatePresence mode="popLayout">
-          {items.map((item, idx) => {
-            const Icon = item.icon;
-            const active = item.type === "link" ? isActive(pathname, item.to) : mode === "business";
-            const key = item.type === "link" ? item.to : `action-${idx}-${item.title}`;
+    <nav className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:hidden pointer-events-none">
+      <div className="mx-auto flex max-w-lg items-center gap-1 rounded-[2rem] border border-white/10 bg-background/80 p-1.5 shadow-2xl backdrop-blur-2xl pointer-events-auto">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isLink = item.type === "link";
+          const active = isLink ? isActive(pathname, item.to, items) : false;
+          // The Business button gets a special active state that doesn't use the shared layoutId pill
+          const isBusinessActive = item.type === "action" && mode === "business";
+          const key = isLink ? item.to : `action-${item.title}`;
 
-            const content = (
-              <motion.div
-                key={key}
-                layout
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                whileTap={{ scale: 0.9 }}
-                className={cn(
-                  "relative flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 transition-all duration-300",
-                  active ? "text-primary-foreground" : "text-foreground/50 hover:text-foreground/80"
-                )}
-              >
-                {active && (
-                  <motion.div
-                    layoutId="mobile-nav-active"
-                    className="absolute inset-0 bg-primary rounded-2xl -z-10 shadow-lg shadow-primary/30"
-                    transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
-                  />
-                )}
-                <Icon className="h-5 w-5" />
-                <span className="max-w-full truncate text-[9px] font-bold leading-none uppercase tracking-tighter">
-                  {item.title}
-                </span>
-              </motion.div>
-            );
+          const content = (
+            <div
+              className={cn(
+                "relative flex h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl transition-all duration-300",
+                active ? "text-primary-foreground" : "text-foreground/40 hover:text-foreground/70",
+                isBusinessActive && !active && "bg-primary/10 text-primary"
+              )}
+            >
+              {active && (
+                <motion.div
+                  layoutId="mobile-nav-pill"
+                  className="absolute inset-0 bg-primary rounded-2xl -z-10 shadow-lg shadow-primary/20"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+                />
+              )}
+              <Icon className={cn("h-5 w-5", active && "scale-110")} />
+              <span className="max-w-full truncate text-[8px] font-black leading-none uppercase tracking-tighter">
+                {item.title}
+              </span>
+            </div>
+          );
 
-            if (item.type === "action") {
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={item.onClick}
-                  className="focus:outline-none"
-                  aria-pressed={mode === "business"}
-                >
-                  {content}
-                </button>
-              );
-            }
-
+          if (item.type === "action") {
             return (
-              <Link
+              <button
                 key={key}
-                to={item.to}
-                className="focus:outline-none"
+                type="button"
+                onClick={item.onClick}
+                className="flex-1 focus:outline-none"
               >
                 {content}
-              </Link>
+              </button>
             );
-          })}
-        </AnimatePresence>
-      </motion.div>
+          }
+
+          return (
+            <Link key={key} to={item.to} className="flex-1 focus:outline-none">
+              {content}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
