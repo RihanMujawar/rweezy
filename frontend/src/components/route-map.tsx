@@ -112,11 +112,6 @@ function LeafletShell({
     mapRef.current = map;
     setMapReady(true);
 
-    // Ensure map tiles are loaded correctly on mobile/dynamic containers
-    setTimeout(() => {
-      map.invalidateSize();
-    }, 100);
-
     return () => {
       map.remove();
       mapRef.current = null;

@@ -1,8 +1,14 @@
-#![allow(clippy::all, unused_imports, dead_code, unused_variables, unused_assignments)]
+#![allow(
+    clippy::all,
+    unused_imports,
+    dead_code,
+    unused_variables,
+    unused_assignments
+)]
 
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
-use sqlx::{migrate::MigrateError, postgres::PgPoolOptions};
+use sqlx::postgres::PgPoolOptions;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -32,39 +38,6 @@ use services::fcm::FcmService;
 use services::whatsapp::WhatsAppService;
 use websocket::{ws_handler, WebSocketBroker};
 
-fn should_repair_migration_history(err: &MigrateError) -> bool {
-    matches!(err, MigrateError::VersionMismatch(_))
-}
-
-async fn run_migrations(pool: &sqlx::PgPool) -> Result<(), MigrateError> {
-    match sqlx::migrate!("./migrations").run(pool).await {
-        Ok(()) => Ok(()),
-        Err(err) if should_repair_migration_history(&err) => {
-            if let MigrateError::VersionMismatch(version) = err {
-                info!("Repairing migration history for version {version} and retrying...");
-                sqlx::query("DELETE FROM _sqlx_migrations WHERE version = $1")
-                    .bind(version)
-                    .execute(pool)
-                    .await
-                    .expect("Failed to reset mismatched migration history");
-            }
-            sqlx::migrate!("./migrations").run(pool).await
-        }
-        Err(err) => Err(err),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn version_mismatch_is_repairable() {
-        let err = MigrateError::VersionMismatch(20240710000000);
-        assert!(should_repair_migration_history(&err));
-    }
-}
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     tracing_subscriber::fmt()
@@ -88,7 +61,8 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to connect to database");
 
     info!("Running database migrations...");
-    run_migrations(&pool)
+    sqlx::migrate!("./migrations")
+        .run(&pool)
         .await
         .expect("Failed to run database migrations");
     info!("Database migrations executed successfully.");

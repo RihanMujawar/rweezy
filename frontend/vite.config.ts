@@ -18,17 +18,17 @@ export default defineConfig(({ command, mode }) => {
 
   const plugins = [
     tailwindcss(),
-                            tsconfigPaths({ projects: ["./tsconfig.json"] }),
-                            tanstackStart({
-                              importProtection: {
-                                behavior: "error",
-                                client: {
-                                  files: ["**/server/**"],
-                                  specifiers: ["server-only"],
-                                },
-                              },
-                            }),
-                            viteReact(),
+    tsconfigPaths({ projects: ["./tsconfig.json"] }),
+    tanstackStart({
+      importProtection: {
+        behavior: "error",
+        client: {
+          files: ["**/server/**"],
+          specifiers: ["server-only"],
+        },
+      },
+    }),
+    viteReact(),
   ];
 
   return {
@@ -52,9 +52,6 @@ export default defineConfig(({ command, mode }) => {
       host: "::",
       port: 3000,
       strictPort: true,
-      allowedHosts: [
-        'unregularized-schizogonous-babette.ngrok-free.dev'
-      ],
       proxy: {
         "/api": {
           target: process.env.BACKEND_URL || "http://127.0.0.1:4000",

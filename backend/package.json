@@ -1,0 +1,27 @@
+{
+  "name": "rweezy-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.mjs",
+    "start": "node server.mjs",
+    "build": "node --check server.mjs"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "6.19.0",
+    "@prisma/client": "6.19.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "bcryptjs": "^3.0.3",
+    "firebase-admin": "^14.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0",
+    "prisma": "6.19.0",
+    "qrcode-terminal": "^0.12.0",
+    "serverless-http": "^4.0.0",
+    "socket.io": "^4.8.3",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "dotenv": "^17.4.2"
+  }
+}

@@ -1,68 +1,113 @@
-# Rweezy
+# Rweezy - Multi-Service Delivery Platform
 
-Rweezy is a comprehensive multi-service delivery platform supporting Food, Grocery, Ride-booking, and Package delivery. It features a high-performance Rust backend, a modern React frontend, and a WhatsApp integration service.
+Rweezy is a full-stack delivery marketplace for food delivery, grocery delivery, ride booking, and package transfer. The project includes role-based experiences for customers, riders, delivery partners, restaurant managers, grocery store managers, and admins.
 
-## 🚀 Quick Deployment (EC2)
+The platform consists of three main components:
+- **Web Application**: React 19 frontend with TypeScript, Vite, TanStack Router, TanStack Query, Tailwind CSS 4
+- **Android Application**: Native Kotlin app with Jetpack Compose UI
+- **Backend**: Node.js ESM server with PostgreSQL (via Prisma), JWT Auth, Socket.io for real-time updates, Mapbox maps and routing
+- **Docker**: Production packaging for the web platform
 
-If you are deploying to an Ubuntu EC2 instance, you can use the automated script to set up the Database, Backend, and Frontend in one go:
+## Tech Stack
+
+| Area | Tools |
+| --- | --- |
+| Web Frontend | React 19, TypeScript, Vite, TanStack Router, TanStack Query |
+| Mobile App | Kotlin, Jetpack Compose, Android Jetpack, Material Design 3 |
+| UI (Web) | Tailwind CSS 4, Radix UI primitives, lucide-react, sonner, shadcn/ui components |
+| Maps | Mapbox GL, Mapbox Geocoding, Mapbox Directions |
+| Forms | React Hook Form, Zod validation |
+| Backend | Node.js ESM HTTP server, Prisma ORM, Socket.io |
+| Database | PostgreSQL |
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20+
+- PostgreSQL database
+- Mapbox access token
+- (Optional) OpenWA for WhatsApp notifications
+
+### Setup
+
+1.  **Clone the repository**
+2.  **Install dependencies**:
+    ```bash
+    npm install
+    cd backend && npm install
+    cd ../frontend && npm install
+    ```
+3.  **Environment Variables**:
+    Create a `.env` file in the root directory based on `.env.example`.
+    ```bash
+    DATABASE_URL="postgresql://user:password@localhost:5432/rweezy"
+    JWT_SECRET="your-secret-key"
+    MAPBOX_ACCESS_TOKEN="your-mapbox-token"
+    ```
+4.  **Database Migration**:
+    ```bash
+    cd backend
+    npx prisma migrate dev
+    ```
+5.  **Run Development Server**:
+    ```bash
+    npm run dev
+    ```
+
+## Project Structure
+
+- `frontend/`: React application
+- `backend/`: Node.js server
+  - `prisma/`: Database schema and migrations
+  - `lib/`: Shared utilities (auth, notifications, etc.)
+  - `server.mjs`: Main server entry and API routes
+- `android/`: Native Android application
+
+## Core Schema
+
+The application uses Prisma to interact with PostgreSQL. The main models include:
+- `User` and `Profile`: Identity and user metadata
+- `UserRole`: RBAC (customer, admin, hotel_manager, etc.)
+- `Restaurant` and `MenuItem`: Catalog for food delivery
+- `GroceryStore` and `GroceryItem`: Catalog for grocery delivery
+- `FoodOrder`, `GroceryOrder`, `Ride`, `PackageDelivery`: Core business transactions
+- `ChatMessage`: Real-time communication during active jobs
+- `OrderReview`: Customer feedback
+- `PlatformSetting`: Configuration like commission rates
+
+## Real-time Updates
+
+Real-time features like order tracking and chat are powered by **Socket.io**.
+- The backend emits events on `order_updated`, `new_message`, and `new_review`.
+- The frontend uses the `useOrderRealtime` hook and Socket.io client to listen for updates.
+
+## Authentication
+
+Custom JWT-based authentication is implemented:
+- Passwords are hashed using `bcryptjs`.
+- JWTs are stored in cookies (`rweezy_access_token`) for secure session management.
+- Supports phone-first registration with WhatsApp OTP verification.
+
+## Build For Production
 
 ```bash
-git clone https://github.com/your-username/rweezy.git
-cd rweezy
-chmod +x deploy.sh
-./deploy.sh
+npm run build
+npm run start
 ```
 
-For detailed manual instructions, see [SETUP_GUIDE.md](./SETUP_GUIDE.md).
+Production server behavior:
+- Serves `/api/*` from the backend
+- Serves built frontend assets from `frontend/dist/client`
+- Uses the frontend server entry from `frontend/dist/server/index.js` when available
+- Falls back to `index.html` for SPA routes
 
-## 📁 Project Structure
+## Contributing
 
-- `frontend/`: Vite + React + TypeScript web app.
-- `backend-rust/`: Rust Actix Web API server.
-- `backend-rust/whatsapp-sidecar/`: Node.js service for WhatsApp integrations.
-- `nginx.conf`: Production server configuration.
-- `deploy.sh`: All-in-one deployment script for Linux/EC2.
+1. Keep changes scoped to one feature or fix
+2. Run `npm run format`, `npm test`, `npm run lint`, and `npm run build` before opening a pull request
+3. Update `prisma/schema.prisma` when schema changes are required
 
-## 🛠️ Tech Stack
+## License
 
-- **Frontend**: React 19, TypeScript, Vite, TanStack Router, Tailwind CSS.
-- **Backend**: Rust, Actix Web, SQLx, PostgreSQL.
-- **Messaging**: WhatsApp sidecar (Node.js/Baileys).
-- **Infrastructure**: Nginx, Systemd.
-
-## 💻 Local Development
-
-### 1. Database
-Ensure PostgreSQL is running and create the database:
-```bash
-createdb rweezy
-```
-
-### 2. Backend
-```bash
-cd backend-rust
-# Create .env with DATABASE_URL and JWT_SECRET
-cargo run
-```
-*Migrations are applied automatically on startup.*
-
-### 3. Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### 4. WhatsApp Sidecar (Optional)
-```bash
-cd backend-rust/whatsapp-sidecar
-npm install
-npm run dev
-```
-
-## 📄 Documentation
-- [Full Setup & Deployment Guide](./SETUP_GUIDE.md)
-- [Nginx Configuration](./nginx.conf)
-
-## 📝 License
-Proprietary / Internal use only.
+No license file is currently included in this repository. Add one before distributing or publishing the project.

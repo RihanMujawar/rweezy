@@ -23,12 +23,6 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [needsManualEntry, setNeedsManualEntry] = useState(false);
 
   const detectLocation = async () => {
-    if (typeof window !== "undefined" && !window.isSecureContext && window.location.hostname !== "localhost") {
-      setError("Location requires a secure (HTTPS) connection to work on mobile devices.");
-      setNeedsManualEntry(true);
-      return;
-    }
-
     if (!navigator.geolocation) {
       setError("Geolocation is not supported by your browser");
       return;

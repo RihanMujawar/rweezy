@@ -95,164 +95,6 @@ function statusBadgeClass(status: string) {
 
 const ACTIVE = (s: string) => s !== "delivered" && s !== "completed" && s !== "cancelled";
 
-const Empty = ({
-  msg,
-  cta,
-  to,
-}: {
-  msg: string;
-  cta: string;
-  to: "/app/food" | "/app/grocery" | "/app/ride" | "/app/package";
-}) => (
-  <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed bg-card/50 p-12 text-center backdrop-blur-sm">
-    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 ring-8 ring-primary/5">
-      <ShoppingBag className="h-10 w-10 text-primary" />
-    </div>
-    <h3 className="mt-6 text-xl font-semibold tracking-tight">{msg}</h3>
-    <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-      You haven't placed any orders in this category yet. Start exploring our services!
-    </p>
-    <Button asChild size="lg" className="mt-8 rounded-full px-8 shadow-lg shadow-primary/20">
-      <Link to={to}>{cta}</Link>
-    </Button>
-  </div>
-);
-
-const Card = ({
-  title,
-  status,
-  sub,
-  meta,
-  amount,
-  trackHref,
-  reorderHref,
-  isMobile,
-  cancelling,
-  onCancel,
-}: {
-  title: string;
-  status: string;
-  sub: string;
-  meta: string;
-  amount: string;
-  trackHref?: { kind: "food" | "grocery" | "ride" | "package"; id: string };
-  reorderHref?: "/app/food" | "/app/grocery" | "/app/ride" | "/app/package";
-  isMobile: boolean;
-  cancelling: string | null;
-  onCancel: (kind: "food" | "grocery" | "ride" | "package", id: string) => void;
-}) => (
-  <div className="rounded-xl border bg-card p-4">
-    <div className="flex items-center justify-between gap-2">
-      <h3 className="font-semibold">{title}</h3>
-      <Badge variant="outline" className={statusBadgeClass(status)}>
-        {status.replaceAll("_", " ")}
-      </Badge>
-    </div>
-    <p className="mt-1 text-sm text-muted-foreground">{sub}</p>
-    <div className="mt-3 flex items-center justify-between gap-2">
-      <span className="text-xs text-muted-foreground">{meta}</span>
-      <div className="flex items-center gap-2">
-        <span className="font-medium">{amount}</span>
-        {isMobile && trackHref ? (
-          <Drawer>
-            <DrawerTrigger asChild>
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-11 w-11"
-                aria-label="Order actions"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DrawerTrigger>
-            <DrawerContent>
-              <DrawerHeader>
-                <DrawerTitle>Order actions</DrawerTitle>
-              </DrawerHeader>
-              <DrawerFooter>
-                {ACTIVE(status) && (
-                  <Button asChild className="min-h-11">
-                    <Link to="/app/track" search={{ id: trackHref.id, kind: trackHref.kind }}>
-                      <ClipboardList className="mr-2 h-4 w-4" /> Track
-                    </Link>
-                  </Button>
-                )}
-                {ACTIVE(status) && (
-                  <Button asChild variant="outline" className="min-h-11">
-                    <Link to="/app/track" search={{ id: trackHref.id, kind: trackHref.kind }}>
-                      <MessageCircle className="mr-2 h-4 w-4" /> Chat
-                    </Link>
-                  </Button>
-                )}
-                {reorderHref && (
-                  <Button asChild variant="outline" className="min-h-11">
-                    <Link to={reorderHref}>
-                      <RefreshCcw className="mr-2 h-4 w-4" /> Reorder
-                    </Link>
-                  </Button>
-                )}
-                {ACTIVE(status) && (
-                  <Button
-                    variant="outline"
-                    className="min-h-11"
-                    disabled={cancelling === trackHref.id}
-                    onClick={() => onCancel(trackHref.kind, trackHref.id)}
-                  >
-                    Cancel
-                  </Button>
-                )}
-                <DrawerClose asChild>
-                  <Button variant="ghost" className="min-h-11">
-                    Close
-                  </Button>
-                </DrawerClose>
-              </DrawerFooter>
-            </DrawerContent>
-          </Drawer>
-        ) : (
-          <>
-            {trackHref && ACTIVE(status) && (
-              <Button asChild size="sm" variant="outline" className="min-h-11">
-                <Link to="/app/track" search={{ id: trackHref.id, kind: trackHref.kind }}>
-                  Track
-                </Link>
-              </Button>
-            )}
-            {trackHref && ACTIVE(status) && (
-              <Button asChild size="sm" variant="outline" className="min-h-11">
-                <Link to="/app/track" search={{ id: trackHref.id, kind: trackHref.kind }}>
-                  Chat
-                </Link>
-              </Button>
-            )}
-            {reorderHref && (
-              <Button asChild size="sm" variant="outline" className="min-h-11">
-                <Link to={reorderHref}>Reorder</Link>
-              </Button>
-            )}
-            {trackHref && ACTIVE(status) && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="min-h-11"
-                disabled={cancelling === trackHref.id}
-                onClick={() => onCancel(trackHref.kind, trackHref.id)}
-              >
-                Cancel
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-    {ACTIVE(status) && (
-      <p className="mt-3 text-xs text-muted-foreground">
-        Cancellation is available before pickup or trip start.
-      </p>
-    )}
-  </div>
-);
-
 function MyOrders() {
   const { user } = useAuth();
   const [food, setFood] = useState<FoodOrder[]>([]);
@@ -295,7 +137,30 @@ function MyOrders() {
     };
   }, [user]);
 
-  const handleCancel = async (kind: "food" | "grocery" | "ride" | "package", id: string) => {
+  const Empty = ({
+    msg,
+    cta,
+    to,
+  }: {
+    msg: string;
+    cta: string;
+    to: "/app/food" | "/app/grocery" | "/app/ride" | "/app/package";
+  }) => (
+    <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed bg-card/50 p-12 text-center backdrop-blur-sm">
+      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 ring-8 ring-primary/5">
+        <ShoppingBag className="h-10 w-10 text-primary" />
+      </div>
+      <h3 className="mt-6 text-xl font-semibold tracking-tight">{msg}</h3>
+      <p className="mt-2 max-w-xs text-sm text-muted-foreground">
+        You haven't placed any orders in this category yet. Start exploring our services!
+      </p>
+      <Button asChild size="lg" className="mt-8 rounded-full px-8 shadow-lg shadow-primary/20">
+        <Link to={to}>{cta}</Link>
+      </Button>
+    </div>
+  );
+
+  const cancel = async (kind: "food" | "grocery" | "ride" | "package", id: string) => {
     const reason = window.prompt("Reason for cancellation?", "Changed my mind");
     if (reason === null) return;
     setCancelling(id);
@@ -313,6 +178,135 @@ function MyOrders() {
       setCancelling(null);
     }
   };
+
+  const Card = ({
+    title,
+    status,
+    sub,
+    meta,
+    amount,
+    trackHref,
+    reorderHref,
+  }: {
+    title: string;
+    status: string;
+    sub: string;
+    meta: string;
+    amount: string;
+    trackHref?: { kind: "food" | "grocery" | "ride" | "package"; id: string };
+    reorderHref?: "/app/food" | "/app/grocery" | "/app/ride" | "/app/package";
+  }) => (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-semibold">{title}</h3>
+        <Badge variant="outline" className={statusBadgeClass(status)}>
+          {status.replaceAll("_", " ")}
+        </Badge>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">{sub}</p>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">{meta}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{amount}</span>
+          {isMobile && trackHref ? (
+            <Drawer>
+              <DrawerTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="h-11 w-11"
+                  aria-label="Order actions"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent>
+                <DrawerHeader>
+                  <DrawerTitle>Order actions</DrawerTitle>
+                </DrawerHeader>
+                <DrawerFooter>
+                  {ACTIVE(status) && (
+                    <Button asChild className="min-h-11">
+                      <Link to="/app/track" search={{ id: trackHref.id, kind: trackHref.kind }}>
+                        <ClipboardList className="mr-2 h-4 w-4" /> Track
+                      </Link>
+                    </Button>
+                  )}
+                  {ACTIVE(status) && (
+                    <Button asChild variant="outline" className="min-h-11">
+                      <Link to="/app/track" search={{ id: trackHref.id, kind: trackHref.kind }}>
+                        <MessageCircle className="mr-2 h-4 w-4" /> Chat
+                      </Link>
+                    </Button>
+                  )}
+                  {reorderHref && (
+                    <Button asChild variant="outline" className="min-h-11">
+                      <Link to={reorderHref}>
+                        <RefreshCcw className="mr-2 h-4 w-4" /> Reorder
+                      </Link>
+                    </Button>
+                  )}
+                  {ACTIVE(status) && (
+                    <Button
+                      variant="outline"
+                      className="min-h-11"
+                      disabled={cancelling === trackHref.id}
+                      onClick={() => cancel(trackHref.kind, trackHref.id)}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <DrawerClose asChild>
+                    <Button variant="ghost" className="min-h-11">
+                      Close
+                    </Button>
+                  </DrawerClose>
+                </DrawerFooter>
+              </DrawerContent>
+            </Drawer>
+          ) : (
+            <>
+              {trackHref && ACTIVE(status) && (
+                <Button asChild size="sm" variant="outline" className="min-h-11">
+                  <Link to="/app/track" search={{ id: trackHref.id, kind: trackHref.kind }}>
+                    Track
+                  </Link>
+                </Button>
+              )}
+              {trackHref && ACTIVE(status) && (
+                <Button asChild size="sm" variant="outline" className="min-h-11">
+                  <Link to="/app/track" search={{ id: trackHref.id, kind: trackHref.kind }}>
+                    Chat
+                  </Link>
+                </Button>
+              )}
+              {reorderHref && (
+                <Button asChild size="sm" variant="outline" className="min-h-11">
+                  <Link to={reorderHref}>Reorder</Link>
+                </Button>
+              )}
+              {trackHref && ACTIVE(status) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11"
+                  disabled={cancelling === trackHref.id}
+                  onClick={() => cancel(trackHref.kind, trackHref.id)}
+                >
+                  Cancel
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+      {ACTIVE(status) && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Cancellation is available before pickup or trip start.
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -348,9 +342,6 @@ function MyOrders() {
                     amount={`₹${Number(o.total).toFixed(0)}`}
                     trackHref={{ kind: "food", id: o.id }}
                     reorderHref="/app/food"
-                    isMobile={isMobile}
-                    cancelling={cancelling}
-                    onCancel={handleCancel}
                   />
                 ))}
               </div>
@@ -372,9 +363,6 @@ function MyOrders() {
                     amount={`₹${Number(o.total).toFixed(0)}`}
                     trackHref={{ kind: "grocery", id: o.id }}
                     reorderHref="/app/grocery"
-                    isMobile={isMobile}
-                    cancelling={cancelling}
-                    onCancel={handleCancel}
                   />
                 ))}
               </div>
@@ -396,9 +384,6 @@ function MyOrders() {
                     amount={o.fare_estimate ? `₹${Number(o.fare_estimate).toFixed(0)}` : "—"}
                     trackHref={{ kind: "ride", id: o.id }}
                     reorderHref="/app/ride"
-                    isMobile={isMobile}
-                    cancelling={cancelling}
-                    onCancel={handleCancel}
                   />
                 ))}
               </div>
@@ -420,9 +405,6 @@ function MyOrders() {
                     amount={o.fare_estimate ? `₹${Number(o.fare_estimate).toFixed(0)}` : "—"}
                     trackHref={{ kind: "package", id: o.id }}
                     reorderHref="/app/package"
-                    isMobile={isMobile}
-                    cancelling={cancelling}
-                    onCancel={handleCancel}
                   />
                 ))}
               </div>

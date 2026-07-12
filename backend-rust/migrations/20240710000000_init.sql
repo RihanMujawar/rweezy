@@ -7,7 +7,7 @@ SET search_path TO rweezy, public;
 -- Create custom AppRole enum
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE t.typname = 'approle' AND n.nspname = 'rweezy') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.pg_namespace = n.oid WHERE t.typname = 'approle' AND n.nspname = 'rweezy') THEN
         CREATE TYPE rweezy.AppRole AS ENUM ('customer', 'admin', 'hotel_manager', 'grocery_manager', 'delivery_boy', 'rider');
     END IF;
 END$$;
@@ -15,7 +15,7 @@ END$$;
 -- Create custom OrderStatus enum
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE t.typname = 'orderstatus' AND n.nspname = 'rweezy') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.pg_namespace = n.oid WHERE t.typname = 'orderstatus' AND n.nspname = 'rweezy') THEN
         CREATE TYPE rweezy.OrderStatus AS ENUM ('pending', 'accepted', 'preparing', 'ready', 'picked_up', 'delivered', 'cancelled');
     END IF;
 END$$;
@@ -23,7 +23,7 @@ END$$;
 -- Create custom RideStatus enum
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE t.typname = 'ridestatus' AND n.nspname = 'rweezy') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.pg_namespace = n.oid WHERE t.typname = 'ridestatus' AND n.nspname = 'rweezy') THEN
         CREATE TYPE rweezy.RideStatus AS ENUM ('requested', 'accepted', 'started', 'completed', 'cancelled');
     END IF;
 END$$;
@@ -31,7 +31,7 @@ END$$;
 -- Create custom ServiceKind enum
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE t.typname = 'servicekind' AND n.nspname = 'rweezy') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.pg_namespace = n.oid WHERE t.typname = 'servicekind' AND n.nspname = 'rweezy') THEN
         CREATE TYPE rweezy.ServiceKind AS ENUM ('ride', 'package', 'food', 'grocery');
     END IF;
 END$$;
@@ -39,7 +39,7 @@ END$$;
 -- Create custom RoleRequestStatus enum
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE t.typname = 'rolerequeststatus' AND n.nspname = 'rweezy') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.pg_namespace = n.oid WHERE t.typname = 'rolerequeststatus' AND n.nspname = 'rweezy') THEN
         CREATE TYPE rweezy.RoleRequestStatus AS ENUM ('pending', 'approved', 'rejected');
     END IF;
 END$$;

@@ -1,0 +1,37 @@
+{
+  "name": "rweezy-fullstack",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "setup": "node scripts/setup.mjs",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "start": "npm --prefix backend run start",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
+    "lint": "npm --prefix frontend run lint",
+    "test": "npx tsx --test tests/run-tests.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:full": "npm run build && npm run seed:demo && npm run test:e2e",
+    "format": "npm --prefix frontend run format",
+    "seed:demo": "node backend/seed-demo-users.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "serverless": "^4.38.1",
+    "serverless-s3-sync": "^3.5.1",
+    "tsx": "^4.23.0"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^6.19.0",
+    "@prisma/client": "^6.19.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0",
+    "pino": "^10.3.1",
+    "zod": "^4.4.3"
+  }
+}
