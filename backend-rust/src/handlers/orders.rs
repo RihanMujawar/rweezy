@@ -454,7 +454,7 @@ pub async fn get_my_orders(
                 let customer_id: Uuid = row.get("customer_id");
                 let restaurant_id: Uuid = row.get("restaurant_id");
                 let delivery_boy_id: Option<Uuid> = row.get("delivery_boy_id");
-                let status: OrderStatus = row.get("status");
+                let status: OrderStatus = row.try_get("status").unwrap_or(OrderStatus::Pending);
                 let total: rust_decimal::Decimal = row.get("total");
                 let delivery_address: String = row.get("delivery_address");
                 let delivery_lat: Option<f64> = row.get("delivery_lat");
@@ -547,7 +547,7 @@ pub async fn get_my_orders(
                 let customer_id: Uuid = row.get("customer_id");
                 let store_id: Uuid = row.get("store_id");
                 let delivery_boy_id: Option<Uuid> = row.get("delivery_boy_id");
-                let status: OrderStatus = row.get("status");
+                let status: OrderStatus = row.try_get("status").unwrap_or(OrderStatus::Pending);
                 let total: rust_decimal::Decimal = row.get("total");
                 let delivery_address: String = row.get("delivery_address");
                 let delivery_lat: Option<f64> = row.get("delivery_lat");
@@ -643,7 +643,7 @@ pub async fn get_my_orders(
                 let drop_address: String = row.get("drop_address");
                 let drop_lat: f64 = row.get("drop_lat");
                 let drop_lng: f64 = row.get("drop_lng");
-                let status: RideStatus = row.get("status");
+                let status: RideStatus = row.try_get("status").unwrap_or(RideStatus::Requested);
                 let fare_estimate: Option<rust_decimal::Decimal> = row.get("fare_estimate");
                 let notes: Option<String> = row.get("notes");
                 let vehicle_type: String = row.get("vehicle_type");
@@ -733,7 +733,7 @@ pub async fn get_my_orders(
                 let receiver_name: Option<String> = row.get("receiver_name");
                 let receiver_phone: Option<String> = row.get("receiver_phone");
                 let notes: Option<String> = row.get("notes");
-                let status: RideStatus = row.get("status");
+                let status: RideStatus = row.try_get("status").unwrap_or(RideStatus::Requested);
                 let fare_estimate: Option<rust_decimal::Decimal> = row.get("fare_estimate");
                 let payment_method: String = row.get("payment_method");
                 let payment_status: String = row.get("payment_status");
@@ -867,7 +867,7 @@ pub async fn track_order(
 
             if let Ok(Some(o)) = row_res {
                 use sqlx::Row;
-                let status: OrderStatus = o.get("status");
+                let status: OrderStatus = o.try_get("status").unwrap_or(OrderStatus::Pending);
                 let total: rust_decimal::Decimal = o.get("total");
                 let delivery_address: String = o.get("delivery_address");
                 let delivery_lat: Option<f64> = o.get("delivery_lat");
@@ -951,7 +951,7 @@ pub async fn track_order(
 
             if let Ok(Some(o)) = row_res {
                 use sqlx::Row;
-                let status: OrderStatus = o.get("status");
+                let status: OrderStatus = o.try_get("status").unwrap_or(OrderStatus::Pending);
                 let total: rust_decimal::Decimal = o.get("total");
                 let delivery_address: String = o.get("delivery_address");
                 let delivery_lat: Option<f64> = o.get("delivery_lat");
@@ -1033,7 +1033,7 @@ pub async fn track_order(
 
             if let Ok(Some(r)) = row_res {
                 use sqlx::Row;
-                let status: RideStatus = r.get("status");
+                let status: RideStatus = r.try_get("status").unwrap_or(RideStatus::Requested);
                 let fare_estimate: Option<rust_decimal::Decimal> = r.get("fare_estimate");
                 let pickup_address: String = r.get("pickup_address");
                 let pickup_lat: f64 = r.get("pickup_lat");
@@ -1111,7 +1111,7 @@ pub async fn track_order(
 
             if let Ok(Some(p)) = row_res {
                 use sqlx::Row;
-                let status: RideStatus = p.get("status");
+                let status: RideStatus = p.try_get("status").unwrap_or(RideStatus::Requested);
                 let fare_estimate: Option<rust_decimal::Decimal> = p.get("fare_estimate");
                 let pickup_address: String = p.get("pickup_address");
                 let pickup_lat: f64 = p.get("pickup_lat");
@@ -1201,7 +1201,7 @@ pub async fn get_available_deliveries(pool: web::Data<PgPool>) -> impl Responder
             .map(|o| {
                 use sqlx::Row;
                 let id: Uuid = o.get("id");
-                let status: OrderStatus = o.get("status");
+                let status: OrderStatus = o.try_get("status").unwrap_or(OrderStatus::Pending);
                 let total: rust_decimal::Decimal = o.get("total");
                 let delivery_address: String = o.get("delivery_address");
                 let pickup_address: Option<String> = o.get("pickup_address");
@@ -1244,7 +1244,7 @@ pub async fn get_available_deliveries(pool: web::Data<PgPool>) -> impl Responder
             .map(|o| {
                 use sqlx::Row;
                 let id: Uuid = o.get("id");
-                let status: OrderStatus = o.get("status");
+                let status: OrderStatus = o.try_get("status").unwrap_or(OrderStatus::Pending);
                 let total: rust_decimal::Decimal = o.get("total");
                 let delivery_address: String = o.get("delivery_address");
                 let pickup_address: Option<String> = o.get("pickup_address");
@@ -1304,7 +1304,7 @@ pub async fn get_active_deliveries(
             .map(|o| {
                 use sqlx::Row;
                 let id: Uuid = o.get("id");
-                let status: OrderStatus = o.get("status");
+                let status: OrderStatus = o.try_get("status").unwrap_or(OrderStatus::Pending);
                 let total: rust_decimal::Decimal = o.get("total");
                 let delivery_address: String = o.get("delivery_address");
                 let pickup_address: Option<String> = o.get("pickup_address");
@@ -1351,7 +1351,7 @@ pub async fn get_active_deliveries(
             .map(|o| {
                 use sqlx::Row;
                 let id: Uuid = o.get("id");
-                let status: OrderStatus = o.get("status");
+                let status: OrderStatus = o.try_get("status").unwrap_or(OrderStatus::Pending);
                 let total: rust_decimal::Decimal = o.get("total");
                 let delivery_address: String = o.get("delivery_address");
                 let pickup_address: Option<String> = o.get("pickup_address");
@@ -1459,7 +1459,7 @@ pub async fn advance_delivery(
         let _row = match row_res {
             Ok(Some(r)) => {
                 use sqlx::Row;
-                let status_val: OrderStatus = r.get("status");
+                let status_val: OrderStatus = r.try_get("status").unwrap_or(OrderStatus::Pending);
                 current_status_str = status_val.as_str().to_string();
                 expected_pin = r.get("delivery_pin");
                 current_boy = r.get("delivery_boy_id");
@@ -1481,7 +1481,7 @@ pub async fn advance_delivery(
         let _row = match row_res {
             Ok(Some(r)) => {
                 use sqlx::Row;
-                let status_val: OrderStatus = r.get("status");
+                let status_val: OrderStatus = r.try_get("status").unwrap_or(OrderStatus::Pending);
                 current_status_str = status_val.as_str().to_string();
                 expected_pin = r.get("delivery_pin");
                 current_boy = r.get("delivery_boy_id");

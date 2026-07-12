@@ -188,7 +188,7 @@ pub async fn get_rider_jobs(
                 let drop_address: String = r.get("drop_address");
                 let drop_lat: f64 = r.get("drop_lat");
                 let drop_lng: f64 = r.get("drop_lng");
-                let status: RideStatus = r.get("status");
+                let status: RideStatus = r.try_get("status").unwrap_or(RideStatus::Requested);
                 let fare_estimate: Option<rust_decimal::Decimal> = r.get("fare_estimate");
                 let vehicle_type: String = r.get("vehicle_type");
                 let created_at: chrono::DateTime<chrono::Utc> = r.get("created_at");
@@ -242,7 +242,7 @@ pub async fn get_rider_jobs(
                 let package_size: String = p.get("package_size");
                 let receiver_name: Option<String> = p.get("receiver_name");
                 let receiver_phone: Option<String> = p.get("receiver_phone");
-                let status: RideStatus = p.get("status");
+                let status: RideStatus = p.try_get("status").unwrap_or(RideStatus::Requested);
                 let fare_estimate: Option<rust_decimal::Decimal> = p.get("fare_estimate");
                 let created_at: chrono::DateTime<chrono::Utc> = p.get("created_at");
                 let customer_name: Option<String> = p.get("customer_name");
@@ -487,7 +487,7 @@ pub async fn advance_rider_job(
         match row_res {
             Ok(Some(r)) => {
                 use sqlx::Row;
-                let status_val: RideStatus = r.get("status");
+                let status_val: RideStatus = r.try_get("status").unwrap_or(RideStatus::Requested);
                 current_status_str = status_val.as_str().to_string();
                 expected_pin = r.get("delivery_pin");
                 current_rider = r.get("rider_id");
@@ -508,7 +508,7 @@ pub async fn advance_rider_job(
         match row_res {
             Ok(Some(r)) => {
                 use sqlx::Row;
-                let status_val: RideStatus = r.get("status");
+                let status_val: RideStatus = r.try_get("status").unwrap_or(RideStatus::Requested);
                 current_status_str = status_val.as_str().to_string();
                 expected_pin = r.get("delivery_pin");
                 current_rider = r.get("rider_id");
@@ -650,7 +650,7 @@ pub async fn get_rider_history(
                 let id: Uuid = r.get("id");
                 let pickup_address: String = r.get("pickup_address");
                 let drop_address: String = r.get("drop_address");
-                let status: RideStatus = r.get("status");
+                let status: RideStatus = r.try_get("status").unwrap_or(RideStatus::Requested);
                 let fare_estimate: Option<rust_decimal::Decimal> = r.get("fare_estimate");
                 let created_at: chrono::DateTime<chrono::Utc> = r.get("created_at");
                 let customer_name: Option<String> = r.get("customer_name");
@@ -692,7 +692,7 @@ pub async fn get_rider_history(
                 let id: Uuid = p.get("id");
                 let pickup_address: String = p.get("pickup_address");
                 let drop_address: String = p.get("drop_address");
-                let status: RideStatus = p.get("status");
+                let status: RideStatus = p.try_get("status").unwrap_or(RideStatus::Requested);
                 let fare_estimate: Option<rust_decimal::Decimal> = p.get("fare_estimate");
                 let created_at: chrono::DateTime<chrono::Utc> = p.get("created_at");
                 let customer_name: Option<String> = p.get("customer_name");

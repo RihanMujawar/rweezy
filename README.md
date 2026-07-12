@@ -1,113 +1,90 @@
-# Rweezy - Multi-Service Delivery Platform
+# Rweezy
 
-Rweezy is a full-stack delivery marketplace for food delivery, grocery delivery, ride booking, and package transfer. The project includes role-based experiences for customers, riders, delivery partners, restaurant managers, grocery store managers, and admins.
+Rweezy is a multi-service delivery platform with a React frontend, a Rust Actix backend, and a WhatsApp sidecar service. The app supports food and grocery ordering, delivery management, ride booking, and package delivery.
 
-The platform consists of three main components:
-- **Web Application**: React 19 frontend with TypeScript, Vite, TanStack Router, TanStack Query, Tailwind CSS 4
-- **Android Application**: Native Kotlin app with Jetpack Compose UI
-- **Backend**: Node.js ESM server with PostgreSQL (via Prisma), JWT Auth, Socket.io for real-time updates, Mapbox maps and routing
-- **Docker**: Production packaging for the web platform
+## Project structure
 
-## Tech Stack
+- frontend/: Vite + React + TypeScript web app
+- backend-rust/: Rust Actix Web API server
+- backend-rust/whatsapp-sidecar/: Node.js sidecar for WhatsApp integrations
+- backend-rust/migrations/: SQLx database migrations
 
-| Area | Tools |
-| --- | --- |
-| Web Frontend | React 19, TypeScript, Vite, TanStack Router, TanStack Query |
-| Mobile App | Kotlin, Jetpack Compose, Android Jetpack, Material Design 3 |
-| UI (Web) | Tailwind CSS 4, Radix UI primitives, lucide-react, sonner, shadcn/ui components |
-| Maps | Mapbox GL, Mapbox Geocoding, Mapbox Directions |
-| Forms | React Hook Form, Zod validation |
-| Backend | Node.js ESM HTTP server, Prisma ORM, Socket.io |
-| Database | PostgreSQL |
+## Tech stack
 
-## Getting Started
+- Frontend: React 19, TypeScript, Vite, TanStack Router, Tailwind CSS
+- Backend: Rust, Actix Web, SQLx, PostgreSQL
+- Messaging: WhatsApp sidecar service
 
-### Prerequisites
+## Prerequisites
 
+- Rust 1.75+
 - Node.js 20+
-- PostgreSQL database
-- Mapbox access token
-- (Optional) OpenWA for WhatsApp notifications
+- PostgreSQL running locally
+- pkg-config and OpenSSL development headers for Rust builds
 
-### Setup
-
-1.  **Clone the repository**
-2.  **Install dependencies**:
-    ```bash
-    npm install
-    cd backend && npm install
-    cd ../frontend && npm install
-    ```
-3.  **Environment Variables**:
-    Create a `.env` file in the root directory based on `.env.example`.
-    ```bash
-    DATABASE_URL="postgresql://user:password@localhost:5432/rweezy"
-    JWT_SECRET="your-secret-key"
-    MAPBOX_ACCESS_TOKEN="your-mapbox-token"
-    ```
-4.  **Database Migration**:
-    ```bash
-    cd backend
-    npx prisma migrate dev
-    ```
-5.  **Run Development Server**:
-    ```bash
-    npm run dev
-    ```
-
-## Project Structure
-
-- `frontend/`: React application
-- `backend/`: Node.js server
-  - `prisma/`: Database schema and migrations
-  - `lib/`: Shared utilities (auth, notifications, etc.)
-  - `server.mjs`: Main server entry and API routes
-- `android/`: Native Android application
-
-## Core Schema
-
-The application uses Prisma to interact with PostgreSQL. The main models include:
-- `User` and `Profile`: Identity and user metadata
-- `UserRole`: RBAC (customer, admin, hotel_manager, etc.)
-- `Restaurant` and `MenuItem`: Catalog for food delivery
-- `GroceryStore` and `GroceryItem`: Catalog for grocery delivery
-- `FoodOrder`, `GroceryOrder`, `Ride`, `PackageDelivery`: Core business transactions
-- `ChatMessage`: Real-time communication during active jobs
-- `OrderReview`: Customer feedback
-- `PlatformSetting`: Configuration like commission rates
-
-## Real-time Updates
-
-Real-time features like order tracking and chat are powered by **Socket.io**.
-- The backend emits events on `order_updated`, `new_message`, and `new_review`.
-- The frontend uses the `useOrderRealtime` hook and Socket.io client to listen for updates.
-
-## Authentication
-
-Custom JWT-based authentication is implemented:
-- Passwords are hashed using `bcryptjs`.
-- JWTs are stored in cookies (`rweezy_access_token`) for secure session management.
-- Supports phone-first registration with WhatsApp OTP verification.
-
-## Build For Production
+On Debian/Ubuntu/Kali this is usually enough:
 
 ```bash
-npm run build
-npm run start
+sudo apt-get install -y pkg-config libssl-dev
 ```
 
-Production server behavior:
-- Serves `/api/*` from the backend
-- Serves built frontend assets from `frontend/dist/client`
-- Uses the frontend server entry from `frontend/dist/server/index.js` when available
-- Falls back to `index.html` for SPA routes
+## Quick start
 
-## Contributing
+### 1. Start PostgreSQL
 
-1. Keep changes scoped to one feature or fix
-2. Run `npm run format`, `npm test`, `npm run lint`, and `npm run build` before opening a pull request
-3. Update `prisma/schema.prisma` when schema changes are required
+Make sure PostgreSQL is running and a database named `rweezy` exists.
 
-## License
+Example:
 
-No license file is currently included in this repository. Add one before distributing or publishing the project.
+```bash
+createdb rweezy
+```
+
+### 2. Configure environment variables
+
+The Rust backend uses `DATABASE_URL` and other optional values from the environment. A typical local setup is:
+
+```bash
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/rweezy"
+export JWT_SECRET="change-me"
+```
+
+### 3. Run the backend
+
+```bash
+cd backend-rust
+cargo run
+```
+
+The backend will apply the SQLx migrations automatically. If the local database already contains a prior migration record with a checksum mismatch, the startup path will repair that history and retry.
+
+### 4. Run the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 5. Run the WhatsApp sidecar (optional)
+
+```bash
+cd backend-rust/whatsapp-sidecar
+npm install
+npm run dev
+```
+
+## Build checks
+
+```bash
+cd backend-rust
+cargo check
+
+cd ../frontend
+npm run build
+```
+
+## Notes
+
+- The backend currently expects PostgreSQL to be available on `localhost:5432` unless overridden with `DATABASE_URL`.
+- The frontend and backend can be developed independently, but both are required for the full experience.

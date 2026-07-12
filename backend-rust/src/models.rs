@@ -5,7 +5,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
-#[sqlx(type_name = "rweezy.AppRole", rename_all = "snake_case")]
+#[sqlx(type_name = "approle", rename_all = "snake_case")]
 pub enum AppRole {
     Customer,
     Admin,
@@ -29,7 +29,7 @@ impl AppRole {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
-#[sqlx(type_name = "rweezy.OrderStatus", rename_all = "snake_case")]
+#[sqlx(type_name = "orderstatus", rename_all = "snake_case")]
 pub enum OrderStatus {
     Pending,
     Accepted,
@@ -55,7 +55,7 @@ impl OrderStatus {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
-#[sqlx(type_name = "rweezy.RideStatus", rename_all = "snake_case")]
+#[sqlx(type_name = "ridestatus", rename_all = "snake_case")]
 pub enum RideStatus {
     Requested,
     Accepted,
@@ -77,7 +77,7 @@ impl RideStatus {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
-#[sqlx(type_name = "rweezy.ServiceKind", rename_all = "snake_case")]
+#[sqlx(type_name = "servicekind", rename_all = "snake_case")]
 pub enum ServiceKind {
     Ride,
     Package,
@@ -97,7 +97,7 @@ impl ServiceKind {
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
-#[sqlx(type_name = "rweezy.RoleRequestStatus", rename_all = "snake_case")]
+#[sqlx(type_name = "rolerequeststatus", rename_all = "snake_case")]
 pub enum RoleRequestStatus {
     Pending,
     Approved,

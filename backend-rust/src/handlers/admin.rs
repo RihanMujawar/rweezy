@@ -684,7 +684,7 @@ pub async fn get_hotel_orders(
                 let id: Uuid = row.get("id");
                 let customer_id: Uuid = row.get("customer_id");
                 let restaurant_id: Uuid = row.get("restaurant_id");
-                let status: OrderStatus = row.get("status");
+                let status: OrderStatus = row.try_get("status").unwrap_or(OrderStatus::Pending);
                 let total: rust_decimal::Decimal = row.get("total");
                 let delivery_address: String = row.get("delivery_address");
                 let notes: Option<String> = row.get("notes");

@@ -69,8 +69,19 @@ export function ManualLocationDialog({
         url.searchParams.set("format", "json");
         url.searchParams.set("limit", "5");
         url.searchParams.set("countrycodes", "in");
+        url.searchParams.set("addressdetails", "1");
 
-        const response = await fetch(url, { signal: abortControllerRef.current.signal });
+        const response = await fetch(url, {
+          signal: abortControllerRef.current.signal,
+          headers: {
+            "Accept-Language": "en",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Nominatim error: ${response.status}`);
+        }
+
         const data = await response.json();
         const results = data.map((item: any) => ({
           id: item.place_id.toString(),
@@ -89,10 +100,11 @@ export function ManualLocationDialog({
   };
 
   useEffect(() => {
+    const delay = MAPBOX_TOKEN ? 300 : 800; // Nominatim is stricter with rate limits
     const timer = setTimeout(() => {
       if (query) searchPlaces(query);
       else setSuggestions([]);
-    }, 300);
+    }, delay);
     return () => clearTimeout(timer);
   }, [query]);
 
