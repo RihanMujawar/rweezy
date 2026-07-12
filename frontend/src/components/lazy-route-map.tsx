@@ -14,6 +14,9 @@ const DeliveryPinMapLazy = lazy(() =>
 const StaticPointMapLazy = lazy(() =>
   import("@/components/route-map").then((m) => ({ default: m.StaticPointMap })),
 );
+const OrdersMapLazy = lazy(() =>
+  import("@/components/orders-map").then((m) => ({ default: m.OrdersMap })),
+);
 
 function MapFallback({ height = 320 }: { height?: number }) {
   return <div style={{ height }} className="animate-pulse rounded-xl border bg-muted" />;
@@ -23,6 +26,16 @@ export function RouteMap(props: ComponentProps<typeof import("@/components/route
   return (
     <Suspense fallback={<MapFallback height={props.height} />}>
       <RouteMapLazy {...props} />
+    </Suspense>
+  );
+}
+
+export function OrdersMap(
+  props: ComponentProps<typeof import("@/components/orders-map").OrdersMap>,
+) {
+  return (
+    <Suspense fallback={<MapFallback height={props.height} />}>
+      <OrdersMapLazy {...props} />
     </Suspense>
   );
 }

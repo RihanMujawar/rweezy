@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { StaticPointMap, type LatLng } from "./route-map";
+import { StaticPointMap, type LatLng } from "./lazy-route-map";
 import { Button } from "./ui/button";
 import { Phone, MessageSquare, CheckCircle2, X } from "lucide-react";
 import { Badge } from "./ui/badge";

@@ -51,26 +51,8 @@ import { logEvent, logRequestError } from "./lib/logger.mjs";
 import { cleanText, isPublicApiRoute, normalizeIndianPhone } from "./lib/request-utils.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const frontendDistDir = path.join(ROOT_DIR, "frontend", "dist");
-const frontendClientDir = path.join(frontendDistDir, "client");
-const frontendServerEntryPath = path.join(frontendDistDir, "server", "index.js");
 const ACCESS_COOKIE = "rweezy_access_token";
 const REFRESH_COOKIE = "rweezy_refresh_token";
-
-const MIME_TYPES = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".ico": "image/x-icon",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".js": "application/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".map": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".txt": "text/plain; charset=utf-8",
-  ".webp": "image/webp",
-};
 
 function buildPath(pathname, params = {}) {
   const query = new URLSearchParams();
@@ -654,18 +636,6 @@ function mergeResponseHeaders(...headerSets) {
   }
 
   return merged;
-}
-
-let serverEntryPromise;
-
-async function getServerEntry() {
-  if (!serverEntryPromise) {
-    serverEntryPromise = import(frontendServerEntryPath).then(async (mod) =>
-      mod.createServerEntry(mod.default),
-    );
-  }
-
-  return serverEntryPromise;
 }
 
 async function getRoles(userId) {
@@ -3294,97 +3264,6 @@ async function handleApi(req, res, url) {
   );
 }
 
-async function serveClientAsset(req, res, url) {
-  let resolved = path.join(frontendClientDir, url.pathname);
-
-  try {
-    let stats = await fs.stat(resolved);
-    if (stats.isDirectory()) {
-      resolved = path.join(resolved, "index.html");
-      stats = await fs.stat(resolved);
-    }
-
-    const ext = path.extname(resolved).toLowerCase();
-    const contentType = MIME_TYPES[ext] || "application/octet-stream";
-    const content = await fs.readFile(resolved);
-    res.writeHead(200, {
-      "Content-Type": contentType,
-      "Content-Length": content.length,
-    });
-    res.end(content);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function requestToFetchRequest(req, url) {
-  const headers = new Headers();
-
-  for (const [key, value] of Object.entries(req.headers)) {
-    if (Array.isArray(value)) {
-      for (const entry of value) headers.append(key, entry);
-      continue;
-    }
-    if (value !== undefined) headers.set(key, value);
-  }
-
-  const init = {
-    method: req.method,
-    headers,
-  };
-
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
-    const body = Buffer.concat(chunks);
-    if (body.length > 0) {
-      init.body = body;
-      init.duplex = "half";
-    }
-  }
-
-  return new Request(url, init);
-}
-
-async function serveSsr(req, res, url) {
-  const entry = await getServerEntry();
-  const request = await requestToFetchRequest(req, url.toString());
-  const response = await entry.fetch(request);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const headers = {};
-
-  response.headers.forEach((value, key) => {
-    headers[key] = value;
-  });
-
-  res.writeHead(response.status, headers);
-  res.end(buffer);
-}
-
-async function serveFrontend(req, res, url) {
-  const isAssetRequest =
-    url.pathname.startsWith("/assets/") ||
-    url.pathname === "/favicon.ico" ||
-    path.extname(url.pathname) !== "";
-
-  if (isAssetRequest) {
-    const served = await serveClientAsset(req, res, url);
-    if (served) return;
-  }
-
-  try {
-    await fs.stat(frontendServerEntryPath);
-    await serveSsr(req, res, url);
-  } catch {
-    sendText(
-      res,
-      200,
-      "Frontend SSR build not found. Run `npm run build` and then start the backend.",
-    );
-  }
-}
-
 async function mainHandler(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
 
@@ -3400,11 +3279,7 @@ async function mainHandler(req, res) {
       return;
     }
 
-    if (process.env.LAMBDA_TASK_ROOT) {
-       throw new HttpError(404, "Not Found");
-    }
-
-    await serveFrontend(req, res, url);
+    throw new HttpError(404, "Not Found");
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
     const message = error instanceof Error ? error.message : "Unexpected server error";

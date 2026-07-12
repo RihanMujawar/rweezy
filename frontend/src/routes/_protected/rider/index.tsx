@@ -20,7 +20,8 @@ import {
   Map as MapIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { OrdersMap, MapOrder } from "@/components/orders-map";
+import { OrdersMap } from "@/components/lazy-route-map";
+import type { MapOrder } from "@/components/orders-map";
 
 export const Route = createFileRoute("/_protected/rider/")({
   component: RiderList,

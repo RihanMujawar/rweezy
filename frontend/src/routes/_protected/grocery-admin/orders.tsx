@@ -11,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { Bell, BellOff, ClipboardList, IndianRupee, PackageCheck, Phone, Map as MapIcon } from "lucide-react";
 import { useAlertsPreference } from "@/hooks/use-alerts-preference";
-import { OrdersMap, MapOrder } from "@/components/orders-map";
+import { OrdersMap } from "@/components/lazy-route-map";
+import type { MapOrder } from "@/components/orders-map";
 
 export const Route = createFileRoute("/_protected/grocery-admin/orders")({
   component: GroceryOrders,
