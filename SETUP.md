@@ -11,6 +11,32 @@
 
 ## 1. Clone & Install
 
+### Automated setup (recommended)
+
+From the repository root, run:
+
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+This script will:
+- verify required tools are installed
+- create or update the root .env file
+- install frontend and WhatsApp sidecar dependencies
+- fetch Rust dependencies
+- optionally start the backend, sidecar, and frontend services
+
+Useful flags:
+
+```bash
+./setup.sh --setup-only      # configure and install without starting services
+./setup.sh --skip-install    # reuse existing dependencies
+./setup.sh --skip-env        # skip .env creation/update
+```
+
+### Manual setup
+
 ```bash
 git clone <repo-url> rweezy
 cd rweezy
