@@ -289,7 +289,7 @@ ensure_env_file() {
   local db_name="${DB_NAME:-rweezy}"
   local db_url="${DATABASE_URL:-postgresql://${db_user}:${db_password}@${PGHOST:-localhost}:${PGPORT:-5432}/${db_name}}"
   local jwt_secret="${JWT_SECRET:-rweezy-dev-secret-change-me}"
-  local mapbox_token="${MAPBOX_ACCESS_TOKEN:-your-mapbox-public-token}"
+  local mapbox_token="${MAPBOX_ACCESS_TOKEN:-}"
   local whatsapp_secret="${WHATSAPP_OTP_SECRET:-rweezy-whatsapp-secret}"
   local phone_secret="${PHONE_VERIFICATION_SECRET:-rweezy-phone-secret}"
   local email_secret="${EMAIL_OTP_SECRET:-rweezy-email-secret}"
@@ -319,8 +319,6 @@ updates = {
     'DB_USER': f'"{sys.argv[10]}"',
     'DB_PASSWORD': f'"{sys.argv[11]}"',
     'JWT_SECRET': f'"{jwt_secret}"',
-    'MAPBOX_ACCESS_TOKEN': f'"{mapbox_token}"',
-    'VITE_MAPBOX_ACCESS_TOKEN': f'"{mapbox_token}"',
     'WHATSAPP_OTP_SECRET': f'"{whatsapp_secret}"',
     'PHONE_VERIFICATION_SECRET': f'"{phone_secret}"',
     'EMAIL_OTP_SECRET': f'"{email_secret}"',
@@ -425,11 +423,20 @@ setup_database() {
     log "PostgreSQL database '$db_name' already exists"
   fi
 
-  if [[ -n "$db_password" ]]; then
+  if [[ -n "$pg_user" ]]; then
+    if [[ -n "$db_password" ]]; then
+      run_psql_as_postgres "ALTER ROLE \"$pg_user\" WITH LOGIN PASSWORD '$db_password';" >/dev/null 2>&1 || true
+    fi
+
     run_psql_as_postgres "ALTER DATABASE \"$db_name\" OWNER TO \"$pg_user\";" >/dev/null 2>&1 || true
-    run_psql_as_postgres "ALTER SCHEMA public OWNER TO \"$pg_user\";" >/dev/null 2>&1 || true
     run_psql_as_postgres "GRANT ALL PRIVILEGES ON DATABASE \"$db_name\" TO \"$pg_user\";" >/dev/null 2>&1 || true
+    run_psql_as_postgres "ALTER SCHEMA public OWNER TO \"$pg_user\";" >/dev/null 2>&1 || true
     run_psql_as_postgres "GRANT ALL ON SCHEMA public TO \"$pg_user\";" >/dev/null 2>&1 || true
+    run_psql_as_postgres "GRANT CREATE ON SCHEMA public TO \"$pg_user\";" >/dev/null 2>&1 || true
+    run_psql_as_postgres "GRANT ALL ON ALL TABLES IN SCHEMA public TO \"$pg_user\";" >/dev/null 2>&1 || true
+    run_psql_as_postgres "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO \"$pg_user\";" >/dev/null 2>&1 || true
+    run_psql_as_postgres "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO \"$pg_user\";" >/dev/null 2>&1 || true
+    run_psql_as_postgres "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO \"$pg_user\";" >/dev/null 2>&1 || true
   fi
 }
 

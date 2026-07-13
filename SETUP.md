@@ -4,7 +4,7 @@
 
 - **Node.js** 20+
 - **PostgreSQL** database (running on localhost:5432 or your configured port)
-- **Mapbox access token** (free tier works) — [get one here](https://account.mapbox.com/access-tokens/)
+- **No Mapbox token required** — the app uses OpenStreetMap-based geocoding and map tiles
 - **WhatsApp phone number** (for Baileys OTP + notifications)
 
 ---
@@ -90,7 +90,6 @@ Key variables you **must** set:
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `JWT_SECRET` | Random secret for signing auth tokens |
-| `MAPBOX_ACCESS_TOKEN` | Your Mapbox public token |
 | `PHONE_VERIFICATION_SECRET` | Random secret for phone verification tokens |
 
 WhatsApp & OTP variables (see Section 5 for setup):

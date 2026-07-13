@@ -5,7 +5,7 @@ Rweezy is a full-stack delivery marketplace for food delivery, grocery delivery,
 The platform consists of three main components:
 - **Web Application**: React 19 frontend with TypeScript, Vite, TanStack Router, TanStack Query, Tailwind CSS 4
 - **Android Application**: Native Kotlin app with Jetpack Compose UI
-- **Backend**: Node.js ESM server with PostgreSQL (via Prisma), JWT Auth, Socket.io for real-time updates, Mapbox maps and routing
+- **Backend**: Node.js ESM server with PostgreSQL (via Prisma), JWT Auth, Socket.io for real-time updates, and geocoding/navigation via OpenStreetMap-compatible services
 - **Docker**: Production packaging for the web platform
 
 ## Tech Stack
@@ -15,7 +15,7 @@ The platform consists of three main components:
 | Web Frontend | React 19, TypeScript, Vite, TanStack Router, TanStack Query |
 | Mobile App | Kotlin, Jetpack Compose, Android Jetpack, Material Design 3 |
 | UI (Web) | Tailwind CSS 4, Radix UI primitives, lucide-react, sonner, shadcn/ui components |
-| Maps | Mapbox GL, Mapbox Geocoding, Mapbox Directions |
+| Maps | Leaflet maps, OpenStreetMap tiles, geocoding and reverse geocoding |
 | Forms | React Hook Form, Zod validation |
 | Backend | Node.js ESM HTTP server, Prisma ORM, Socket.io |
 | Database | PostgreSQL |
@@ -26,7 +26,7 @@ The platform consists of three main components:
 
 - Node.js 20+
 - PostgreSQL database
-- Mapbox access token
+- No Mapbox token required
 - (Optional) OpenWA for WhatsApp notifications
 
 ### Setup
@@ -43,7 +43,6 @@ The platform consists of three main components:
     ```bash
     DATABASE_URL="postgresql://user:password@localhost:5432/rweezy"
     JWT_SECRET="your-secret-key"
-    MAPBOX_ACCESS_TOKEN="your-mapbox-token"
     ```
 4.  **Database Migration**:
     ```bash

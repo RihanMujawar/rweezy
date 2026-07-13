@@ -10,9 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, MapPin, Loader2, X } from "lucide-react";
 import { useLocation } from "@/lib/location-context";
+import { searchPlaces as searchLocations } from "@/lib/geocoding";
 import { toast } from "sonner";
-
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
 interface Suggestion {
   id: string;
@@ -33,7 +32,7 @@ export function ManualLocationDialog({
   const [loading, setLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const searchPlaces = async (val: string) => {
+  const runSearch = async (val: string) => {
     if (val.length < 3) {
       setSuggestions([]);
       return;
@@ -46,43 +45,13 @@ export function ManualLocationDialog({
 
     setLoading(true);
     try {
-      if (MAPBOX_TOKEN) {
-        const url = new URL(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(val)}.json`
-        );
-        url.searchParams.set("access_token", MAPBOX_TOKEN);
-        url.searchParams.set("autocomplete", "true");
-        url.searchParams.set("limit", "5");
-        url.searchParams.set("country", "IN"); // Prioritize India based on currency memory
-
-        const response = await fetch(url, { signal: abortControllerRef.current.signal });
-        const data = await response.json();
-        const results = (data.features ?? []).map((f: any) => ({
-          id: f.id,
-          label: f.place_name,
-          point: { lat: f.center[1], lng: f.center[0] },
-        }));
-        setSuggestions(results);
-      } else {
-        const url = new URL("https://nominatim.openstreetmap.org/search");
-        url.searchParams.set("q", val);
-        url.searchParams.set("format", "json");
-        url.searchParams.set("limit", "5");
-        url.searchParams.set("countrycodes", "in");
-
-        const response = await fetch(url, { signal: abortControllerRef.current.signal });
-        const data = await response.json();
-        const results = data.map((item: any) => ({
-          id: item.place_id.toString(),
-          label: item.display_name,
-          point: { lat: parseFloat(item.lat), lng: parseFloat(item.lon) },
-        }));
-        setSuggestions(results);
-      }
+      const results = await searchLocations(val, undefined, abortControllerRef.current.signal);
+      setSuggestions(results ?? []);
     } catch (err: any) {
       if (err.name !== "AbortError") {
         console.error("Search failed", err);
       }
+      setSuggestions([]);
     } finally {
       setLoading(false);
     }
@@ -90,7 +59,7 @@ export function ManualLocationDialog({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (query) searchPlaces(query);
+      if (query) runSearch(query);
       else setSuggestions([]);
     }, 300);
     return () => clearTimeout(timer);

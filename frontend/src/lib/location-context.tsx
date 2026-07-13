@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { LatLng } from "./geo";
+import { reverseGeocode } from "./geocoding";
 
 interface LocationContextType {
   location: LatLng | null;
@@ -42,22 +43,9 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
           // Try to reverse geocode
           try {
-            const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-            if (MAPBOX_TOKEN) {
-              const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${newLoc.lng},${newLoc.lat}.json?access_token=${MAPBOX_TOKEN}&limit=1`;
-              const res = await fetch(url);
-              const data = await res.json();
-              if (data.features?.[0]) {
-                setAddress(data.features[0].place_name);
-              }
-            } else {
-               // Fallback to Nominatim
-               const url = `https://nominatim.openstreetmap.org/reverse?lat=${newLoc.lat}&lon=${newLoc.lng}&format=json`;
-               const res = await fetch(url);
-               const data = await res.json();
-               if (data.display_name) {
-                 setAddress(data.display_name);
-               }
+            const address = await reverseGeocode(newLoc);
+            if (address) {
+              setAddress(address);
             }
           } catch (e) {
             console.error("Reverse geocoding failed", e);
