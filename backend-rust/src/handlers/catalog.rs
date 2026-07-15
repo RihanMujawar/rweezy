@@ -393,6 +393,76 @@ pub async fn list_food_items(
     HttpResponse::Ok().json(serde_json::json!({ "items": mapped_items }))
 }
 
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    pub query: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct LocationSearchResult {
+    pub town: String,
+    pub district: Option<String>,
+    pub state: Option<String>,
+    pub lat: f64,
+    pub lng: f64,
+    pub available: bool,
+}
+
+pub async fn search_locations(
+    query: web::Query<SearchQuery>,
+    pool: web::Data<PgPool>,
+) -> impl Responder {
+    let q = query.query.trim().to_lowercase();
+    if q.len() < 2 {
+        return HttpResponse::Ok().json(serde_json::Value::Array(vec![]));
+    }
+
+    let search_pattern = format!("%{}%", q);
+
+    let rows_res = sqlx::query(
+        "SELECT
+            town_name,
+            AVG(lat) as avg_lat,
+            AVG(lng) as avg_lng
+         FROM (
+            SELECT town_name, lat, lng FROM rweezy.restaurants WHERE town_name IS NOT NULL
+            UNION ALL
+            SELECT town_name, lat, lng FROM rweezy.grocery_stores WHERE town_name IS NOT NULL
+         ) combined
+         WHERE LOWER(town_name) LIKE $1
+         GROUP BY town_name
+         ORDER BY town_name ASC"
+    )
+    .bind(search_pattern)
+    .fetch_all(pool.get_ref())
+    .await;
+
+    match rows_res {
+        Ok(rows) => {
+            use sqlx::Row;
+            let mut results = Vec::new();
+            for r in rows {
+                let town: String = r.get("town_name");
+                let lat: Option<f64> = r.get("avg_lat");
+                let lng: Option<f64> = r.get("avg_lng");
+                results.push(LocationSearchResult {
+                    town,
+                    district: None,
+                    state: None,
+                    lat: lat.unwrap_or(0.0),
+                    lng: lng.unwrap_or(0.0),
+                    available: true,
+                });
+            }
+            HttpResponse::Ok().json(results)
+        }
+        Err(e) => {
+            tracing::error!("Failed to search locations: {}", e);
+            HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" }))
+        }
+    }
+}
+
 pub async fn list_grocery_items(
     req: HttpRequest,
     coords: web::Query<QueryCoords>,

@@ -5,6 +5,7 @@ async function apiRequest<T>(
   options: {
     method?: ApiMethod;
     body?: unknown;
+    signal?: AbortSignal;
   } = {},
 ) {
   const response = await fetch(path, {
@@ -14,6 +15,7 @@ async function apiRequest<T>(
       ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    signal: options.signal,
   });
 
   const text = await response.text();
@@ -223,6 +225,8 @@ export const api = {
       apiRequest<{ items: unknown[] }>(
         `/api/catalog/items/grocery${location ? `?lat=${location.lat}&lng=${location.lng}` : ""}`,
       ),
+    searchLocations: (query: string, signal?: AbortSignal) =>
+      apiRequest<any[]>(`/api/catalog/search-locations?query=${encodeURIComponent(query)}`, { signal }),
   },
 
   orders: {

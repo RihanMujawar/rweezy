@@ -156,6 +156,10 @@ async fn main() -> std::io::Result<()> {
                         web::post().to(handlers::profile::update_live_location),
                     )
                     .route(
+                        "/catalog/search-locations",
+                        web::get().to(handlers::catalog::search_locations),
+                    )
+                    .route(
                         "/catalog/restaurants",
                         web::get().to(handlers::catalog::list_restaurants),
                     )
