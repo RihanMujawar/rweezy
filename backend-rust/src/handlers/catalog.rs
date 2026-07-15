@@ -431,7 +431,7 @@ pub async fn search_locations(
          ) combined
          WHERE LOWER(town_name) LIKE $1
          GROUP BY town_name
-         ORDER BY town_name ASC"
+         ORDER BY town_name ASC",
     )
     .bind(search_pattern)
     .fetch_all(pool.get_ref())
@@ -458,7 +458,8 @@ pub async fn search_locations(
         }
         Err(e) => {
             tracing::error!("Failed to search locations: {}", e);
-            HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" }))
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": "Database error" }))
         }
     }
 }
