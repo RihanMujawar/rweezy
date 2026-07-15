@@ -207,7 +207,7 @@ function Checkout() {
               label: `${i.quantity} × ${i.name}`,
               amount: i.price * i.quantity,
             })),
-            { label: "Delivery fee (demo)", amount: Math.max(20, Math.round(cart.total() * 0.08)) },
+            { label: "Delivery fee", amount: Math.max(20, Math.round(cart.total() * 0.08)) },
           ]}
           total={cart.total() + Math.max(20, Math.round(cart.total() * 0.08))}
           paymentMethod={paymentMethod}

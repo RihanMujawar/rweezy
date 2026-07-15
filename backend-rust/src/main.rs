@@ -328,6 +328,10 @@ async fn main() -> std::io::Result<()> {
                         web::get().to(handlers::admin::get_hotel_dashboard),
                     )
                     .route(
+                        "/hotel/restaurant",
+                        web::put().to(handlers::admin::save_hotel_restaurant),
+                    )
+                    .route(
                         "/hotel/orders",
                         web::get().to(handlers::admin::get_hotel_orders),
                     )
@@ -338,6 +342,10 @@ async fn main() -> std::io::Result<()> {
                     .route(
                         "/grocery/dashboard",
                         web::get().to(handlers::admin::get_grocery_dashboard),
+                    )
+                    .route(
+                        "/grocery/store",
+                        web::put().to(handlers::admin::save_grocery_store),
                     )
                     .route(
                         "/grocery/alerts",

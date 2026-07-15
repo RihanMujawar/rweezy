@@ -97,9 +97,9 @@ function SendPackage() {
         trackKind: "package",
         lines: [
           { label: `Delivery (${size})`, amount: fare },
-          { label: "Platform fee (demo)", amount: platformFee },
+          { label: "Platform fee", amount: platformFee },
         ],
-        paymentNote: "Cash on delivery (demo)",
+        paymentNote: "Cash on delivery",
       });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to request pickup");
@@ -208,7 +208,7 @@ function SendPackage() {
           {placing ? "Requesting..." : "Request pickup"}
         </Button>
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          Payment: cash/manual demo on delivery.
+          Payment: cash on delivery.
         </p>
       </div>
     </div>

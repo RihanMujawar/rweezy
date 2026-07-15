@@ -81,7 +81,7 @@ pub async fn checkout_food(
     }
 
     let rest_res = sqlx::query(
-        "SELECT name, address, town_name, pincode, lat, lng, is_open FROM rweezy.restaurants WHERE id = $1"
+        "SELECT name, address, town_name, pincode, lat, lng, is_open, delivery_radius_km FROM rweezy.restaurants WHERE id = $1"
     )
     .bind(rest_id)
     .fetch_optional(pool.get_ref())
@@ -101,6 +101,23 @@ pub async fn checkout_food(
                 .json(serde_json::json!({ "error": "Restaurant not found" }))
         }
     };
+
+    // Check delivery limit
+    {
+        use sqlx::Row;
+        let rest_lat: Option<f64> = rest.get("lat");
+        let rest_lng: Option<f64> = rest.get("lng");
+        let delivery_radius_km: f64 = rest.try_get("delivery_radius_km").unwrap_or(25.0);
+
+        if let (Some(r_lat), Some(r_lng)) = (rest_lat, rest_lng) {
+            let dist = distance_km(r_lat, r_lng, payload.delivery_lat, payload.delivery_lng);
+            if dist > delivery_radius_km {
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": format!("Your delivery location is {:.1} km away, which is outside the restaurant's maximum delivery limit of {:.1} km.", dist, delivery_radius_km)
+                }));
+            }
+        }
+    }
 
     let mut tx = match pool.begin().await {
         Ok(t) => t,
@@ -255,7 +272,7 @@ pub async fn checkout_grocery(
     }
 
     let store_res = sqlx::query(
-        "SELECT name, address, town_name, pincode, lat, lng, is_open FROM rweezy.grocery_stores WHERE id = $1"
+        "SELECT name, address, town_name, pincode, lat, lng, is_open, delivery_radius_km FROM rweezy.grocery_stores WHERE id = $1"
     )
     .bind(store_id)
     .fetch_optional(pool.get_ref())
@@ -276,6 +293,23 @@ pub async fn checkout_grocery(
             return HttpResponse::NotFound().json(serde_json::json!({ "error": "Store not found" }))
         }
     };
+
+    // Check delivery limit
+    {
+        use sqlx::Row;
+        let store_lat: Option<f64> = store.get("lat");
+        let store_lng: Option<f64> = store.get("lng");
+        let delivery_radius_km: f64 = store.try_get("delivery_radius_km").unwrap_or(25.0);
+
+        if let (Some(s_lat), Some(s_lng)) = (store_lat, store_lng) {
+            let dist = distance_km(s_lat, s_lng, payload.delivery_lat, payload.delivery_lng);
+            if dist > delivery_radius_km {
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": format!("Your delivery location is {:.1} km away, which is outside the store's maximum delivery limit of {:.1} km.", dist, delivery_radius_km)
+                }));
+            }
+        }
+    }
 
     let mut tx = match pool.begin().await {
         Ok(t) => t,
@@ -1756,4 +1790,14 @@ pub async fn get_reviews(
     };
 
     HttpResponse::Ok().json(serde_json::json!({ "reviews": mapped_reviews }))
+}
+
+fn distance_km(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
+    let earth_radius_km = 6371.0;
+    let d_lat = (lat2 - lat1).to_radians();
+    let d_lng = (lng2 - lng1).to_radians();
+    let a = (d_lat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lng / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
+    earth_radius_km * c
 }

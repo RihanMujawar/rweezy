@@ -876,3 +876,207 @@ pub async fn get_grocery_alerts(
         "expiringSoon": expiring_items
     }))
 }
+
+pub async fn save_hotel_restaurant(
+    req: HttpRequest,
+    payload: web::Json<serde_json::Value>,
+    pool: web::Data<PgPool>,
+    config: web::Data<crate::config::Config>,
+) -> impl Responder {
+    let user_id = match get_auth_user(&req, &config.jwt_secret) {
+        Ok(uid) => uid,
+        Err(e) => return HttpResponse::from_error(e),
+    };
+
+    let id_opt = payload
+        .get("id")
+        .and_then(|v| v.as_str())
+        .and_then(|s| Uuid::parse_str(s).ok());
+    let name = payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    let description = payload.get("description").and_then(|v| v.as_str());
+    let address = payload.get("address").and_then(|v| v.as_str());
+    let town_name = payload.get("town_name").and_then(|v| v.as_str());
+    let pincode = payload.get("pincode").and_then(|v| v.as_str());
+    let image_url = payload.get("image_url").and_then(|v| v.as_str());
+    let is_open = payload
+        .get("is_open")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let delivery_radius_km = payload
+        .get("delivery_radius_km")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(25.0);
+
+    if name.is_empty() {
+        return HttpResponse::BadRequest().json(serde_json::json!({ "error": "Name is required" }));
+    }
+
+    match id_opt {
+        Some(id) => {
+            // Update
+            let updated = sqlx::query_as::<_, DbRestaurant>(
+                "UPDATE rweezy.restaurants
+                 SET name = $1, description = $2, address = $3, town_name = $4, pincode = $5, image_url = $6, is_open = $7, delivery_radius_km = $8, updated_at = now()
+                 WHERE id = $9 AND manager_id = $10 RETURNING *"
+            )
+            .bind(name)
+            .bind(description)
+            .bind(address)
+            .bind(town_name)
+            .bind(pincode)
+            .bind(image_url)
+            .bind(is_open)
+            .bind(delivery_radius_km)
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await;
+
+            match updated {
+                Ok(Some(r)) => HttpResponse::Ok().json(serde_json::json!({ "restaurant": r })),
+                Ok(None) => HttpResponse::NotFound()
+                    .json(serde_json::json!({ "error": "Restaurant not found or unauthorized" })),
+                Err(e) => {
+                    tracing::error!("Failed to update restaurant: {}", e);
+                    HttpResponse::InternalServerError()
+                        .json(serde_json::json!({ "error": "Database error" }))
+                }
+            }
+        }
+        None => {
+            // Create
+            let created = sqlx::query_as::<_, DbRestaurant>(
+                "INSERT INTO rweezy.restaurants (id, manager_id, name, description, address, town_name, pincode, image_url, is_open, delivery_radius_km, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
+                 RETURNING *"
+            )
+            .bind(Uuid::new_v4())
+            .bind(user_id)
+            .bind(name)
+            .bind(description)
+            .bind(address)
+            .bind(town_name)
+            .bind(pincode)
+            .bind(image_url)
+            .bind(is_open)
+            .bind(delivery_radius_km)
+            .fetch_one(pool.get_ref())
+            .await;
+
+            match created {
+                Ok(r) => HttpResponse::Ok().json(serde_json::json!({ "restaurant": r })),
+                Err(e) => {
+                    tracing::error!("Failed to create restaurant: {}", e);
+                    HttpResponse::InternalServerError()
+                        .json(serde_json::json!({ "error": "Database error" }))
+                }
+            }
+        }
+    }
+}
+
+pub async fn save_grocery_store(
+    req: HttpRequest,
+    payload: web::Json<serde_json::Value>,
+    pool: web::Data<PgPool>,
+    config: web::Data<crate::config::Config>,
+) -> impl Responder {
+    let user_id = match get_auth_user(&req, &config.jwt_secret) {
+        Ok(uid) => uid,
+        Err(e) => return HttpResponse::from_error(e),
+    };
+
+    let id_opt = payload
+        .get("id")
+        .and_then(|v| v.as_str())
+        .and_then(|s| Uuid::parse_str(s).ok());
+    let name = payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    let description = payload.get("description").and_then(|v| v.as_str());
+    let address = payload.get("address").and_then(|v| v.as_str());
+    let town_name = payload.get("town_name").and_then(|v| v.as_str());
+    let pincode = payload.get("pincode").and_then(|v| v.as_str());
+    let image_url = payload.get("image_url").and_then(|v| v.as_str());
+    let is_open = payload
+        .get("is_open")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let delivery_radius_km = payload
+        .get("delivery_radius_km")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(25.0);
+
+    if name.is_empty() {
+        return HttpResponse::BadRequest().json(serde_json::json!({ "error": "Name is required" }));
+    }
+
+    match id_opt {
+        Some(id) => {
+            // Update
+            let updated = sqlx::query_as::<_, DbGroceryStore>(
+                "UPDATE rweezy.grocery_stores
+                 SET name = $1, description = $2, address = $3, town_name = $4, pincode = $5, image_url = $6, is_open = $7, delivery_radius_km = $8, updated_at = now()
+                 WHERE id = $9 AND manager_id = $10 RETURNING *"
+            )
+            .bind(name)
+            .bind(description)
+            .bind(address)
+            .bind(town_name)
+            .bind(pincode)
+            .bind(image_url)
+            .bind(is_open)
+            .bind(delivery_radius_km)
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await;
+
+            match updated {
+                Ok(Some(s)) => HttpResponse::Ok().json(serde_json::json!({ "store": s })),
+                Ok(None) => HttpResponse::NotFound()
+                    .json(serde_json::json!({ "error": "Store not found or unauthorized" })),
+                Err(e) => {
+                    tracing::error!("Failed to update store: {}", e);
+                    HttpResponse::InternalServerError()
+                        .json(serde_json::json!({ "error": "Database error" }))
+                }
+            }
+        }
+        None => {
+            // Create
+            let created = sqlx::query_as::<_, DbGroceryStore>(
+                "INSERT INTO rweezy.grocery_stores (id, manager_id, name, description, address, town_name, pincode, image_url, is_open, delivery_radius_km, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
+                 RETURNING *"
+            )
+            .bind(Uuid::new_v4())
+            .bind(user_id)
+            .bind(name)
+            .bind(description)
+            .bind(address)
+            .bind(town_name)
+            .bind(pincode)
+            .bind(image_url)
+            .bind(is_open)
+            .bind(delivery_radius_km)
+            .fetch_one(pool.get_ref())
+            .await;
+
+            match created {
+                Ok(s) => HttpResponse::Ok().json(serde_json::json!({ "store": s })),
+                Err(e) => {
+                    tracing::error!("Failed to create store: {}", e);
+                    HttpResponse::InternalServerError()
+                        .json(serde_json::json!({ "error": "Database error" }))
+                }
+            }
+        }
+    }
+}

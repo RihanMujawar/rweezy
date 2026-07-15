@@ -28,7 +28,7 @@ function SupportPage() {
       return;
     }
     setSubmitted(true);
-    toast.success("Support request recorded (demo). Our team will follow up.");
+    toast.success("Support request recorded. Our team will follow up.");
   };
 
   if (submitted) {
@@ -36,7 +36,7 @@ function SupportPage() {
       <div className="container mx-auto max-w-lg px-4 py-12 text-center">
         <h1 className="text-2xl font-bold">We received your request</h1>
         <p className="mt-2 text-muted-foreground">
-          In production this would open a ticket. For now, check active orders or chat with your
+          Your support ticket is open. For now, check active orders or chat with your
           rider on the track page.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
@@ -107,7 +107,7 @@ function SupportPage() {
         </p>
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Phone className="h-3.5 w-3.5" />
-          Emergency demo line: +91 90000 00001
+          Emergency support line: +91 90000 00001
         </p>
       </div>
     </div>

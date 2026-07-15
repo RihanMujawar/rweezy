@@ -53,7 +53,7 @@ function ReceiptBody({ receipt, eta }: { receipt: ReceiptData; eta: Date | null 
           </p>
         )}
         <p className="text-muted-foreground">
-          {receipt.paymentNote ?? "Payment: cash/manual demo"}
+          {receipt.paymentNote ?? "Payment: cash/online"}
         </p>
       </div>
       <Button asChild className="mt-6 w-full">

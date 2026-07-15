@@ -298,6 +298,7 @@ pub struct DbRestaurant {
     pub pincode: Option<String>,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
+    pub delivery_radius_km: f64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -333,6 +334,7 @@ pub struct DbGroceryStore {
     pub pincode: Option<String>,
     pub lat: Option<f64>,
     pub lng: Option<f64>,
+    pub delivery_radius_km: f64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
