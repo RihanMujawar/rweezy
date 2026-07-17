@@ -40,6 +40,9 @@ function Checkout() {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [placing, setPlacing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const itemsTotal = cart.total();
+  const deliveryFee = Math.max(20, Math.round(itemsTotal * 0.08));
+  const orderTotal = itemsTotal + deliveryFee;
 
   useEffect(() => {
     api.profile
@@ -74,7 +77,7 @@ function Checkout() {
     }
     setErrors({});
     setPlacing(true);
-    const total = cart.total();
+    const total = orderTotal;
     const lines = cart.items.map((i) => ({
       label: `${i.quantity} × ${i.name}`,
       amount: i.price * i.quantity,
@@ -106,7 +109,7 @@ function Checkout() {
         deliveryPin: placed.delivery_pin,
         estimatedAt: placed.estimated_delivery_at,
         trackKind: "food",
-        lines,
+        lines: [...lines, { label: "Delivery fee", amount: deliveryFee }],
       });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to place order");
@@ -131,7 +134,7 @@ function Checkout() {
         ))}
         <div className="flex justify-between border-t pt-3 font-semibold">
           <span>Total</span>
-          <span>₹{cart.total().toFixed(0)}</span>
+          <span>₹{itemsTotal.toFixed(0)}</span>
         </div>
         <p className="text-xs text-muted-foreground">
           Items are rechecked for availability and price before the order is created.
@@ -207,9 +210,9 @@ function Checkout() {
               label: `${i.quantity} × ${i.name}`,
               amount: i.price * i.quantity,
             })),
-            { label: "Delivery fee", amount: Math.max(20, Math.round(cart.total() * 0.08)) },
+            { label: "Delivery fee", amount: deliveryFee },
           ]}
-          total={cart.total() + Math.max(20, Math.round(cart.total() * 0.08))}
+          total={orderTotal}
           paymentMethod={paymentMethod}
         />
         <Button
@@ -217,7 +220,7 @@ function Checkout() {
           disabled={placing}
           className="sticky bottom-4 w-full shadow-lg"
         >
-          {placing ? "Placing order..." : `Place order — ₹${cart.total().toFixed(0)}`}
+          {placing ? "Placing order..." : `Place order — ₹${orderTotal.toFixed(0)}`}
         </Button>
       </div>
     </div>

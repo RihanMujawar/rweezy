@@ -133,6 +133,7 @@ pub async fn checkout_food(
     let estimated_delivery_at = Utc::now() + chrono::Duration::minutes(35);
 
     let mut total_price = rust_decimal::Decimal::from(0);
+    let mut order_items = Vec::with_capacity(payload.items.len());
 
     for item in &payload.items {
         let item_id = match Uuid::parse_str(&item.id) {
@@ -170,24 +171,13 @@ pub async fn checkout_food(
         let price_dec: rust_decimal::Decimal = menu_item.get("price");
         let qty_dec = rust_decimal::Decimal::from(item.quantity);
         total_price += price_dec * qty_dec;
-
-        if let Err(e) = sqlx::query(
-            "INSERT INTO rweezy.food_order_items (id, order_id, menu_item_id, name, price, quantity, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, now())"
-        )
-        .bind(Uuid::new_v4())
-        .bind(order_id)
-        .bind(item_id)
-        .bind(&item.name)
-        .bind(price_dec)
-        .bind(item.quantity)
-        .execute(&mut *tx)
-        .await
-        {
-            error!("Failed to create order item: {}", e);
-            return HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error creating order items" }));
-        }
+        order_items.push((item_id, item.name.clone(), price_dec, item.quantity));
     }
+
+    let delivery_fee = (total_price * rust_decimal::Decimal::new(8, 2))
+        .round()
+        .max(rust_decimal::Decimal::from(20));
+    total_price += delivery_fee;
 
     use sqlx::Row;
     let rest_address: Option<String> = rest.get("address");
@@ -227,6 +217,26 @@ pub async fn checkout_food(
     {
         error!("Failed to create food order: {}", e);
         return HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error creating order" }));
+    }
+
+    for (item_id, name, price, quantity) in order_items {
+        if let Err(e) = sqlx::query(
+            "INSERT INTO rweezy.food_order_items (id, order_id, menu_item_id, name, price, quantity, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, now())",
+        )
+        .bind(Uuid::new_v4())
+        .bind(order_id)
+        .bind(item_id)
+        .bind(name)
+        .bind(price)
+        .bind(quantity)
+        .execute(&mut *tx)
+        .await
+        {
+            error!("Failed to create food order item: {}", e);
+            return HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": "Database error creating order items" }));
+        }
     }
 
     if let Err(e) = tx.commit().await {

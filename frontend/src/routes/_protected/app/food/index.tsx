@@ -6,6 +6,7 @@ import { Search, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ManualLocationDialog } from "@/components/manual-location-dialog";
 
 export const Route = createFileRoute("/_protected/app/food/")({
   component: FoodList,
@@ -34,15 +35,32 @@ function FoodList() {
   const [query, setQuery] = useState("");
   const [openOnly, setOpenOnly] = useState(false);
 
-  const { location: gpsLocation } = useLocation();
+  const {
+    location: gpsLocation,
+    address: locationAddress,
+    detectLocation,
+    needsManualEntry,
+    setNeedsManualEntry,
+  } = useLocation();
 
   useEffect(() => {
-    api.catalog.getRestaurants(gpsLocation || undefined).then(({ restaurants: data, location }) => {
+    if (!gpsLocation) {
+      detectLocation().catch(() => {
+        // The location context opens the manual picker when browser GPS is unavailable.
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const selectedLocation = gpsLocation
+      ? { ...gpsLocation, townName: locationAddress }
+      : undefined;
+    api.catalog.getRestaurants(selectedLocation).then(({ restaurants: data, location }) => {
       setRestaurants((data as Restaurant[]) ?? []);
       setLocation((location as Location | null) ?? null);
       setLoading(false);
     });
-  }, [gpsLocation]);
+  }, [gpsLocation, locationAddress]);
 
   const filteredRestaurants = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -64,6 +82,7 @@ function FoodList() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <ManualLocationDialog open={needsManualEntry} onOpenChange={setNeedsManualEntry} />
       <h1 className="text-3xl font-bold">Restaurants</h1>
       <p className="text-muted-foreground">
         {location?.town_name && location?.pincode

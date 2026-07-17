@@ -11,6 +11,9 @@ use crate::models::*;
 pub struct QueryCoords {
     pub lat: Option<f64>,
     pub lng: Option<f64>,
+    /// The town chosen in the location picker. GPS coordinates alone cannot be
+    /// matched to older restaurants that only have a town/pincode saved.
+    pub town_name: Option<String>,
 }
 
 struct UserCatalogLocation {
@@ -88,16 +91,30 @@ fn is_location_match_by_text(
     row_town: Option<&str>,
     row_pin: Option<&str>,
 ) -> bool {
-    let u_pin = user_pin.unwrap_or("").trim().to_lowercase();
-    let r_pin = row_pin.unwrap_or("").trim().to_lowercase();
+    let normalise = |value: Option<&str>| {
+        value
+            .unwrap_or("")
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect::<String>()
+    };
+
+    let u_pin = normalise(user_pin);
+    let r_pin = normalise(row_pin);
     if !u_pin.is_empty() && !r_pin.is_empty() {
-        return u_pin == r_pin;
+        if u_pin == r_pin {
+            return true;
+        }
     }
 
-    let u_town = user_town.unwrap_or("").trim().to_lowercase();
-    let r_town = row_town.unwrap_or("").trim().to_lowercase();
+    let u_town = normalise(user_town);
+    let r_town = normalise(row_town);
     if !u_town.is_empty() && !r_town.is_empty() {
-        return u_town == r_town;
+        // A manually selected location may include a district/state, while a
+        // partner normally saves only the town (for example "Terdal, Karnataka"
+        // versus "Terdal"). Treat those as the same town.
+        return u_town == r_town || u_town.contains(&r_town) || r_town.contains(&u_town);
     }
 
     false
@@ -122,6 +139,9 @@ pub async fn list_restaurants(
     }
     if let Some(lng) = coords.lng {
         loc.lng = Some(lng);
+    }
+    if let Some(town_name) = coords.town_name.as_deref().map(str::trim).filter(|town| !town.is_empty()) {
+        loc.town_name = Some(town_name.to_owned());
     }
 
     let all_restaurants = sqlx::query_as::<_, DbRestaurant>(
@@ -221,6 +241,9 @@ pub async fn list_stores(
     if let Some(lng) = coords.lng {
         loc.lng = Some(lng);
     }
+    if let Some(town_name) = coords.town_name.as_deref().map(str::trim).filter(|town| !town.is_empty()) {
+        loc.town_name = Some(town_name.to_owned());
+    }
 
     let all_stores = sqlx::query_as::<_, DbGroceryStore>(
         "SELECT * FROM rweezy.grocery_stores ORDER BY created_at DESC",
@@ -315,6 +338,9 @@ pub async fn list_food_items(
     }
     if let Some(lng) = coords.lng {
         loc.lng = Some(lng);
+    }
+    if let Some(town_name) = coords.town_name.as_deref().map(str::trim).filter(|town| !town.is_empty()) {
+        loc.town_name = Some(town_name.to_owned());
     }
 
     let all_restaurants =

@@ -240,7 +240,7 @@ function AppHome() {
     setLoadingGrocery(true);
 
     api.catalog
-      .getPopularFoodItems(loc)
+      .getPopularFoodItems(loc ? { ...loc, townName: address } : undefined)
       .then(({ items }) => setFoodItems(items || []))
       .catch((err) => console.error("Error fetching food:", err))
       .finally(() => setLoadingFood(false));
@@ -262,7 +262,7 @@ function AppHome() {
 
   useEffect(() => {
     fetchData(location || undefined);
-  }, [location]);
+  }, [location, address]);
 
   const handleDetectLocation = async () => {
     try {

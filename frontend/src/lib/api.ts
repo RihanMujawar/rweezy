@@ -203,9 +203,9 @@ export const api = {
   },
 
   catalog: {
-    getRestaurants: (location?: { lat: number; lng: number }) =>
+    getRestaurants: (location?: { lat: number; lng: number; townName?: string | null }) =>
       apiRequest<{ restaurants: unknown[]; location: null }>(
-        `/api/catalog/restaurants${location ? `?lat=${location.lat}&lng=${location.lng}` : ""}`,
+        `/api/catalog/restaurants${location ? `?lat=${location.lat}&lng=${location.lng}${location.townName ? `&town_name=${encodeURIComponent(location.townName)}` : ""}` : ""}`,
       ),
     getRestaurant: (restaurantId: string) =>
       apiRequest<{ restaurant: unknown | null; items: unknown[] }>(
@@ -217,9 +217,9 @@ export const api = {
       ),
     getStore: (storeId: string) =>
       apiRequest<{ store: unknown | null; items: unknown[] }>(`/api/catalog/stores/${storeId}`),
-    getPopularFoodItems: (location?: { lat: number; lng: number }) =>
+    getPopularFoodItems: (location?: { lat: number; lng: number; townName?: string | null }) =>
       apiRequest<{ items: unknown[] }>(
-        `/api/catalog/items/food${location ? `?lat=${location.lat}&lng=${location.lng}` : ""}`,
+        `/api/catalog/items/food${location ? `?lat=${location.lat}&lng=${location.lng}${location.townName ? `&town_name=${encodeURIComponent(location.townName)}` : ""}` : ""}`,
       ),
     getPopularGroceryItems: (location?: { lat: number; lng: number }) =>
       apiRequest<{ items: unknown[] }>(

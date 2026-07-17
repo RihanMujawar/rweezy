@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { LatLng } from "./geo";
 import { reverseGeocode } from "./geocoding";
 
@@ -15,13 +15,46 @@ interface LocationContextType {
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
+const LOCATION_STORAGE_KEY = "rweezy_selected_location";
+
+type StoredLocation = {
+  location: LatLng | null;
+  address: string | null;
+};
+
+function getStoredLocation(): StoredLocation {
+  if (typeof window === "undefined") return { location: null, address: null };
+  try {
+    const value = JSON.parse(localStorage.getItem(LOCATION_STORAGE_KEY) ?? "null");
+    if (
+      value &&
+      value.location &&
+      typeof value.location.lat === "number" &&
+      typeof value.location.lng === "number"
+    ) {
+      return { location: value.location, address: typeof value.address === "string" ? value.address : null };
+    }
+  } catch {
+    // Ignore an invalid legacy value and let the user select a new location.
+  }
+  return { location: null, address: null };
+}
 
 export function LocationProvider({ children }: { children: React.ReactNode }) {
-  const [location, setLocation] = useState<LatLng | null>(null);
-  const [address, setAddress] = useState<string | null>(null);
+  const [location, setLocation] = useState<LatLng | null>(() => getStoredLocation().location);
+  const [address, setAddress] = useState<string | null>(() => getStoredLocation().address);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsManualEntry, setNeedsManualEntry] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!location) {
+      localStorage.removeItem(LOCATION_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify({ location, address }));
+  }, [location, address]);
 
   const detectLocation = async () => {
     if (!navigator.geolocation) {

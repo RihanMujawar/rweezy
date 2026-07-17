@@ -124,6 +124,13 @@ pub async fn get_admin_analytics(
 pub struct AdminPagination {
     pub page: Option<i64>,
     pub limit: Option<i64>,
+    pub search: Option<String>,
+}
+
+#[derive(Serialize, sqlx::FromRow)]
+struct AdminUserRole {
+    user_id: Uuid,
+    role: AppRole,
 }
 
 pub async fn admin_list_restaurants(
@@ -1849,6 +1856,7 @@ pub async fn admin_toggle_restaurant(
 
 pub async fn admin_list_users(
     req: HttpRequest,
+    query: web::Query<AdminPagination>,
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
 ) -> impl Responder {
@@ -1861,16 +1869,64 @@ pub async fn admin_list_users(
         return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }));
     }
 
-    let profiles =
-        sqlx::query_as::<_, DbProfile>("SELECT * FROM rweezy.profiles ORDER BY full_name ASC")
-            .fetch_all(pool.get_ref())
-            .await
-            .unwrap_or_default();
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * limit;
+    let search = query.search.as_deref().filter(|value| !value.is_empty());
+
+    let total = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM rweezy.profiles
+         WHERE $1::text IS NULL
+            OR full_name ILIKE '%' || $1 || '%'
+            OR id::text ILIKE '%' || $1 || '%'",
+    )
+    .bind(search)
+    .fetch_one(pool.get_ref())
+    .await
+    .unwrap_or(0);
+
+    let profiles = sqlx::query_as::<_, DbProfile>(
+        "SELECT * FROM rweezy.profiles
+         WHERE $1::text IS NULL
+            OR full_name ILIKE '%' || $1 || '%'
+            OR id::text ILIKE '%' || $1 || '%'
+         ORDER BY full_name ASC NULLS LAST
+         LIMIT $2 OFFSET $3",
+    )
+    .bind(search)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool.get_ref())
+    .await
+    .unwrap_or_default();
+
+    let profile_ids: Vec<Uuid> = profiles.iter().map(|profile| profile.id).collect();
+    let roles = if profile_ids.is_empty() {
+        Vec::new()
+    } else {
+        sqlx::query_as::<_, AdminUserRole>(
+            "SELECT user_id, role FROM rweezy.user_roles WHERE user_id = ANY($1)",
+        )
+        .bind(&profile_ids)
+        .fetch_all(pool.get_ref())
+        .await
+        .unwrap_or_default()
+    };
+
+    let role_requests = sqlx::query_as::<_, DbRoleRequest>(
+        "SELECT * FROM rweezy.role_requests WHERE status = 'pending'::rweezy.RoleRequestStatus ORDER BY created_at DESC",
+    )
+    .fetch_all(pool.get_ref())
+    .await
+    .unwrap_or_default();
 
     HttpResponse::Ok().json(serde_json::json!({
         "profiles": profiles,
-        "roles": [],
-        "roleRequests": []
+        "roles": roles,
+        "roleRequests": role_requests,
+        "page": page,
+        "limit": limit,
+        "total": total
     }))
 }
 
