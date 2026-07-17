@@ -275,7 +275,10 @@ pub async fn admin_create_store(
         return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }));
     }
 
-    let name = payload.get("name").and_then(|v| v.as_str()).unwrap_or("Unnamed Grocery Store");
+    let name = payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Unnamed Grocery Store");
 
     match sqlx::query_as::<_, DbGroceryStore>(
         "INSERT INTO rweezy.grocery_stores (id, name, description, address, image_url, is_open, town_name, pincode, lat, lng, created_at, updated_at)
@@ -319,7 +322,10 @@ pub async fn admin_update_store(
     }
 
     let id = path.into_inner();
-    let name = payload.get("name").and_then(|v| v.as_str()).unwrap_or("Store");
+    let name = payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Store");
 
     match sqlx::query_as::<_, DbGroceryStore>(
         "UPDATE rweezy.grocery_stores SET name = $1, description = $2, address = $3, image_url = $4, is_open = $5, town_name = $6, pincode = $7, lat = $8, lng = $9, updated_at = now() WHERE id = $10 RETURNING *"
@@ -383,15 +389,24 @@ pub async fn admin_grant_restaurant_manager(
     }
 
     let rest_id = path.into_inner();
-    let manager_uuid_str = payload.get("user_id").and_then(|v| v.as_str()).unwrap_or("");
+    let manager_uuid_str = payload
+        .get("user_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let manager_id = match Uuid::parse_str(manager_uuid_str) {
         Ok(uid) => uid,
-        Err(_) => return HttpResponse::BadRequest().json(serde_json::json!({ "error": "Invalid user_id" })),
+        Err(_) => {
+            return HttpResponse::BadRequest()
+                .json(serde_json::json!({ "error": "Invalid user_id" }))
+        }
     };
 
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
-        Err(_) => return HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Db error" })),
+        Err(_) => {
+            return HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": "Db error" }))
+        }
     };
 
     let _ = sqlx::query(
@@ -413,7 +428,8 @@ pub async fn admin_grant_restaurant_manager(
 
     if updated.is_err() {
         let _ = tx.rollback().await;
-        return HttpResponse::NotFound().json(serde_json::json!({ "error": "Restaurant not found" }));
+        return HttpResponse::NotFound()
+            .json(serde_json::json!({ "error": "Restaurant not found" }));
     }
 
     let _ = tx.commit().await;
@@ -469,7 +485,10 @@ pub async fn admin_toggle_user_role(
 
     let target_user_id = path.into_inner();
     let role_str = payload.get("role").and_then(|v| v.as_str()).unwrap_or("");
-    let has_role = payload.get("has_role").and_then(|v| v.as_bool()).unwrap_or(false);
+    let has_role = payload
+        .get("has_role")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     let parsed_role = match role_str {
         "customer" => AppRole::Customer,
@@ -478,7 +497,9 @@ pub async fn admin_toggle_user_role(
         "grocery_manager" => AppRole::GroceryManager,
         "delivery_boy" => AppRole::DeliveryBoy,
         "rider" => AppRole::Rider,
-        _ => return HttpResponse::BadRequest().json(serde_json::json!({ "error": "Invalid role" })),
+        _ => {
+            return HttpResponse::BadRequest().json(serde_json::json!({ "error": "Invalid role" }))
+        }
     };
 
     if has_role {
@@ -492,11 +513,13 @@ pub async fn admin_toggle_user_role(
         .execute(pool.get_ref())
         .await;
     } else {
-        let _ = sqlx::query("DELETE FROM rweezy.user_roles WHERE user_id = $1 AND role = $2::rweezy.AppRole")
-            .bind(target_user_id)
-            .bind(parsed_role as AppRole)
-            .execute(pool.get_ref())
-            .await;
+        let _ = sqlx::query(
+            "DELETE FROM rweezy.user_roles WHERE user_id = $1 AND role = $2::rweezy.AppRole",
+        )
+        .bind(target_user_id)
+        .bind(parsed_role as AppRole)
+        .execute(pool.get_ref())
+        .await;
     }
 
     HttpResponse::Ok().json(serde_json::json!({ "ok": true }))
@@ -512,21 +535,22 @@ pub async fn get_grocery_items(
         Err(e) => return HttpResponse::from_error(e),
     };
 
-    let store_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let store_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let store_id = match store_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Ok().json(serde_json::json!({ "storeId": null, "items": [] })),
+        None => {
+            return HttpResponse::Ok().json(serde_json::json!({ "storeId": null, "items": [] }))
+        }
     };
 
     let items = sqlx::query_as::<_, DbGroceryItem>(
-        "SELECT * FROM rweezy.grocery_items WHERE store_id = $1 ORDER BY category ASC"
+        "SELECT * FROM rweezy.grocery_items WHERE store_id = $1 ORDER BY category ASC",
     )
     .bind(store_id)
     .fetch_all(pool.get_ref())
@@ -550,37 +574,77 @@ pub async fn create_grocery_item(
         Err(e) => return HttpResponse::from_error(e),
     };
 
-    let store_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let store_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let store_id = match store_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Forbidden().json(serde_json::json!({ "error": "No assigned grocery store" })),
+        None => {
+            return HttpResponse::Forbidden()
+                .json(serde_json::json!({ "error": "No assigned grocery store" }))
+        }
     };
 
-    let name = payload.get("name").and_then(|v| v.as_str()).unwrap_or("New Item").to_string();
-    let description = payload.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let name = payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("New Item")
+        .to_string();
+    let description = payload
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let price_val = payload.get("price").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let price = rust_decimal::Decimal::from_f64_retain(price_val).unwrap_or_default();
-    let category = payload.get("category").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let image_url = payload.get("image_url").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let is_available = payload.get("is_available").and_then(|v| v.as_bool()).unwrap_or(true);
-    let stock_quantity = payload.get("stock_quantity").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-    let low_stock_threshold = payload.get("low_stock_threshold").and_then(|v| v.as_i64()).unwrap_or(5) as i32;
-    let expiry_date = payload.get("expiry_date").and_then(|v| v.as_str())
-        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok().map(|dt| dt.with_timezone(&chrono::Utc))
-        .or_else(|| {
-            let naive_date = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
-            let naive_datetime = naive_date.and_hms_opt(0, 0, 0)?;
-            Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive_datetime, chrono::Utc))
-        }));
-    let aisle_location = payload.get("aisle_location").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let unit = payload.get("unit").and_then(|v| v.as_str()).unwrap_or("pcs").to_string();
+    let category = payload
+        .get("category")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let image_url = payload
+        .get("image_url")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let is_available = payload
+        .get("is_available")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let stock_quantity = payload
+        .get("stock_quantity")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let low_stock_threshold = payload
+        .get("low_stock_threshold")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(5) as i32;
+    let expiry_date = payload
+        .get("expiry_date")
+        .and_then(|v| v.as_str())
+        .and_then(|s| {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .or_else(|| {
+                    let naive_date = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
+                    let naive_datetime = naive_date.and_hms_opt(0, 0, 0)?;
+                    Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
+                        naive_datetime,
+                        chrono::Utc,
+                    ))
+                })
+        });
+    let aisle_location = payload
+        .get("aisle_location")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let unit = payload
+        .get("unit")
+        .and_then(|v| v.as_str())
+        .unwrap_or("pcs")
+        .to_string();
 
     let created = sqlx::query_as::<_, DbGroceryItem>(
         "INSERT INTO rweezy.grocery_items (id, store_id, name, description, price, image_url, category, is_available, stock_quantity, low_stock_threshold, expiry_date, aisle_location, unit, created_at, updated_at)
@@ -606,7 +670,8 @@ pub async fn create_grocery_item(
         Ok(item) => HttpResponse::Ok().json(serde_json::json!({ "item": item })),
         Err(e) => {
             tracing::error!("Failed to create grocery item: {}", e);
-            HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" }))
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": "Database error" }))
         }
     }
 }
@@ -625,21 +690,22 @@ pub async fn update_grocery_item(
 
     let item_id = path.into_inner();
 
-    let store_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let store_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let store_id = match store_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" })),
+        None => {
+            return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }))
+        }
     };
 
     let belongs = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM rweezy.grocery_items WHERE id = $1 AND store_id = $2)"
+        "SELECT EXISTS(SELECT 1 FROM rweezy.grocery_items WHERE id = $1 AND store_id = $2)",
     )
     .bind(item_id)
     .bind(store_id)
@@ -651,31 +717,66 @@ pub async fn update_grocery_item(
         return HttpResponse::NotFound().json(serde_json::json!({ "error": "Item not found" }));
     }
 
-    let name = payload.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let description = payload.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let price = payload.get("price").and_then(|v| v.as_f64()).map(|f| rust_decimal::Decimal::from_f64_retain(f).unwrap_or_default());
-    let category = payload.get("category").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let image_url = payload.get("image_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let name = payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let description = payload
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let price = payload
+        .get("price")
+        .and_then(|v| v.as_f64())
+        .map(|f| rust_decimal::Decimal::from_f64_retain(f).unwrap_or_default());
+    let category = payload
+        .get("category")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let image_url = payload
+        .get("image_url")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let is_available = payload.get("is_available").and_then(|v| v.as_bool());
-    let stock_quantity = payload.get("stock_quantity").and_then(|v| v.as_i64()).map(|i| i as i32);
-    let low_stock_threshold = payload.get("low_stock_threshold").and_then(|v| v.as_i64()).map(|i| i as i32);
-    let expiry_date = payload.get("expiry_date").and_then(|v| v.as_str())
-        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok().map(|dt| dt.with_timezone(&chrono::Utc))
-        .or_else(|| {
-            let naive_date = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
-            let naive_datetime = naive_date.and_hms_opt(0, 0, 0)?;
-            Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive_datetime, chrono::Utc))
-        }));
-    let aisle_location = payload.get("aisle_location").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let unit = payload.get("unit").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let stock_quantity = payload
+        .get("stock_quantity")
+        .and_then(|v| v.as_i64())
+        .map(|i| i as i32);
+    let low_stock_threshold = payload
+        .get("low_stock_threshold")
+        .and_then(|v| v.as_i64())
+        .map(|i| i as i32);
+    let expiry_date = payload
+        .get("expiry_date")
+        .and_then(|v| v.as_str())
+        .and_then(|s| {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .or_else(|| {
+                    let naive_date = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
+                    let naive_datetime = naive_date.and_hms_opt(0, 0, 0)?;
+                    Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
+                        naive_datetime,
+                        chrono::Utc,
+                    ))
+                })
+        });
+    let aisle_location = payload
+        .get("aisle_location")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let unit = payload
+        .get("unit")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
-    let current_item = sqlx::query_as::<_, DbGroceryItem>(
-        "SELECT * FROM rweezy.grocery_items WHERE id = $1"
-    )
-    .bind(item_id)
-    .fetch_one(pool.get_ref())
-    .await
-    .unwrap();
+    let current_item =
+        sqlx::query_as::<_, DbGroceryItem>("SELECT * FROM rweezy.grocery_items WHERE id = $1")
+            .bind(item_id)
+            .fetch_one(pool.get_ref())
+            .await
+            .unwrap();
 
     let name = name.unwrap_or(current_item.name);
     let description = description.or(current_item.description);
@@ -685,7 +786,11 @@ pub async fn update_grocery_item(
     let is_available = is_available.unwrap_or(current_item.is_available);
     let stock_quantity = stock_quantity.unwrap_or(current_item.stock_quantity);
     let low_stock_threshold = low_stock_threshold.unwrap_or(current_item.low_stock_threshold);
-    let expiry_date = if payload.get("expiry_date").is_some() { expiry_date } else { current_item.expiry_date };
+    let expiry_date = if payload.get("expiry_date").is_some() {
+        expiry_date
+    } else {
+        current_item.expiry_date
+    };
     let aisle_location = aisle_location.or(current_item.aisle_location);
     let unit = unit.unwrap_or(current_item.unit);
 
@@ -709,7 +814,8 @@ pub async fn update_grocery_item(
 
     match updated {
         Ok(item) => HttpResponse::Ok().json(serde_json::json!({ "item": item })),
-        _ => HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" })),
+        _ => HttpResponse::InternalServerError()
+            .json(serde_json::json!({ "error": "Database error" })),
     }
 }
 
@@ -726,21 +832,22 @@ pub async fn delete_grocery_item(
 
     let item_id = path.into_inner();
 
-    let store_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let store_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let store_id = match store_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" })),
+        None => {
+            return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }))
+        }
     };
 
     let belongs = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM rweezy.grocery_items WHERE id = $1 AND store_id = $2)"
+        "SELECT EXISTS(SELECT 1 FROM rweezy.grocery_items WHERE id = $1 AND store_id = $2)",
     )
     .bind(item_id)
     .bind(store_id)
@@ -773,21 +880,22 @@ pub async fn toggle_grocery_item(
 
     let item_id = path.into_inner();
 
-    let store_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let store_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.grocery_stores WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let store_id = match store_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" })),
+        None => {
+            return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }))
+        }
     };
 
     let belongs = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM rweezy.grocery_items WHERE id = $1 AND store_id = $2)"
+        "SELECT EXISTS(SELECT 1 FROM rweezy.grocery_items WHERE id = $1 AND store_id = $2)",
     )
     .bind(item_id)
     .bind(store_id)
@@ -808,7 +916,8 @@ pub async fn toggle_grocery_item(
 
     match updated {
         Ok(item) => HttpResponse::Ok().json(serde_json::json!({ "item": item })),
-        _ => HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" })),
+        _ => HttpResponse::InternalServerError()
+            .json(serde_json::json!({ "error": "Database error" })),
     }
 }
 
@@ -842,8 +951,7 @@ pub async fn get_grocery_orders(
     {
         Some(id) => id,
         None => {
-            return HttpResponse::Ok()
-                .json(serde_json::json!({ "storeId": null, "orders": [] }))
+            return HttpResponse::Ok().json(serde_json::json!({ "storeId": null, "orders": [] }))
         }
     };
 
@@ -861,10 +969,13 @@ pub async fn get_grocery_orders(
         Err(_) => Vec::new(),
     };
 
-    let order_ids: Vec<Uuid> = orders_rows.iter().map(|row| {
-        use sqlx::Row;
-        row.get::<Uuid, _>("id")
-    }).collect();
+    let order_ids: Vec<Uuid> = orders_rows
+        .iter()
+        .map(|row| {
+            use sqlx::Row;
+            row.get::<Uuid, _>("id")
+        })
+        .collect();
 
     let items_res = sqlx::query_as::<_, DbGroceryOrderItem>(
         "SELECT id, order_id, grocery_item_id, name, price, quantity FROM rweezy.grocery_order_items WHERE order_id = ANY($1)"
@@ -1010,8 +1121,7 @@ pub async fn get_grocery_history(
     {
         Some(id) => id,
         None => {
-            return HttpResponse::Ok()
-                .json(serde_json::json!({ "storeId": null, "orders": [] }))
+            return HttpResponse::Ok().json(serde_json::json!({ "storeId": null, "orders": [] }))
         }
     };
 
@@ -1029,10 +1139,13 @@ pub async fn get_grocery_history(
         Err(_) => Vec::new(),
     };
 
-    let order_ids: Vec<Uuid> = orders_rows.iter().map(|row| {
-        use sqlx::Row;
-        row.get::<Uuid, _>("id")
-    }).collect();
+    let order_ids: Vec<Uuid> = orders_rows
+        .iter()
+        .map(|row| {
+            use sqlx::Row;
+            row.get::<Uuid, _>("id")
+        })
+        .collect();
 
     let items_res = sqlx::query_as::<_, DbGroceryOrderItem>(
         "SELECT id, order_id, grocery_item_id, name, price, quantity FROM rweezy.grocery_order_items WHERE order_id = ANY($1)"
@@ -1108,21 +1221,23 @@ pub async fn get_hotel_menu(
         Err(e) => return HttpResponse::from_error(e),
     };
 
-    let rest_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.restaurants WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let rest_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.restaurants WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let rest_id = match rest_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Ok().json(serde_json::json!({ "restaurantId": null, "items": [] })),
+        None => {
+            return HttpResponse::Ok()
+                .json(serde_json::json!({ "restaurantId": null, "items": [] }))
+        }
     };
 
     let items = sqlx::query_as::<_, DbMenuItem>(
-        "SELECT * FROM rweezy.menu_items WHERE restaurant_id = $1 ORDER BY category ASC"
+        "SELECT * FROM rweezy.menu_items WHERE restaurant_id = $1 ORDER BY category ASC",
     )
     .bind(rest_id)
     .fetch_all(pool.get_ref())
@@ -1146,30 +1261,60 @@ pub async fn create_hotel_menu_item(
         Err(e) => return HttpResponse::from_error(e),
     };
 
-    let rest_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.restaurants WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let rest_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.restaurants WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let rest_id = match rest_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Forbidden().json(serde_json::json!({ "error": "No assigned restaurant" })),
+        None => {
+            return HttpResponse::Forbidden()
+                .json(serde_json::json!({ "error": "No assigned restaurant" }))
+        }
     };
 
-    let name = payload.get("name").and_then(|v| v.as_str()).unwrap_or("New Item").to_string();
-    let description = payload.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let name = payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("New Item")
+        .to_string();
+    let description = payload
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let price_val = payload.get("price").and_then(|v| v.as_f64()).unwrap_or(0.0);
     let price = rust_decimal::Decimal::from_f64_retain(price_val).unwrap_or_default();
-    let category = payload.get("category").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let image_url = payload.get("image_url").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let is_available = payload.get("is_available").and_then(|v| v.as_bool()).unwrap_or(true);
-    let is_veg = payload.get("is_veg").and_then(|v| v.as_bool()).unwrap_or(true);
-    let prep_time_minutes = payload.get("prep_time_minutes").and_then(|v| v.as_i64()).unwrap_or(15) as i32;
-    let is_special = payload.get("is_special").and_then(|v| v.as_bool()).unwrap_or(false);
-    let modifiers = payload.get("modifiers").cloned().unwrap_or(serde_json::json!([]));
+    let category = payload
+        .get("category")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let image_url = payload
+        .get("image_url")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let is_available = payload
+        .get("is_available")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let is_veg = payload
+        .get("is_veg")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let prep_time_minutes = payload
+        .get("prep_time_minutes")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(15) as i32;
+    let is_special = payload
+        .get("is_special")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let modifiers = payload
+        .get("modifiers")
+        .cloned()
+        .unwrap_or(serde_json::json!([]));
 
     let created = sqlx::query_as::<_, DbMenuItem>(
         "INSERT INTO rweezy.menu_items (id, restaurant_id, name, description, price, image_url, category, is_available, is_veg, prep_time_minutes, is_special, modifiers, created_at, updated_at)
@@ -1194,7 +1339,8 @@ pub async fn create_hotel_menu_item(
         Ok(item) => HttpResponse::Ok().json(serde_json::json!({ "item": item })),
         Err(e) => {
             tracing::error!("Failed to create menu item: {}", e);
-            HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" }))
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": "Database error" }))
         }
     }
 }
@@ -1213,21 +1359,22 @@ pub async fn update_hotel_menu_item(
 
     let item_id = path.into_inner();
 
-    let rest_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.restaurants WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let rest_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.restaurants WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let rest_id = match rest_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" })),
+        None => {
+            return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }))
+        }
     };
 
     let belongs = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM rweezy.menu_items WHERE id = $1 AND restaurant_id = $2)"
+        "SELECT EXISTS(SELECT 1 FROM rweezy.menu_items WHERE id = $1 AND restaurant_id = $2)",
     )
     .bind(item_id)
     .bind(rest_id)
@@ -1239,24 +1386,41 @@ pub async fn update_hotel_menu_item(
         return HttpResponse::NotFound().json(serde_json::json!({ "error": "Item not found" }));
     }
 
-    let name = payload.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let description = payload.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let price = payload.get("price").and_then(|v| v.as_f64()).map(|f| rust_decimal::Decimal::from_f64_retain(f).unwrap_or_default());
-    let category = payload.get("category").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let image_url = payload.get("image_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let name = payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let description = payload
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let price = payload
+        .get("price")
+        .and_then(|v| v.as_f64())
+        .map(|f| rust_decimal::Decimal::from_f64_retain(f).unwrap_or_default());
+    let category = payload
+        .get("category")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let image_url = payload
+        .get("image_url")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let is_available = payload.get("is_available").and_then(|v| v.as_bool());
     let is_veg = payload.get("is_veg").and_then(|v| v.as_bool());
-    let prep_time_minutes = payload.get("prep_time_minutes").and_then(|v| v.as_i64()).map(|i| i as i32);
+    let prep_time_minutes = payload
+        .get("prep_time_minutes")
+        .and_then(|v| v.as_i64())
+        .map(|i| i as i32);
     let is_special = payload.get("is_special").and_then(|v| v.as_bool());
     let modifiers = payload.get("modifiers").cloned();
 
-    let current_item = sqlx::query_as::<_, DbMenuItem>(
-        "SELECT * FROM rweezy.menu_items WHERE id = $1"
-    )
-    .bind(item_id)
-    .fetch_one(pool.get_ref())
-    .await
-    .unwrap();
+    let current_item =
+        sqlx::query_as::<_, DbMenuItem>("SELECT * FROM rweezy.menu_items WHERE id = $1")
+            .bind(item_id)
+            .fetch_one(pool.get_ref())
+            .await
+            .unwrap();
 
     let name = name.unwrap_or(current_item.name);
     let description = description.or(current_item.description);
@@ -1288,7 +1452,8 @@ pub async fn update_hotel_menu_item(
 
     match updated {
         Ok(item) => HttpResponse::Ok().json(serde_json::json!({ "item": item })),
-        _ => HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" })),
+        _ => HttpResponse::InternalServerError()
+            .json(serde_json::json!({ "error": "Database error" })),
     }
 }
 
@@ -1305,21 +1470,22 @@ pub async fn delete_hotel_menu_item(
 
     let item_id = path.into_inner();
 
-    let rest_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.restaurants WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let rest_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.restaurants WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let rest_id = match rest_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" })),
+        None => {
+            return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }))
+        }
     };
 
     let belongs = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM rweezy.menu_items WHERE id = $1 AND restaurant_id = $2)"
+        "SELECT EXISTS(SELECT 1 FROM rweezy.menu_items WHERE id = $1 AND restaurant_id = $2)",
     )
     .bind(item_id)
     .bind(rest_id)
@@ -1352,21 +1518,22 @@ pub async fn toggle_hotel_menu_item(
 
     let item_id = path.into_inner();
 
-    let rest_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.restaurants WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let rest_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.restaurants WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let rest_id = match rest_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" })),
+        None => {
+            return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }))
+        }
     };
 
     let belongs = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM rweezy.menu_items WHERE id = $1 AND restaurant_id = $2)"
+        "SELECT EXISTS(SELECT 1 FROM rweezy.menu_items WHERE id = $1 AND restaurant_id = $2)",
     )
     .bind(item_id)
     .bind(rest_id)
@@ -1387,7 +1554,8 @@ pub async fn toggle_hotel_menu_item(
 
     match updated {
         Ok(item) => HttpResponse::Ok().json(serde_json::json!({ "item": item })),
-        _ => HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" })),
+        _ => HttpResponse::InternalServerError()
+            .json(serde_json::json!({ "error": "Database error" })),
     }
 }
 
@@ -1405,23 +1573,27 @@ pub async fn reject_hotel_order(
     };
 
     let order_id = path.into_inner();
-    let reason = payload.get("reason").and_then(|v| v.as_str()).unwrap_or("Rejected by manager");
+    let reason = payload
+        .get("reason")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Rejected by manager");
 
-    let rest_id_opt = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM rweezy.restaurants WHERE manager_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(pool.get_ref())
-    .await
-    .unwrap_or(None);
+    let rest_id_opt =
+        sqlx::query_scalar::<_, Uuid>("SELECT id FROM rweezy.restaurants WHERE manager_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool.get_ref())
+            .await
+            .unwrap_or(None);
 
     let rest_id = match rest_id_opt {
         Some(id) => id,
-        None => return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" })),
+        None => {
+            return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }))
+        }
     };
 
     let belongs = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM rweezy.food_orders WHERE id = $1 AND restaurant_id = $2)"
+        "SELECT EXISTS(SELECT 1 FROM rweezy.food_orders WHERE id = $1 AND restaurant_id = $2)",
     )
     .bind(order_id)
     .bind(rest_id)
@@ -1453,9 +1625,11 @@ pub async fn reject_hotel_order(
             let b = broker.lock().await;
             b.broadcast(&format!("order_{}", order_id), &msg);
 
-            HttpResponse::Ok().json(serde_json::json!({ "order": { "id": order_id, "status": "cancelled" } }))
+            HttpResponse::Ok()
+                .json(serde_json::json!({ "order": { "id": order_id, "status": "cancelled" } }))
         }
-        _ => HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" })),
+        _ => HttpResponse::InternalServerError()
+            .json(serde_json::json!({ "error": "Database error" })),
     }
 }
 
@@ -1498,10 +1672,13 @@ pub async fn get_hotel_history(
         Err(_) => Vec::new(),
     };
 
-    let order_ids: Vec<Uuid> = orders_rows.iter().map(|row| {
-        use sqlx::Row;
-        row.get::<Uuid, _>("id")
-    }).collect();
+    let order_ids: Vec<Uuid> = orders_rows
+        .iter()
+        .map(|row| {
+            use sqlx::Row;
+            row.get::<Uuid, _>("id")
+        })
+        .collect();
 
     let items_res = sqlx::query_as::<_, DbFoodOrderItem>(
         "SELECT id, order_id, menu_item_id, name, price, quantity FROM rweezy.food_order_items WHERE order_id = ANY($1)"
@@ -2041,10 +2218,13 @@ pub async fn get_hotel_orders(
         Err(_) => Vec::new(),
     };
 
-    let order_ids: Vec<Uuid> = orders_rows.iter().map(|row| {
-        use sqlx::Row;
-        row.get::<Uuid, _>("id")
-    }).collect();
+    let order_ids: Vec<Uuid> = orders_rows
+        .iter()
+        .map(|row| {
+            use sqlx::Row;
+            row.get::<Uuid, _>("id")
+        })
+        .collect();
 
     let items_res = sqlx::query_as::<_, DbFoodOrderItem>(
         "SELECT id, order_id, menu_item_id, name, price, quantity FROM rweezy.food_order_items WHERE order_id = ANY($1)"

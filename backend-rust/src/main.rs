@@ -129,10 +129,7 @@ async fn main() -> std::io::Result<()> {
                         "/notifications/token",
                         web::post().to(handlers::auth::register_push_token),
                     )
-                    .route(
-                        "/map/route",
-                        web::get().to(handlers::rides::get_map_route),
-                    )
+                    .route("/map/route", web::get().to(handlers::rides::get_map_route))
                     .route("/profile", web::get().to(handlers::profile::get_profile))
                     .route("/profile", web::put().to(handlers::profile::update_profile))
                     .route(
