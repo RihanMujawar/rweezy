@@ -808,3 +808,23 @@ pub async fn get_rider_earnings(
         "totalJobs": total_count
     }))
 }
+
+#[derive(Deserialize)]
+pub struct RouteQueryParams {
+    #[serde(rename = "fromLat")]
+    pub from_lat: f64,
+    #[serde(rename = "fromLng")]
+    pub from_lng: f64,
+    #[serde(rename = "toLat")]
+    pub to_lat: f64,
+    #[serde(rename = "toLng")]
+    pub to_lng: f64,
+}
+
+pub async fn get_map_route(query: web::Query<RouteQueryParams>) -> impl Responder {
+    let route = vec![
+        serde_json::json!({ "lat": query.from_lat, "lng": query.from_lng }),
+        serde_json::json!({ "lat": query.to_lat, "lng": query.to_lng }),
+    ];
+    HttpResponse::Ok().json(serde_json::json!({ "route": route }))
+}

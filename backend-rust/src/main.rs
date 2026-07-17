@@ -129,6 +129,10 @@ async fn main() -> std::io::Result<()> {
                         "/notifications/token",
                         web::post().to(handlers::auth::register_push_token),
                     )
+                    .route(
+                        "/map/route",
+                        web::get().to(handlers::rides::get_map_route),
+                    )
                     .route("/profile", web::get().to(handlers::profile::get_profile))
                     .route("/profile", web::put().to(handlers::profile::update_profile))
                     .route(
@@ -220,6 +224,10 @@ async fn main() -> std::io::Result<()> {
                         "/delivery/earnings",
                         web::get().to(handlers::orders::get_delivery_earnings),
                     )
+                    .route(
+                        "/delivery/history",
+                        web::get().to(handlers::orders::get_delivery_history),
+                    )
                     .route("/reviews", web::post().to(handlers::orders::submit_review))
                     .route(
                         "/reviews/{kind}/{id}",
@@ -296,8 +304,36 @@ async fn main() -> std::io::Result<()> {
                         web::post().to(handlers::admin::admin_toggle_restaurant),
                     )
                     .route(
+                        "/admin/restaurants/{id}/grant-manager",
+                        web::post().to(handlers::admin::admin_grant_restaurant_manager),
+                    )
+                    .route(
+                        "/admin/restaurants/{id}/revoke-manager",
+                        web::post().to(handlers::admin::admin_revoke_restaurant_manager),
+                    )
+                    .route(
+                        "/admin/stores",
+                        web::get().to(handlers::admin::admin_list_stores),
+                    )
+                    .route(
+                        "/admin/stores",
+                        web::post().to(handlers::admin::admin_create_store),
+                    )
+                    .route(
+                        "/admin/stores/{id}",
+                        web::put().to(handlers::admin::admin_update_store),
+                    )
+                    .route(
+                        "/admin/stores/{id}",
+                        web::delete().to(handlers::admin::admin_delete_store),
+                    )
+                    .route(
                         "/admin/users",
                         web::get().to(handlers::admin::admin_list_users),
+                    )
+                    .route(
+                        "/admin/users/{userId}/roles/toggle",
+                        web::post().to(handlers::admin::admin_toggle_user_role),
                     )
                     .route(
                         "/admin/role-requests/{id}/review",
@@ -340,6 +376,34 @@ async fn main() -> std::io::Result<()> {
                         web::post().to(handlers::admin::advance_hotel_order),
                     )
                     .route(
+                        "/hotel/orders/{id}/reject",
+                        web::post().to(handlers::admin::reject_hotel_order),
+                    )
+                    .route(
+                        "/hotel/history",
+                        web::get().to(handlers::admin::get_hotel_history),
+                    )
+                    .route(
+                        "/hotel/menu",
+                        web::get().to(handlers::admin::get_hotel_menu),
+                    )
+                    .route(
+                        "/hotel/menu",
+                        web::post().to(handlers::admin::create_hotel_menu_item),
+                    )
+                    .route(
+                        "/hotel/menu/{id}",
+                        web::put().to(handlers::admin::update_hotel_menu_item),
+                    )
+                    .route(
+                        "/hotel/menu/{id}",
+                        web::delete().to(handlers::admin::delete_hotel_menu_item),
+                    )
+                    .route(
+                        "/hotel/menu/{id}/toggle",
+                        web::post().to(handlers::admin::toggle_hotel_menu_item),
+                    )
+                    .route(
                         "/grocery/dashboard",
                         web::get().to(handlers::admin::get_grocery_dashboard),
                     )
@@ -350,6 +414,38 @@ async fn main() -> std::io::Result<()> {
                     .route(
                         "/grocery/alerts",
                         web::get().to(handlers::admin::get_grocery_alerts),
+                    )
+                    .route(
+                        "/grocery/items",
+                        web::get().to(handlers::admin::get_grocery_items),
+                    )
+                    .route(
+                        "/grocery/items",
+                        web::post().to(handlers::admin::create_grocery_item),
+                    )
+                    .route(
+                        "/grocery/items/{id}",
+                        web::put().to(handlers::admin::update_grocery_item),
+                    )
+                    .route(
+                        "/grocery/items/{id}",
+                        web::delete().to(handlers::admin::delete_grocery_item),
+                    )
+                    .route(
+                        "/grocery/items/{id}/toggle",
+                        web::post().to(handlers::admin::toggle_grocery_item),
+                    )
+                    .route(
+                        "/grocery/orders",
+                        web::get().to(handlers::admin::get_grocery_orders),
+                    )
+                    .route(
+                        "/grocery/orders/{id}/advance",
+                        web::post().to(handlers::admin::advance_grocery_order),
+                    )
+                    .route(
+                        "/grocery/history",
+                        web::get().to(handlers::admin::get_grocery_history),
                     ),
             )
     })

@@ -934,6 +934,31 @@ pub async fn track_order(
                 } else {
                     serde_json::Value::Null
                 };
+
+                let food_items_res = sqlx::query(
+                    "SELECT id, menu_item_id, name, price, quantity FROM rweezy.food_order_items WHERE order_id = $1"
+                )
+                .bind(id)
+                .fetch_all(pool.get_ref())
+                .await;
+
+                let food_order_items: Vec<serde_json::Value> = match food_items_res {
+                    Ok(rows) => rows
+                        .iter()
+                        .map(|item| {
+                            use sqlx::Row;
+                            serde_json::json!({
+                                "id": item.get::<Uuid, _>("id"),
+                                "menu_item_id": item.get::<Uuid, _>("menu_item_id"),
+                                "name": item.get::<String, _>("name"),
+                                "price": item.get::<rust_decimal::Decimal, _>("price"),
+                                "quantity": item.get::<i32, _>("quantity"),
+                            })
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+
                 return HttpResponse::Ok().json(serde_json::json!({
                     "row": {
                         "id": id,
@@ -963,7 +988,8 @@ pub async fn track_order(
                         "profiles": customer,
                         "customer": customer,
                         "rider": partner,
-                        "partner": partner
+                        "partner": partner,
+                        "food_order_items": food_order_items
                     }
                 }));
             }
@@ -1018,6 +1044,31 @@ pub async fn track_order(
                 } else {
                     serde_json::Value::Null
                 };
+
+                let grocery_items_res = sqlx::query(
+                    "SELECT id, grocery_item_id, name, price, quantity FROM rweezy.grocery_order_items WHERE order_id = $1"
+                )
+                .bind(id)
+                .fetch_all(pool.get_ref())
+                .await;
+
+                let grocery_order_items: Vec<serde_json::Value> = match grocery_items_res {
+                    Ok(rows) => rows
+                        .iter()
+                        .map(|item| {
+                            use sqlx::Row;
+                            serde_json::json!({
+                                "id": item.get::<Uuid, _>("id"),
+                                "grocery_item_id": item.get::<Uuid, _>("grocery_item_id"),
+                                "name": item.get::<String, _>("name"),
+                                "price": item.get::<rust_decimal::Decimal, _>("price"),
+                                "quantity": item.get::<i32, _>("quantity"),
+                            })
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+
                 return HttpResponse::Ok().json(serde_json::json!({
                     "row": {
                         "id": id,
@@ -1047,7 +1098,8 @@ pub async fn track_order(
                         "profiles": customer,
                         "customer": customer,
                         "rider": partner,
-                        "partner": partner
+                        "partner": partner,
+                        "grocery_order_items": grocery_order_items
                     }
                 }));
             }
@@ -1800,4 +1852,114 @@ fn distance_km(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
         + lat1.to_radians().cos() * lat2.to_radians().cos() * (d_lng / 2.0).sin().powi(2);
     let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
     earth_radius_km * c
+}
+
+pub async fn get_delivery_history(
+    req: HttpRequest,
+    pool: web::Data<PgPool>,
+    config: web::Data<crate::config::Config>,
+) -> impl Responder {
+    let user_id = match get_auth_user(&req, &config.jwt_secret) {
+        Ok(uid) => uid,
+        Err(e) => return HttpResponse::from_error(e),
+    };
+
+    let food_rows_res = sqlx::query(
+        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, r.name as restaurant_name, pc.full_name as customer_name, pc.phone as customer_phone
+         FROM rweezy.food_orders o
+         JOIN rweezy.restaurants r ON o.restaurant_id = r.id
+         LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         WHERE o.delivery_boy_id = $1 AND o.status IN ('completed'::rweezy.OrderStatus, 'delivered'::rweezy.OrderStatus, 'cancelled'::rweezy.OrderStatus) ORDER BY o.created_at DESC"
+    )
+    .bind(user_id)
+    .fetch_all(pool.get_ref())
+    .await;
+
+    let mapped_food: Vec<serde_json::Value> = match food_rows_res {
+        Ok(rows) => rows
+            .iter()
+            .map(|o| {
+                use sqlx::Row;
+                let id: Uuid = o.get("id");
+                let status: OrderStatus = o.get("status");
+                let total: rust_decimal::Decimal = o.get("total");
+                let delivery_address: String = o.get("delivery_address");
+                let pickup_address: Option<String> = o.get("pickup_address");
+                let created_at: chrono::DateTime<chrono::Utc> = o.get("created_at");
+                let delivery_boy_id: Option<Uuid> = o.get("delivery_boy_id");
+                let restaurant_name: String = o.get("restaurant_name");
+                let customer_name: Option<String> = o.get("customer_name");
+                let customer_phone: Option<String> = o.get("customer_phone");
+
+                let profiles =
+                    serde_json::json!({ "full_name": customer_name, "phone": customer_phone });
+                serde_json::json!({
+                    "id": id,
+                    "delivery_boy_id": delivery_boy_id,
+                    "rider_id": delivery_boy_id,
+                    "status": status as OrderStatus,
+                    "total": total,
+                    "delivery_address": delivery_address,
+                    "pickup_address": pickup_address,
+                    "created_at": created_at,
+                    "restaurants": { "name": restaurant_name },
+                    "profiles": profiles,
+                    "customer": profiles
+                })
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    let grocery_rows_res = sqlx::query(
+        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, s.name as store_name, pc.full_name as customer_name, pc.phone as customer_phone
+         FROM rweezy.grocery_orders o
+         JOIN rweezy.grocery_stores s ON o.store_id = s.id
+         LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         WHERE o.delivery_boy_id = $1 AND o.status IN ('completed'::rweezy.OrderStatus, 'delivered'::rweezy.OrderStatus, 'cancelled'::rweezy.OrderStatus) ORDER BY o.created_at DESC"
+    )
+    .bind(user_id)
+    .fetch_all(pool.get_ref())
+    .await;
+
+    let mapped_grocery: Vec<serde_json::Value> = match grocery_rows_res {
+        Ok(rows) => rows
+            .iter()
+            .map(|o| {
+                use sqlx::Row;
+                let id: Uuid = o.get("id");
+                let status: OrderStatus = o.get("status");
+                let total: rust_decimal::Decimal = o.get("total");
+                let delivery_address: String = o.get("delivery_address");
+                let pickup_address: Option<String> = o.get("pickup_address");
+                let created_at: chrono::DateTime<chrono::Utc> = o.get("created_at");
+                let delivery_boy_id: Option<Uuid> = o.get("delivery_boy_id");
+                let store_name: String = o.get("store_name");
+                let customer_name: Option<String> = o.get("customer_name");
+                let customer_phone: Option<String> = o.get("customer_phone");
+
+                let profiles =
+                    serde_json::json!({ "full_name": customer_name, "phone": customer_phone });
+                serde_json::json!({
+                    "id": id,
+                    "delivery_boy_id": delivery_boy_id,
+                    "rider_id": delivery_boy_id,
+                    "status": status as OrderStatus,
+                    "total": total,
+                    "delivery_address": delivery_address,
+                    "pickup_address": pickup_address,
+                    "created_at": created_at,
+                    "grocery_stores": { "name": store_name },
+                    "profiles": profiles,
+                    "customer": profiles
+                })
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "food": mapped_food,
+        "grocery": mapped_grocery
+    }))
 }
