@@ -69,6 +69,10 @@ const riderNav: NavItem[] = [
   { title: "Active", url: "/rider/active", icon: ClipboardList },
 ];
 
+const allInOneNav: NavItem[] = [
+  { title: "All-in-One Dashboard", url: "/all-in-one-partner", icon: Truck },
+];
+
 const adminNav: NavItem[] = [
   { title: "Admin", url: "/admin", icon: Shield },
   { title: "Users", url: "/admin/users", icon: Users },
@@ -88,6 +92,8 @@ export function AppSidebar() {
       next.push({ label: "Grocery manager", items: groceryNav });
     if (roles.includes("delivery_boy")) next.push({ label: "Delivery", items: deliveryNav });
     if (roles.includes("rider")) next.push({ label: "Rider", items: riderNav });
+    if (roles.includes("all_in_one_partner"))
+      next.push({ label: "All-in-One Partner", items: allInOneNav });
     if (roles.includes("admin")) next.push({ label: "Admin", items: adminNav });
     return next;
   }, [roles]);

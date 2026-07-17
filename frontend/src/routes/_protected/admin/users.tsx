@@ -34,6 +34,7 @@ const ASSIGNABLE: AppRole[] = [
   "grocery_manager",
   "delivery_boy",
   "rider",
+  "all_in_one_partner",
 ];
 
 function AdminUsers() {

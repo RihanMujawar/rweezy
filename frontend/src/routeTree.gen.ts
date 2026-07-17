@@ -21,6 +21,7 @@ import { Route as ProtectedHotelIndexRouteImport } from './routes/_protected/hot
 import { Route as ProtectedGroceryAdminIndexRouteImport } from './routes/_protected/grocery-admin/index'
 import { Route as ProtectedDeliveryIndexRouteImport } from './routes/_protected/delivery/index'
 import { Route as ProtectedAppIndexRouteImport } from './routes/_protected/app/index'
+import { Route as ProtectedAllInOnePartnerIndexRouteImport } from './routes/_protected/all-in-one-partner/index'
 import { Route as ProtectedAdminIndexRouteImport } from './routes/_protected/admin/index'
 import { Route as ProtectedRiderActiveRouteImport } from './routes/_protected/rider/active'
 import { Route as ProtectedHotelOrdersRouteImport } from './routes/_protected/hotel/orders'
@@ -104,6 +105,12 @@ const ProtectedAppIndexRoute = ProtectedAppIndexRouteImport.update({
   path: '/app/',
   getParentRoute: () => ProtectedRoute,
 } as any)
+const ProtectedAllInOnePartnerIndexRoute =
+  ProtectedAllInOnePartnerIndexRouteImport.update({
+    id: '/all-in-one-partner/',
+    path: '/all-in-one-partner/',
+    getParentRoute: () => ProtectedRoute,
+  } as any)
 const ProtectedAdminIndexRoute = ProtectedAdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
@@ -247,6 +254,7 @@ export interface FileRoutesByFullPath {
   '/hotel/orders': typeof ProtectedHotelOrdersRoute
   '/rider/active': typeof ProtectedRiderActiveRoute
   '/admin/': typeof ProtectedAdminIndexRoute
+  '/all-in-one-partner/': typeof ProtectedAllInOnePartnerIndexRoute
   '/app/': typeof ProtectedAppIndexRoute
   '/delivery/': typeof ProtectedDeliveryIndexRoute
   '/grocery-admin/': typeof ProtectedGroceryAdminIndexRoute
@@ -282,6 +290,7 @@ export interface FileRoutesByTo {
   '/hotel/orders': typeof ProtectedHotelOrdersRoute
   '/rider/active': typeof ProtectedRiderActiveRoute
   '/admin': typeof ProtectedAdminIndexRoute
+  '/all-in-one-partner': typeof ProtectedAllInOnePartnerIndexRoute
   '/app': typeof ProtectedAppIndexRoute
   '/delivery': typeof ProtectedDeliveryIndexRoute
   '/grocery-admin': typeof ProtectedGroceryAdminIndexRoute
@@ -319,6 +328,7 @@ export interface FileRoutesById {
   '/_protected/hotel/orders': typeof ProtectedHotelOrdersRoute
   '/_protected/rider/active': typeof ProtectedRiderActiveRoute
   '/_protected/admin/': typeof ProtectedAdminIndexRoute
+  '/_protected/all-in-one-partner/': typeof ProtectedAllInOnePartnerIndexRoute
   '/_protected/app/': typeof ProtectedAppIndexRoute
   '/_protected/delivery/': typeof ProtectedDeliveryIndexRoute
   '/_protected/grocery-admin/': typeof ProtectedGroceryAdminIndexRoute
@@ -356,6 +366,7 @@ export interface FileRouteTypes {
     | '/hotel/orders'
     | '/rider/active'
     | '/admin/'
+    | '/all-in-one-partner/'
     | '/app/'
     | '/delivery/'
     | '/grocery-admin/'
@@ -391,6 +402,7 @@ export interface FileRouteTypes {
     | '/hotel/orders'
     | '/rider/active'
     | '/admin'
+    | '/all-in-one-partner'
     | '/app'
     | '/delivery'
     | '/grocery-admin'
@@ -427,6 +439,7 @@ export interface FileRouteTypes {
     | '/_protected/hotel/orders'
     | '/_protected/rider/active'
     | '/_protected/admin/'
+    | '/_protected/all-in-one-partner/'
     | '/_protected/app/'
     | '/_protected/delivery/'
     | '/_protected/grocery-admin/'
@@ -534,6 +547,13 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app/'
       preLoaderRoute: typeof ProtectedAppIndexRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
+    '/_protected/all-in-one-partner/': {
+      id: '/_protected/all-in-one-partner/'
+      path: '/all-in-one-partner'
+      fullPath: '/all-in-one-partner/'
+      preLoaderRoute: typeof ProtectedAllInOnePartnerIndexRouteImport
       parentRoute: typeof ProtectedRoute
     }
     '/_protected/admin/': {
@@ -710,6 +730,7 @@ interface ProtectedRouteChildren {
   ProtectedHotelOrdersRoute: typeof ProtectedHotelOrdersRoute
   ProtectedRiderActiveRoute: typeof ProtectedRiderActiveRoute
   ProtectedAdminIndexRoute: typeof ProtectedAdminIndexRoute
+  ProtectedAllInOnePartnerIndexRoute: typeof ProtectedAllInOnePartnerIndexRoute
   ProtectedAppIndexRoute: typeof ProtectedAppIndexRoute
   ProtectedDeliveryIndexRoute: typeof ProtectedDeliveryIndexRoute
   ProtectedGroceryAdminIndexRoute: typeof ProtectedGroceryAdminIndexRoute
@@ -740,6 +761,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedHotelOrdersRoute: ProtectedHotelOrdersRoute,
   ProtectedRiderActiveRoute: ProtectedRiderActiveRoute,
   ProtectedAdminIndexRoute: ProtectedAdminIndexRoute,
+  ProtectedAllInOnePartnerIndexRoute: ProtectedAllInOnePartnerIndexRoute,
   ProtectedAppIndexRoute: ProtectedAppIndexRoute,
   ProtectedDeliveryIndexRoute: ProtectedDeliveryIndexRoute,
   ProtectedGroceryAdminIndexRoute: ProtectedGroceryAdminIndexRoute,

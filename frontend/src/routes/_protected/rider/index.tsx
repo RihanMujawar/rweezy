@@ -361,8 +361,8 @@ function RiderList() {
 
   return (
     <RoleGate
-      allowed={["rider", "admin"]}
-      hasAny={roles.includes("rider") || roles.includes("admin")}
+      allowed={["rider", "admin", "all_in_one_partner"]}
+      hasAny={roles.includes("rider") || roles.includes("admin") || roles.includes("all_in_one_partner")}
     >
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center gap-2">

@@ -286,8 +286,8 @@ function DeliveryActive() {
 
   return (
     <RoleGate
-      allowed={["delivery_boy", "admin"]}
-      hasAny={roles.includes("delivery_boy") || roles.includes("admin")}
+      allowed={["delivery_boy", "admin", "all_in_one_partner"]}
+      hasAny={roles.includes("delivery_boy") || roles.includes("admin") || roles.includes("all_in_one_partner")}
     >
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold">Deliveries</h1>

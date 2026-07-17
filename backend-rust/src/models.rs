@@ -13,6 +13,7 @@ pub enum AppRole {
     GroceryManager,
     DeliveryBoy,
     Rider,
+    AllInOnePartner,
 }
 
 impl AppRole {
@@ -24,6 +25,7 @@ impl AppRole {
             AppRole::GroceryManager => "grocery_manager",
             AppRole::DeliveryBoy => "delivery_boy",
             AppRole::Rider => "rider",
+            AppRole::AllInOnePartner => "all_in_one_partner",
         }
     }
 }

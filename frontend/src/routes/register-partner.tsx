@@ -18,6 +18,7 @@ export const Route = createFileRoute("/register-partner")({
 });
 
 const roleOptions = [
+  { value: "all_in_one_partner", label: "All-in-One Partner (Food, Grocery, Rides & Packages)" },
   { value: "rider", label: "Rider for rides/packages" },
   { value: "delivery_boy", label: "Food/grocery delivery partner" },
   { value: "hotel_manager", label: "Restaurant manager" },

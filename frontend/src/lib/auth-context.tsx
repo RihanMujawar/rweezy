@@ -8,7 +8,8 @@ export type AppRole =
   | "hotel_manager"
   | "grocery_manager"
   | "delivery_boy"
-  | "rider";
+  | "rider"
+  | "all_in_one_partner";
 
 type AuthUser = {
   id: string;

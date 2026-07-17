@@ -497,6 +497,7 @@ pub async fn admin_toggle_user_role(
         "grocery_manager" => AppRole::GroceryManager,
         "delivery_boy" => AppRole::DeliveryBoy,
         "rider" => AppRole::Rider,
+        "all_in_one_partner" => AppRole::AllInOnePartner,
         _ => {
             return HttpResponse::BadRequest().json(serde_json::json!({ "error": "Invalid role" }))
         }

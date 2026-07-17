@@ -549,6 +549,7 @@ pub async fn register(
                 "grocery_manager" => AppRole::GroceryManager,
                 "delivery_boy" => AppRole::DeliveryBoy,
                 "rider" => AppRole::Rider,
+                "all_in_one_partner" => AppRole::AllInOnePartner,
                 _ => AppRole::Customer,
             };
 
