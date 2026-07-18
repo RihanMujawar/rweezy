@@ -5,6 +5,8 @@ use uuid::Uuid;
 
 use crate::handlers::auth::get_auth_user;
 use crate::models::*;
+use crate::services::order_notifications;
+use crate::services::whatsapp::WhatsAppService;
 
 pub async fn get_profile(
     req: HttpRequest,
@@ -194,6 +196,7 @@ pub async fn create_role_request(
     payload: web::Json<RoleRequestPayload>,
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -229,7 +232,15 @@ pub async fn create_role_request(
     .fetch_one(pool.get_ref())
     .await
     {
-        Ok(request) => HttpResponse::Ok().json(serde_json::json!({ "request": request })),
+        Ok(request) => {
+            order_notifications::spawn_role_request_created(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                user_id,
+                &role_str,
+            );
+            HttpResponse::Ok().json(serde_json::json!({ "request": request }))
+        }
         Err(e) => {
             error!("Failed to create role request: {}", e);
             HttpResponse::InternalServerError().json(serde_json::json!({ "error": "Database error" }))

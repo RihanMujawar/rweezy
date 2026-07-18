@@ -7,6 +7,8 @@ use uuid::Uuid;
 use crate::handlers::auth::get_auth_user;
 use crate::models::*;
 use crate::services::fcm::FcmService;
+use crate::services::order_notifications;
+use crate::services::whatsapp::WhatsAppService;
 use crate::websocket::SharedBroker;
 
 async fn get_chat_participants(
@@ -146,6 +148,7 @@ pub async fn post_chat_message(
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
     fcm_service: web::Data<FcmService>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -257,6 +260,14 @@ pub async fn post_chat_message(
         } else {
             body.to_string()
         };
+        order_notifications::spawn_chat_message(
+            pool.get_ref().clone(),
+            whatsapp.get_ref().clone(),
+            rec_uid,
+            &sender_name,
+            &preview,
+            &kind,
+        );
         let title = format!("{} · Chat", sender_name);
 
         let mut data = HashMap::new();

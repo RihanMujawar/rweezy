@@ -20,6 +20,7 @@ mod config;
 mod models;
 mod services {
     pub mod fcm;
+    pub mod order_notifications;
     pub mod whatsapp;
 }
 mod websocket;

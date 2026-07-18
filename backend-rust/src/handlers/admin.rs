@@ -8,6 +8,8 @@ use uuid::Uuid;
 use crate::handlers::auth::get_auth_user;
 use crate::models::*;
 use crate::services::fcm::FcmService;
+use crate::services::order_notifications;
+use crate::services::whatsapp::WhatsAppService;
 use crate::websocket::SharedBroker;
 
 async fn check_has_role(user_id: Uuid, role_name: &str, pool: &PgPool) -> bool {
@@ -1936,6 +1938,7 @@ pub async fn admin_review_role_request(
     payload: web::Json<serde_json::Value>,
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -2039,6 +2042,14 @@ pub async fn admin_review_role_request(
     };
 
     let _ = tx.commit().await;
+
+    order_notifications::spawn_role_request_reviewed(
+        pool.get_ref().clone(),
+        whatsapp.get_ref().clone(),
+        request.user_id,
+        decision == "approved",
+        request.requested_role.as_str(),
+    );
 
     HttpResponse::Ok().json(serde_json::json!({ "request": updated }))
 }

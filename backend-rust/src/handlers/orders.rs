@@ -9,6 +9,8 @@ use uuid::Uuid;
 
 use crate::handlers::auth::get_auth_user;
 use crate::models::*;
+use crate::services::order_notifications;
+use crate::services::whatsapp::WhatsAppService;
 use crate::websocket::SharedBroker;
 
 fn generate_delivery_pin() -> String {
@@ -61,6 +63,7 @@ pub async fn checkout_food(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -247,6 +250,15 @@ pub async fn checkout_food(
 
     broadcast_order_update(&broker, &order_id).await;
 
+    order_notifications::spawn_food_order_placed(
+        pool.get_ref().clone(),
+        whatsapp.get_ref().clone(),
+        order_id,
+        user_id,
+        rest_id,
+        estimated_delivery_at,
+    );
+
     HttpResponse::Ok().json(serde_json::json!({
         "order": {
             "id": order_id,
@@ -262,6 +274,7 @@ pub async fn checkout_grocery(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -456,6 +469,15 @@ pub async fn checkout_grocery(
 
     broadcast_order_update(&broker, &order_id).await;
 
+    order_notifications::spawn_grocery_order_placed(
+        pool.get_ref().clone(),
+        whatsapp.get_ref().clone(),
+        order_id,
+        user_id,
+        store_id,
+        estimated_delivery_at,
+    );
+
     HttpResponse::Ok().json(serde_json::json!({
         "order": {
             "id": order_id,
@@ -489,6 +511,34 @@ pub async fn get_my_orders(
     .fetch_all(pool.get_ref())
     .await;
 
+    // #region agent log
+    {
+        use std::io::Write;
+        let payload = serde_json::json!({
+            "sessionId": "d37c4b",
+            "runId": "post-fix",
+            "hypothesisId": "C",
+            "location": "orders.rs:get_my_orders",
+            "message": "food_rows fetched",
+            "data": {
+                "ok": food_rows_res.is_ok(),
+                "count": food_rows_res.as_ref().map(|r| r.len()).unwrap_or(0)
+            },
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        });
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/home/penguin/github/.cursor/debug-d37c4b.log")
+        {
+            let _ = writeln!(f, "{}", payload);
+        }
+    }
+    // #endregion
+
     let mapped_food: Vec<serde_json::Value> = match food_rows_res {
         Ok(rows) => rows
             .iter()
@@ -498,6 +548,50 @@ pub async fn get_my_orders(
                 let customer_id: Uuid = row.get("customer_id");
                 let restaurant_id: Uuid = row.get("restaurant_id");
                 let delivery_boy_id: Option<Uuid> = row.get("delivery_boy_id");
+                // #region agent log
+                {
+                    use sqlx::{Column, TypeInfo};
+                    use std::io::Write;
+                    let pg_type_name = row
+                        .columns()
+                        .iter()
+                        .find(|c| c.name() == "status")
+                        .map(|c| c.type_info().name().to_string())
+                        .unwrap_or_else(|| "missing".into());
+                    let enum_err = row
+                        .try_get::<OrderStatus, _>("status")
+                        .err()
+                        .map(|e| e.to_string());
+                    let str_ok = row.try_get::<String, _>("status").is_ok();
+                    let rust_type_name = "orderstatus";
+                    let payload = serde_json::json!({
+                        "sessionId": "d37c4b",
+                        "runId": "post-fix",
+                        "hypothesisId": "A",
+                        "location": "orders.rs:status_decode",
+                        "message": "status column type check",
+                        "data": {
+                            "pg_type_name": pg_type_name,
+                            "rust_type_name": rust_type_name,
+                            "names_match": pg_type_name == rust_type_name,
+                            "bare_name_match": pg_type_name == "orderstatus",
+                            "enum_decode_err": enum_err,
+                            "string_decode_ok": str_ok
+                        },
+                        "timestamp": std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis())
+                            .unwrap_or(0)
+                    });
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open("/home/penguin/github/.cursor/debug-d37c4b.log")
+                    {
+                        let _ = writeln!(f, "{}", payload);
+                    }
+                }
+                // #endregion
                 let status: OrderStatus = row.get("status");
                 let total: rust_decimal::Decimal = row.get("total");
                 let delivery_address: String = row.get("delivery_address");
@@ -851,6 +945,7 @@ pub async fn cancel_order(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -874,6 +969,12 @@ pub async fn cancel_order(
     {
         Ok(Some(_)) => {
             broadcast_order_update(&broker, &id).await;
+            order_notifications::spawn_order_cancelled(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                kind.clone(),
+                id,
+            );
             HttpResponse::Ok()
                 .json(serde_json::json!({ "ok": true, "row": { "id": id, "status": "cancelled" } }))
         }
@@ -1489,6 +1590,7 @@ pub async fn accept_delivery(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -1510,6 +1612,19 @@ pub async fn accept_delivery(
     {
         Ok(Some(_)) => {
             broadcast_order_update(&broker, &id).await;
+            order_notifications::spawn_delivery_accepted(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                kind.clone(),
+                id,
+            );
+            order_notifications::spawn_order_status(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                kind.clone(),
+                id,
+                "accepted".to_string(),
+            );
             HttpResponse::Ok()
                 .json(serde_json::json!({ "order": { "id": id, "rider_id": user_id } }))
         }
@@ -1525,6 +1640,7 @@ pub async fn advance_delivery(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -1650,6 +1766,13 @@ pub async fn advance_delivery(
     {
         Ok(Some(_)) => {
             broadcast_order_update(&broker, &id).await;
+            order_notifications::spawn_order_status(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                kind.clone(),
+                id,
+                target_status.to_string(),
+            );
             HttpResponse::Ok()
                 .json(serde_json::json!({ "order": { "id": id, "status": target_status } }))
         }

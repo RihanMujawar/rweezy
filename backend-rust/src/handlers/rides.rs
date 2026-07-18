@@ -8,6 +8,8 @@ use uuid::Uuid;
 
 use crate::handlers::auth::get_auth_user;
 use crate::models::*;
+use crate::services::order_notifications;
+use crate::services::whatsapp::WhatsAppService;
 use crate::websocket::SharedBroker;
 
 fn generate_delivery_pin() -> String {
@@ -52,6 +54,7 @@ pub async fn book_ride(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -86,6 +89,12 @@ pub async fn book_ride(
     {
         Ok(_) => {
             broadcast_job_update(&broker, &ride_id).await;
+            order_notifications::spawn_ride_booked(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                ride_id,
+                user_id,
+            );
             HttpResponse::Ok().json(serde_json::json!({
                 "ride": {
                     "id": ride_id,
@@ -106,6 +115,7 @@ pub async fn book_package(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -142,6 +152,12 @@ pub async fn book_package(
     {
         Ok(_) => {
             broadcast_job_update(&broker, &pkg_id).await;
+            order_notifications::spawn_package_booked(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                pkg_id,
+                user_id,
+            );
             HttpResponse::Ok().json(serde_json::json!({
                 "packageDelivery": {
                     "id": pkg_id,
@@ -397,6 +413,7 @@ pub async fn accept_ride_job(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -415,6 +432,13 @@ pub async fn accept_ride_job(
     {
         Ok(Some(_)) => {
             broadcast_job_update(&broker, &id).await;
+            order_notifications::spawn_ride_status(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                "rides".to_string(),
+                id,
+                "accepted".to_string(),
+            );
             HttpResponse::Ok().json(serde_json::json!({ "ride": { "id": id, "rider_id": user_id, "status": "accepted" } }))
         }
         _ => HttpResponse::BadRequest().json(serde_json::json!({ "error": "Ride job already accepted or unavailable" })),
@@ -427,6 +451,7 @@ pub async fn accept_package_job(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -445,6 +470,13 @@ pub async fn accept_package_job(
     {
         Ok(Some(_)) => {
             broadcast_job_update(&broker, &id).await;
+            order_notifications::spawn_ride_status(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                "package_deliveries".to_string(),
+                id,
+                "accepted".to_string(),
+            );
             HttpResponse::Ok().json(serde_json::json!({ "packageDelivery": { "id": id, "rider_id": user_id, "status": "accepted" } }))
         }
         _ => HttpResponse::BadRequest().json(serde_json::json!({ "error": "Package job already accepted or unavailable" })),
@@ -458,6 +490,7 @@ pub async fn advance_rider_job(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -577,6 +610,13 @@ pub async fn advance_rider_job(
     {
         Ok(Some(_)) => {
             broadcast_job_update(&broker, &id).await;
+            order_notifications::spawn_ride_status(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                table.clone(),
+                id,
+                target_status.to_string(),
+            );
             HttpResponse::Ok()
                 .json(serde_json::json!({ "job": { "id": id, "status": target_status } }))
         }
@@ -591,6 +631,7 @@ pub async fn cancel_rider_job(
     pool: web::Data<PgPool>,
     config: web::Data<crate::config::Config>,
     broker: web::Data<SharedBroker>,
+    whatsapp: web::Data<WhatsAppService>,
 ) -> impl Responder {
     let user_id = match get_auth_user(&req, &config.jwt_secret) {
         Ok(uid) => uid,
@@ -613,6 +654,13 @@ pub async fn cancel_rider_job(
     {
         Ok(Some(_)) => {
             broadcast_job_update(&broker, &id).await;
+            order_notifications::spawn_ride_status(
+                pool.get_ref().clone(),
+                whatsapp.get_ref().clone(),
+                table.clone(),
+                id,
+                "cancelled".to_string(),
+            );
             HttpResponse::Ok()
                 .json(serde_json::json!({ "job": { "id": id, "status": "cancelled" } }))
         }
