@@ -1383,10 +1383,11 @@ pub async fn track_order(
 
 pub async fn get_available_deliveries(pool: web::Data<PgPool>) -> impl Responder {
     let food_rows_res = sqlx::query(
-        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, r.name as restaurant_name, pc.full_name as customer_name, pc.phone as customer_phone
+        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, r.name as restaurant_name, pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone
          FROM rweezy.food_orders o
          JOIN rweezy.restaurants r ON o.restaurant_id = r.id
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.delivery_boy_id IS NULL AND o.status IN ('ready'::rweezy.OrderStatus, 'preparing'::rweezy.OrderStatus)"
     )
     .fetch_all(pool.get_ref())
@@ -1426,10 +1427,11 @@ pub async fn get_available_deliveries(pool: web::Data<PgPool>) -> impl Responder
     };
 
     let grocery_rows_res = sqlx::query(
-        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, s.name as store_name, pc.full_name as customer_name, pc.phone as customer_phone
+        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, s.name as store_name, pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone
          FROM rweezy.grocery_orders o
          JOIN rweezy.grocery_stores s ON o.store_id = s.id
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.delivery_boy_id IS NULL AND o.status IN ('ready'::rweezy.OrderStatus, 'preparing'::rweezy.OrderStatus)"
     )
     .fetch_all(pool.get_ref())
@@ -1485,10 +1487,11 @@ pub async fn get_active_deliveries(
     };
 
     let food_rows_res = sqlx::query(
-        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, r.name as restaurant_name, pc.full_name as customer_name, pc.phone as customer_phone
+        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, r.name as restaurant_name, pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone
          FROM rweezy.food_orders o
          JOIN rweezy.restaurants r ON o.restaurant_id = r.id
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.delivery_boy_id = $1 AND o.status NOT IN ('delivered'::rweezy.OrderStatus, 'cancelled'::rweezy.OrderStatus)"
     )
     .bind(user_id)
@@ -1532,10 +1535,11 @@ pub async fn get_active_deliveries(
     };
 
     let grocery_rows_res = sqlx::query(
-        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, s.name as store_name, pc.full_name as customer_name, pc.phone as customer_phone
+        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, s.name as store_name, pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone
          FROM rweezy.grocery_orders o
          JOIN rweezy.grocery_stores s ON o.store_id = s.id
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.delivery_boy_id = $1 AND o.status NOT IN ('delivered'::rweezy.OrderStatus, 'cancelled'::rweezy.OrderStatus)"
     )
     .bind(user_id)
@@ -1998,10 +2002,11 @@ pub async fn get_delivery_history(
     };
 
     let food_rows_res = sqlx::query(
-        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, r.name as restaurant_name, pc.full_name as customer_name, pc.phone as customer_phone
+        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, r.name as restaurant_name, pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone
          FROM rweezy.food_orders o
          JOIN rweezy.restaurants r ON o.restaurant_id = r.id
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.delivery_boy_id = $1 AND o.status IN ('completed'::rweezy.OrderStatus, 'delivered'::rweezy.OrderStatus, 'cancelled'::rweezy.OrderStatus) ORDER BY o.created_at DESC"
     )
     .bind(user_id)
@@ -2045,10 +2050,11 @@ pub async fn get_delivery_history(
     };
 
     let grocery_rows_res = sqlx::query(
-        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, s.name as store_name, pc.full_name as customer_name, pc.phone as customer_phone
+        "SELECT o.id, o.status, o.total, o.delivery_address, o.pickup_address, o.created_at, o.delivery_boy_id, s.name as store_name, pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone
          FROM rweezy.grocery_orders o
          JOIN rweezy.grocery_stores s ON o.store_id = s.id
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.delivery_boy_id = $1 AND o.status IN ('completed'::rweezy.OrderStatus, 'delivered'::rweezy.OrderStatus, 'cancelled'::rweezy.OrderStatus) ORDER BY o.created_at DESC"
     )
     .bind(user_id)

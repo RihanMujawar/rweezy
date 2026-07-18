@@ -966,8 +966,10 @@ pub async fn get_grocery_orders(
     };
 
     let orders_res = sqlx::query(
-        "SELECT o.id, o.customer_id, o.store_id, o.status, o.total, o.delivery_address, o.notes, o.payment_method, o.created_at, pc.full_name as customer_name, pc.phone as customer_phone FROM rweezy.grocery_orders o
+        "SELECT o.id, o.customer_id, o.store_id, o.status, o.total, o.delivery_address, o.delivery_lat, o.delivery_lng, o.notes, o.payment_method, o.created_at,
+                pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone FROM rweezy.grocery_orders o
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.store_id = $1 ORDER BY o.created_at DESC"
     )
     .bind(store_id)
@@ -1006,6 +1008,8 @@ pub async fn get_grocery_orders(
             let status: OrderStatus = row.get("status");
             let total: rust_decimal::Decimal = row.get("total");
             let delivery_address: String = row.get("delivery_address");
+            let delivery_lat: Option<f64> = row.get("delivery_lat");
+            let delivery_lng: Option<f64> = row.get("delivery_lng");
             let notes: Option<String> = row.get("notes");
             let payment_method: String = row.get("payment_method");
             let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
@@ -1035,6 +1039,8 @@ pub async fn get_grocery_orders(
                 "status": status as OrderStatus,
                 "total": total,
                 "delivery_address": delivery_address,
+                "delivery_lat": delivery_lat,
+                "delivery_lng": delivery_lng,
                 "notes": notes,
                 "payment_method": payment_method,
                 "created_at": created_at,
@@ -1064,11 +1070,38 @@ pub async fn advance_grocery_order(
         Err(e) => return HttpResponse::from_error(e),
     };
 
-    if !check_has_role(user_id, "grocery_manager", pool.get_ref()).await {
+    let order_id = path.into_inner();
+
+    // Securely check if user is manager of the store for this order, or an admin
+    let order_store_id_res = sqlx::query_scalar::<_, Uuid>(
+        "SELECT store_id FROM rweezy.grocery_orders WHERE id = $1"
+    )
+    .bind(order_id)
+    .fetch_optional(pool.get_ref())
+    .await;
+
+    let order_store_id = match order_store_id_res {
+        Ok(Some(id)) => id,
+        _ => return HttpResponse::NotFound().json(serde_json::json!({ "error": "Order not found" })),
+    };
+
+    let is_manager_or_admin = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(
+            SELECT 1 FROM rweezy.grocery_stores WHERE id = $1 AND manager_id = $2
+            UNION ALL
+            SELECT 1 FROM rweezy.user_roles WHERE user_id = $2 AND role = 'admin'::rweezy.AppRole
+        )"
+    )
+    .bind(order_store_id)
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .unwrap_or(false);
+
+    if !is_manager_or_admin {
         return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }));
     }
 
-    let order_id = path.into_inner();
     let status_str = payload
         .get("status")
         .and_then(|v| v.as_str())
@@ -1136,8 +1169,10 @@ pub async fn get_grocery_history(
     };
 
     let orders_res = sqlx::query(
-        "SELECT o.id, o.customer_id, o.store_id, o.status, o.total, o.delivery_address, o.notes, o.payment_method, o.created_at, pc.full_name as customer_name, pc.phone as customer_phone FROM rweezy.grocery_orders o
+        "SELECT o.id, o.customer_id, o.store_id, o.status, o.total, o.delivery_address, o.delivery_lat, o.delivery_lng, o.notes, o.payment_method, o.created_at,
+                pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone FROM rweezy.grocery_orders o
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.store_id = $1 AND o.status IN ('completed'::rweezy.OrderStatus, 'delivered'::rweezy.OrderStatus, 'cancelled'::rweezy.OrderStatus) ORDER BY o.created_at DESC"
     )
     .bind(store_id)
@@ -1176,6 +1211,8 @@ pub async fn get_grocery_history(
             let status: OrderStatus = row.get("status");
             let total: rust_decimal::Decimal = row.get("total");
             let delivery_address: String = row.get("delivery_address");
+            let delivery_lat: Option<f64> = row.get("delivery_lat");
+            let delivery_lng: Option<f64> = row.get("delivery_lng");
             let notes: Option<String> = row.get("notes");
             let payment_method: String = row.get("payment_method");
             let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
@@ -1205,6 +1242,8 @@ pub async fn get_grocery_history(
                 "status": status as OrderStatus,
                 "total": total,
                 "delivery_address": delivery_address,
+                "delivery_lat": delivery_lat,
+                "delivery_lng": delivery_lng,
                 "notes": notes,
                 "payment_method": payment_method,
                 "created_at": created_at,
@@ -1669,8 +1708,10 @@ pub async fn get_hotel_history(
     };
 
     let orders_res = sqlx::query(
-        "SELECT o.id, o.customer_id, o.restaurant_id, o.status, o.total, o.delivery_address, o.notes, o.payment_method, o.created_at, pc.full_name as customer_name, pc.phone as customer_phone FROM rweezy.food_orders o
+        "SELECT o.id, o.customer_id, o.restaurant_id, o.status, o.total, o.delivery_address, o.delivery_lat, o.delivery_lng, o.notes, o.payment_method, o.created_at,
+                pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone FROM rweezy.food_orders o
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.restaurant_id = $1 AND o.status IN ('completed'::rweezy.OrderStatus, 'delivered'::rweezy.OrderStatus, 'cancelled'::rweezy.OrderStatus) ORDER BY o.created_at DESC"
     )
     .bind(rest_id)
@@ -1709,6 +1750,8 @@ pub async fn get_hotel_history(
             let status: OrderStatus = row.get("status");
             let total: rust_decimal::Decimal = row.get("total");
             let delivery_address: String = row.get("delivery_address");
+            let delivery_lat: Option<f64> = row.get("delivery_lat");
+            let delivery_lng: Option<f64> = row.get("delivery_lng");
             let notes: Option<String> = row.get("notes");
             let payment_method: String = row.get("payment_method");
             let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
@@ -1738,6 +1781,8 @@ pub async fn get_hotel_history(
                 "status": status as OrderStatus,
                 "total": total,
                 "delivery_address": delivery_address,
+                "delivery_lat": delivery_lat,
+                "delivery_lng": delivery_lng,
                 "notes": notes,
                 "payment_method": payment_method,
                 "created_at": created_at,
@@ -2273,8 +2318,10 @@ pub async fn get_hotel_orders(
     };
 
     let orders_res = sqlx::query(
-        "SELECT o.id, o.customer_id, o.restaurant_id, o.status, o.total, o.delivery_address, o.notes, o.payment_method, o.created_at, pc.full_name as customer_name, pc.phone as customer_phone FROM rweezy.food_orders o
+        "SELECT o.id, o.customer_id, o.restaurant_id, o.status, o.total, o.delivery_address, o.delivery_lat, o.delivery_lng, o.notes, o.payment_method, o.created_at,
+                pc.full_name as customer_name, COALESCE(NULLIF(pc.phone, ''), NULLIF(u.phone, '')) as customer_phone FROM rweezy.food_orders o
          LEFT JOIN rweezy.profiles pc ON o.customer_id = pc.id
+         LEFT JOIN rweezy.users u ON o.customer_id = u.id
          WHERE o.restaurant_id = $1 ORDER BY o.created_at DESC"
     )
     .bind(rest_id)
@@ -2313,6 +2360,8 @@ pub async fn get_hotel_orders(
             let status: OrderStatus = row.get("status");
             let total: rust_decimal::Decimal = row.get("total");
             let delivery_address: String = row.get("delivery_address");
+            let delivery_lat: Option<f64> = row.get("delivery_lat");
+            let delivery_lng: Option<f64> = row.get("delivery_lng");
             let notes: Option<String> = row.get("notes");
             let payment_method: String = row.get("payment_method");
             let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
@@ -2342,6 +2391,8 @@ pub async fn get_hotel_orders(
                 "status": status as OrderStatus,
                 "total": total,
                 "delivery_address": delivery_address,
+                "delivery_lat": delivery_lat,
+                "delivery_lng": delivery_lng,
                 "notes": notes,
                 "payment_method": payment_method,
                 "created_at": created_at,
@@ -2371,11 +2422,38 @@ pub async fn advance_hotel_order(
         Err(e) => return HttpResponse::from_error(e),
     };
 
-    if !check_has_role(user_id, "hotel_manager", pool.get_ref()).await {
+    let order_id = path.into_inner();
+
+    // Securely check if user is manager of the restaurant for this order, or an admin
+    let order_rest_id_res = sqlx::query_scalar::<_, Uuid>(
+        "SELECT restaurant_id FROM rweezy.food_orders WHERE id = $1"
+    )
+    .bind(order_id)
+    .fetch_optional(pool.get_ref())
+    .await;
+
+    let order_rest_id = match order_rest_id_res {
+        Ok(Some(id)) => id,
+        _ => return HttpResponse::NotFound().json(serde_json::json!({ "error": "Order not found" })),
+    };
+
+    let is_manager_or_admin = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(
+            SELECT 1 FROM rweezy.restaurants WHERE id = $1 AND manager_id = $2
+            UNION ALL
+            SELECT 1 FROM rweezy.user_roles WHERE user_id = $2 AND role = 'admin'::rweezy.AppRole
+        )"
+    )
+    .bind(order_rest_id)
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .unwrap_or(false);
+
+    if !is_manager_or_admin {
         return HttpResponse::Forbidden().json(serde_json::json!({ "error": "Unauthorized" }));
     }
 
-    let order_id = path.into_inner();
     let status_str = payload
         .get("status")
         .and_then(|v| v.as_str())

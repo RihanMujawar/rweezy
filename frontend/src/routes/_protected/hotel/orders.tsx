@@ -9,9 +9,11 @@ import { toast } from "sonner";
 import { RoleGate } from "@/components/coming-soon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
-import { Bell, BellOff, Clock, IndianRupee, Phone, Map as MapIcon } from "lucide-react";
+import { Bell, BellOff, Clock, IndianRupee, Phone, Map as MapIcon, MessageSquare } from "lucide-react";
 import { useAlertsPreference } from "@/hooks/use-alerts-preference";
 import { OrdersMap, MapOrder } from "@/components/orders-map";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ChatPanel } from "@/components/chat-panel";
 
 export const Route = createFileRoute("/_protected/hotel/orders")({
   component: HotelOrders,
@@ -68,6 +70,7 @@ function HotelOrders() {
   const { alertsEnabled, setAlertsEnabled } = useAlertsPreference();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState("active");
+  const [chatOrder, setChatOrder] = useState<Order | null>(null);
 
   const load = useCallback(async () => {
     const { orders } = await api.hotel.getOrders();
@@ -216,12 +219,20 @@ function HotelOrders() {
             <Button
               size="sm"
               variant="outline"
-              className="min-h-11"
-              onClick={() => toast.message("Customer phone is not attached to this order yet.")}
+              className="min-h-11 opacity-50 cursor-not-allowed"
+              disabled
             >
-              <Phone className="mr-2 h-4 w-4" /> Call customer
+              <Phone className="mr-2 h-4 w-4" /> Phone number unavailable
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="min-h-11"
+            onClick={() => setChatOrder(o)}
+          >
+            <MessageSquare className="mr-2 h-4 w-4" /> Chat
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -417,6 +428,19 @@ function HotelOrders() {
           </Tabs>
         )}
       </div>
+      <Dialog open={!!chatOrder} onOpenChange={(open) => !open && setChatOrder(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Chat with {chatOrder?.profiles?.full_name || "Customer"}</DialogTitle>
+          </DialogHeader>
+          {chatOrder && (
+            <ChatPanel
+              kind="food"
+              serviceId={chatOrder.id}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </RoleGate>
   );
 }
