@@ -1073,16 +1073,17 @@ pub async fn advance_grocery_order(
     let order_id = path.into_inner();
 
     // Securely check if user is manager of the store for this order, or an admin
-    let order_store_id_res = sqlx::query_scalar::<_, Uuid>(
-        "SELECT store_id FROM rweezy.grocery_orders WHERE id = $1"
-    )
-    .bind(order_id)
-    .fetch_optional(pool.get_ref())
-    .await;
+    let order_store_id_res =
+        sqlx::query_scalar::<_, Uuid>("SELECT store_id FROM rweezy.grocery_orders WHERE id = $1")
+            .bind(order_id)
+            .fetch_optional(pool.get_ref())
+            .await;
 
     let order_store_id = match order_store_id_res {
         Ok(Some(id)) => id,
-        _ => return HttpResponse::NotFound().json(serde_json::json!({ "error": "Order not found" })),
+        _ => {
+            return HttpResponse::NotFound().json(serde_json::json!({ "error": "Order not found" }))
+        }
     };
 
     let is_manager_or_admin = sqlx::query_scalar::<_, bool>(
@@ -1090,7 +1091,7 @@ pub async fn advance_grocery_order(
             SELECT 1 FROM rweezy.grocery_stores WHERE id = $1 AND manager_id = $2
             UNION ALL
             SELECT 1 FROM rweezy.user_roles WHERE user_id = $2 AND role = 'admin'::rweezy.AppRole
-        )"
+        )",
     )
     .bind(order_store_id)
     .bind(user_id)
@@ -2425,16 +2426,17 @@ pub async fn advance_hotel_order(
     let order_id = path.into_inner();
 
     // Securely check if user is manager of the restaurant for this order, or an admin
-    let order_rest_id_res = sqlx::query_scalar::<_, Uuid>(
-        "SELECT restaurant_id FROM rweezy.food_orders WHERE id = $1"
-    )
-    .bind(order_id)
-    .fetch_optional(pool.get_ref())
-    .await;
+    let order_rest_id_res =
+        sqlx::query_scalar::<_, Uuid>("SELECT restaurant_id FROM rweezy.food_orders WHERE id = $1")
+            .bind(order_id)
+            .fetch_optional(pool.get_ref())
+            .await;
 
     let order_rest_id = match order_rest_id_res {
         Ok(Some(id)) => id,
-        _ => return HttpResponse::NotFound().json(serde_json::json!({ "error": "Order not found" })),
+        _ => {
+            return HttpResponse::NotFound().json(serde_json::json!({ "error": "Order not found" }))
+        }
     };
 
     let is_manager_or_admin = sqlx::query_scalar::<_, bool>(
@@ -2442,7 +2444,7 @@ pub async fn advance_hotel_order(
             SELECT 1 FROM rweezy.restaurants WHERE id = $1 AND manager_id = $2
             UNION ALL
             SELECT 1 FROM rweezy.user_roles WHERE user_id = $2 AND role = 'admin'::rweezy.AppRole
-        )"
+        )",
     )
     .bind(order_rest_id)
     .bind(user_id)
