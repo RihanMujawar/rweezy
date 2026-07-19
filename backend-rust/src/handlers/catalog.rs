@@ -140,7 +140,12 @@ pub async fn list_restaurants(
     if let Some(lng) = coords.lng {
         loc.lng = Some(lng);
     }
-    if let Some(town_name) = coords.town_name.as_deref().map(str::trim).filter(|town| !town.is_empty()) {
+    if let Some(town_name) = coords
+        .town_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|town| !town.is_empty())
+    {
         loc.town_name = Some(town_name.to_owned());
     }
 
@@ -241,7 +246,12 @@ pub async fn list_stores(
     if let Some(lng) = coords.lng {
         loc.lng = Some(lng);
     }
-    if let Some(town_name) = coords.town_name.as_deref().map(str::trim).filter(|town| !town.is_empty()) {
+    if let Some(town_name) = coords
+        .town_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|town| !town.is_empty())
+    {
         loc.town_name = Some(town_name.to_owned());
     }
 
@@ -339,7 +349,12 @@ pub async fn list_food_items(
     if let Some(lng) = coords.lng {
         loc.lng = Some(lng);
     }
-    if let Some(town_name) = coords.town_name.as_deref().map(str::trim).filter(|town| !town.is_empty()) {
+    if let Some(town_name) = coords
+        .town_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|town| !town.is_empty())
+    {
         loc.town_name = Some(town_name.to_owned());
     }
 
