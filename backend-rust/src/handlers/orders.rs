@@ -1031,7 +1031,11 @@ pub async fn track_order(
                 let delivery_boy_id: Option<Uuid> = o.get("delivery_boy_id");
                 let manager_id: Option<Uuid> = o.get("manager_id");
 
-                if user_id != customer_id && delivery_boy_id != Some(user_id) && manager_id != Some(user_id) && !is_admin {
+                if user_id != customer_id
+                    && delivery_boy_id != Some(user_id)
+                    && manager_id != Some(user_id)
+                    && !is_admin
+                {
                     return HttpResponse::Forbidden().json(serde_json::json!({ "error": "You do not have access to track this order" }));
                 }
 
@@ -1148,7 +1152,11 @@ pub async fn track_order(
                 let delivery_boy_id: Option<Uuid> = o.get("delivery_boy_id");
                 let manager_id: Option<Uuid> = o.get("manager_id");
 
-                if user_id != customer_id && delivery_boy_id != Some(user_id) && manager_id != Some(user_id) && !is_admin {
+                if user_id != customer_id
+                    && delivery_boy_id != Some(user_id)
+                    && manager_id != Some(user_id)
+                    && !is_admin
+                {
                     return HttpResponse::Forbidden().json(serde_json::json!({ "error": "You do not have access to track this order" }));
                 }
 
@@ -1264,7 +1272,9 @@ pub async fn track_order(
                 let rider_id: Option<Uuid> = r.get("rider_id");
 
                 if user_id != customer_id && rider_id != Some(user_id) && !is_admin {
-                    return HttpResponse::Forbidden().json(serde_json::json!({ "error": "You do not have access to track this ride" }));
+                    return HttpResponse::Forbidden().json(
+                        serde_json::json!({ "error": "You do not have access to track this ride" }),
+                    );
                 }
 
                 let status: RideStatus = r.get("status");
