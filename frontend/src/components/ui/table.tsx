@@ -55,10 +55,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       whileHover={{ backgroundColor: "rgba(var(--foreground), 0.03)" }}
-      className={cn(
-        "border-b transition-colors data-[state=selected]:bg-muted/50",
-        className,
-      )}
+      className={cn("border-b transition-colors data-[state=selected]:bg-muted/50", className)}
       {...props}
     />
   ),

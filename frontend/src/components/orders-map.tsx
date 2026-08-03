@@ -83,37 +83,53 @@ export function OrdersMap({
           <div className="flex items-start justify-between">
             <div>
               <h3 className="font-bold">{selectedOrder.customerName || "Customer"}</h3>
-              <p className="text-sm text-muted-foreground">{selectedOrder.customerPhone || "No phone"}</p>
+              <p className="text-sm text-muted-foreground">
+                {selectedOrder.customerPhone || "No phone"}
+              </p>
             </div>
-            <Badge variant="secondary" className="capitalize">{selectedOrder.status}</Badge>
+            <Badge variant="secondary" className="capitalize">
+              {selectedOrder.status}
+            </Badge>
           </div>
 
           <div className="mt-2 text-sm">
-             {selectedOrder.items && (
-               <ul className="space-y-1">
-                 {selectedOrder.items.map((item, i) => (
-                   <li key={i}>{item.quantity}x {item.name}</li>
-                 ))}
-               </ul>
-             )}
-             {selectedOrder.total && <p className="mt-1 font-semibold">Total: ₹{selectedOrder.total}</p>}
+            {selectedOrder.items && (
+              <ul className="space-y-1">
+                {selectedOrder.items.map((item, i) => (
+                  <li key={i}>
+                    {item.quantity}x {item.name}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {selectedOrder.total && (
+              <p className="mt-1 font-semibold">Total: ₹{selectedOrder.total}</p>
+            )}
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
             {selectedOrder.canAccept && onAccept && (
-              <Button size="sm" onClick={() => { onAccept(selectedOrder.id, selectedOrder.type); setSelectedOrder(null); }}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  onAccept(selectedOrder.id, selectedOrder.type);
+                  setSelectedOrder(null);
+                }}
+              >
                 <CheckCircle2 className="mr-2 h-4 w-4" /> Accept
               </Button>
             )}
             <Button size="sm" variant="outline" asChild>
-               <a href={`tel:${selectedOrder.customerPhone}`}>
-                 <Phone className="mr-2 h-4 w-4" /> Call
-               </a>
+              <a href={`tel:${selectedOrder.customerPhone}`}>
+                <Phone className="mr-2 h-4 w-4" /> Call
+              </a>
             </Button>
             <Button size="sm" variant="outline" onClick={() => setShowChat(true)}>
               <MessageSquare className="mr-2 h-4 w-4" /> Chat
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelectedOrder(null)}>Close</Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedOrder(null)}>
+              Close
+            </Button>
           </div>
         </div>
       )}
@@ -127,8 +143,12 @@ export function OrdersMap({
             <ChatPanel
               kind={
                 selectedOrder.type === "ride" || selectedOrder.type === "package"
-                  ? (selectedOrder.type === "ride" ? "ride" : "package")
-                  : (selectedOrder.type === "food" ? "food" : "grocery")
+                  ? selectedOrder.type === "ride"
+                    ? "ride"
+                    : "package"
+                  : selectedOrder.type === "food"
+                    ? "food"
+                    : "grocery"
               }
               serviceId={selectedOrder.id}
             />

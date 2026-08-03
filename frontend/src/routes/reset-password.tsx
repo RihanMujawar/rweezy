@@ -50,8 +50,7 @@ function ResetPasswordPage() {
   );
 
   useEffect(() => {
-    const hasStarted =
-      phoneSuffix || password || confirmPassword || phoneVerificationToken;
+    const hasStarted = phoneSuffix || password || confirmPassword || phoneVerificationToken;
     if (!hasStarted) return;
     const parsed = passwordResetCompleteSchema.safeParse(validationPayload);
     setErrors(parsed.success ? {} : fieldErrors(parsed.error));

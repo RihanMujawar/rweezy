@@ -207,9 +207,7 @@ function SendPackage() {
         <Button className="mt-4 w-full" onClick={book} disabled={placing || !pickup || !drop}>
           {placing ? "Requesting..." : "Request pickup"}
         </Button>
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          Payment: cash on delivery.
-        </p>
+        <p className="mt-2 text-center text-xs text-muted-foreground">Payment: cash on delivery.</p>
       </div>
     </div>
   );

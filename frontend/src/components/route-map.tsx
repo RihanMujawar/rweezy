@@ -98,7 +98,8 @@ function LeafletShell({
     L.control.zoom({ position: "topright" }).addTo(map);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     map.on("click", (e) => {
@@ -147,7 +148,7 @@ function LeafletShell({
             weight: l.id === "rider" ? 5 : 4,
             opacity: l.id === "rider" ? 0.9 : 0.65,
             dashArray: l.dashed ? "5, 10" : undefined,
-          }
+          },
         );
         polyline.addTo(linesGroupRef.current!);
       });
@@ -438,12 +439,7 @@ export function StaticPointMap({
   );
 
   return (
-    <LeafletShell
-      center={point}
-      markers={markers}
-      height={height}
-      onMarkerClick={onMarkerClick}
-    />
+    <LeafletShell center={point} markers={markers} height={height} onMarkerClick={onMarkerClick} />
   );
 }
 
