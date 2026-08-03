@@ -49,7 +49,7 @@ export function ManualLocationDialog({
       const mapped: Suggestion[] = (results ?? []).map((loc: any) => ({
         id: loc.town,
         label: loc.town,
-        point: { lat: loc.lat, lng: loc.lng }
+        point: { lat: loc.lat, lng: loc.lng },
       }));
       setSuggestions(mapped);
     } catch (err: any) {

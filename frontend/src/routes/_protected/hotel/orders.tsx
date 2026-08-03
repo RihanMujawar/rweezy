@@ -9,7 +9,15 @@ import { toast } from "sonner";
 import { RoleGate } from "@/components/coming-soon";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
-import { Bell, BellOff, Clock, IndianRupee, Phone, Map as MapIcon, MessageSquare } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  Clock,
+  IndianRupee,
+  Phone,
+  Map as MapIcon,
+  MessageSquare,
+} from "lucide-react";
 import { useAlertsPreference } from "@/hooks/use-alerts-preference";
 import { OrdersMap, MapOrder } from "@/components/orders-map";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -225,12 +233,7 @@ function HotelOrders() {
               <Phone className="mr-2 h-4 w-4" /> Phone number unavailable
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="min-h-11"
-            onClick={() => setChatOrder(o)}
-          >
+          <Button size="sm" variant="outline" className="min-h-11" onClick={() => setChatOrder(o)}>
             <MessageSquare className="mr-2 h-4 w-4" /> Chat
           </Button>
           <Button
@@ -433,12 +436,7 @@ function HotelOrders() {
           <DialogHeader>
             <DialogTitle>Chat with {chatOrder?.profiles?.full_name || "Customer"}</DialogTitle>
           </DialogHeader>
-          {chatOrder && (
-            <ChatPanel
-              kind="food"
-              serviceId={chatOrder.id}
-            />
-          )}
+          {chatOrder && <ChatPanel kind="food" serviceId={chatOrder.id} />}
         </DialogContent>
       </Dialog>
     </RoleGate>

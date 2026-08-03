@@ -133,13 +133,7 @@ export function PhoneOtpVerification({
           type="button"
           variant="outline"
           onClick={sendOtp}
-          disabled={
-            disabled ||
-            sending ||
-            verified ||
-            cooldown > 0 ||
-            !phone
-          }
+          disabled={disabled || sending || verified || cooldown > 0 || !phone}
         >
           {sending
             ? "Sending..."

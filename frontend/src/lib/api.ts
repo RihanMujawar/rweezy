@@ -50,10 +50,7 @@ export const api = {
           body: payload,
         },
       ),
-    sendPhoneOtp: (payload: {
-      phone: string;
-      purpose: "login" | "register" | "reset_password";
-    }) =>
+    sendPhoneOtp: (payload: { phone: string; purpose: "login" | "register" | "reset_password" }) =>
       apiRequest<{ ok: true; message: string }>("/api/auth/phone/send-otp", {
         method: "POST",
         body: payload,
@@ -226,7 +223,9 @@ export const api = {
         `/api/catalog/items/grocery${location ? `?lat=${location.lat}&lng=${location.lng}` : ""}`,
       ),
     searchLocations: (query: string, signal?: AbortSignal) =>
-      apiRequest<any[]>(`/api/catalog/search-locations?query=${encodeURIComponent(query)}`, { signal }),
+      apiRequest<any[]>(`/api/catalog/search-locations?query=${encodeURIComponent(query)}`, {
+        signal,
+      }),
   },
 
   orders: {

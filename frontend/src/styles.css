@@ -136,7 +136,7 @@
       radial-gradient(at 100% 0%, oklch(1 0 0 / 5%) 0px, transparent 50%);
     color: var(--color-foreground);
     min-height: 100vh;
-    font-family: 'Outfit', 'Inter', sans-serif;
+    font-family: "Outfit", "Inter", sans-serif;
   }
 
   .dark body {
@@ -168,7 +168,7 @@
   overflow: hidden;
 
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     top: -50%;
     left: -50%;
@@ -189,21 +189,25 @@
 }
 
 /* Specific component overrides for Glassmorphism */
-.bg-card, [class*="bg-card"] {
+.bg-card,
+[class*="bg-card"] {
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   background-color: var(--color-card) !important;
   border: 1px solid var(--color-border) !important;
 }
 
-[role="dialog"], .dialog-content, .sheet-content {
+[role="dialog"],
+.dialog-content,
+.sheet-content {
   backdrop-filter: blur(32px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
   background-color: var(--color-popover) !important;
   border: 1px solid oklch(1 0 0 / 20%) !important;
 }
 
-aside, [data-sidebar="sidebar"] {
+aside,
+[data-sidebar="sidebar"] {
   backdrop-filter: blur(24px) !important;
   -webkit-backdrop-filter: blur(24px) !important;
   background-color: var(--color-sidebar) !important;

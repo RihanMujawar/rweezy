@@ -152,9 +152,7 @@ function GroceryCheckout() {
                   }}
                 >
                   <span className="font-semibold">{item.label}</span>
-                  <span className="mt-1 line-clamp-1 text-[10px] opacity-70">
-                    {item.address}
-                  </span>
+                  <span className="mt-1 line-clamp-1 text-[10px] opacity-70">{item.address}</span>
                 </Button>
               ))}
             </div>

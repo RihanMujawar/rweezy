@@ -169,7 +169,9 @@ function HotelDashboard() {
                     min="1"
                     max="100"
                     value={form.delivery_radius_km ?? 25}
-                    onChange={(e) => setForm({ ...form, delivery_radius_km: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setForm({ ...form, delivery_radius_km: Number(e.target.value) })
+                    }
                   />
                 </div>
                 <div className="flex items-center gap-2">

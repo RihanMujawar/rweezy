@@ -36,8 +36,8 @@ function SupportPage() {
       <div className="container mx-auto max-w-lg px-4 py-12 text-center">
         <h1 className="text-2xl font-bold">We received your request</h1>
         <p className="mt-2 text-muted-foreground">
-          Your support ticket is open. For now, check active orders or chat with your
-          rider on the track page.
+          Your support ticket is open. For now, check active orders or chat with your rider on the
+          track page.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Button asChild>

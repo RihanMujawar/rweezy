@@ -9,12 +9,7 @@ type Options = {
   fallbackMs?: number;
 };
 
-export function useOrderRealtime({
-  id,
-  onChange,
-  enabled = true,
-  fallbackMs = 4000,
-}: Options) {
+export function useOrderRealtime({ id, onChange, enabled = true, fallbackMs = 4000 }: Options) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 

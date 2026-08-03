@@ -32,7 +32,10 @@ function getStoredLocation(): StoredLocation {
       typeof value.location.lat === "number" &&
       typeof value.location.lng === "number"
     ) {
-      return { location: value.location, address: typeof value.address === "string" ? value.address : null };
+      return {
+        location: value.location,
+        address: typeof value.address === "string" ? value.address : null,
+      };
     }
   } catch {
     // Ignore an invalid legacy value and let the user select a new location.
@@ -93,7 +96,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
           setNeedsManualEntry(true);
           reject(err);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
       );
     });
   };

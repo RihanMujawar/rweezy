@@ -410,7 +410,8 @@ function AllInOneDashboard() {
               <h1 className="text-3xl font-extrabold tracking-tight">All-in-One Dashboard</h1>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Universal Agent Control. Instantly accept and process Food, Grocery, Rides and Packages in your area.
+              Universal Agent Control. Instantly accept and process Food, Grocery, Rides and
+              Packages in your area.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -469,10 +470,16 @@ function AllInOneDashboard() {
         <Tabs defaultValue="jobs" className="mt-8">
           <TabsList className="grid w-full grid-cols-3 max-w-md">
             <TabsTrigger value="jobs">
-              <MapIcon className="mr-2 h-4 w-4" /> Available ({availableFood.length + availableGrocery.length + availableRides.length + availablePkgs.length})
+              <MapIcon className="mr-2 h-4 w-4" /> Available (
+              {availableFood.length +
+                availableGrocery.length +
+                availableRides.length +
+                availablePkgs.length}
+              )
             </TabsTrigger>
             <TabsTrigger value="active">
-              <ClipboardList className="mr-2 h-4 w-4" /> Active ({activeFood.length + activeGrocery.length + myRides.length + myPkgs.length})
+              <ClipboardList className="mr-2 h-4 w-4" /> Active (
+              {activeFood.length + activeGrocery.length + myRides.length + myPkgs.length})
             </TabsTrigger>
             <TabsTrigger value="history" onClick={loadHistory}>
               <History className="mr-2 h-4 w-4" /> History
@@ -502,15 +509,26 @@ function AllInOneDashboard() {
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     {availableFood.map((o) => (
-                      <div key={o.id} className="rounded-2xl border bg-card/60 p-5 shadow-sm backdrop-blur-xl">
+                      <div
+                        key={o.id}
+                        className="rounded-2xl border bg-card/60 p-5 shadow-sm backdrop-blur-xl"
+                      >
                         <div className="flex items-start justify-between">
                           <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Food Delivery</span>
-                            <h3 className="mt-1 font-bold text-lg">🍽️ {o.restaurants?.name || "Restaurant"}</h3>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                              Food Delivery
+                            </span>
+                            <h3 className="mt-1 font-bold text-lg">
+                              🍽️ {o.restaurants?.name || "Restaurant"}
+                            </h3>
                           </div>
-                          <Badge variant="secondary" className="capitalize">{o.status}</Badge>
+                          <Badge variant="secondary" className="capitalize">
+                            {o.status}
+                          </Badge>
                         </div>
-                        <p className="mt-3 text-sm text-muted-foreground line-clamp-2">📍 {o.delivery_address}</p>
+                        <p className="mt-3 text-sm text-muted-foreground line-clamp-2">
+                          📍 {o.delivery_address}
+                        </p>
                         {o.pickup_lat !== undefined && (
                           <p className="mt-1 text-xs text-muted-foreground font-medium">
                             📏 Distance: {distLabel({ lat: o.pickup_lat, lng: o.pickup_lng })}
@@ -519,8 +537,12 @@ function AllInOneDashboard() {
                         <div className="mt-4 flex items-center justify-between border-t pt-4">
                           <span className="text-lg font-black">₹{Number(o.total).toFixed(0)}</span>
                           <div className="flex gap-2">
-                            <Button size="sm" onClick={() => acceptFood(o.id)}>Accept</Button>
-                            <Button size="sm" variant="outline" onClick={() => decline("Food Job")}>Decline</Button>
+                            <Button size="sm" onClick={() => acceptFood(o.id)}>
+                              Accept
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => decline("Food Job")}>
+                              Decline
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -538,15 +560,26 @@ function AllInOneDashboard() {
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     {availableGrocery.map((o) => (
-                      <div key={o.id} className="rounded-2xl border bg-card/60 p-5 shadow-sm backdrop-blur-xl">
+                      <div
+                        key={o.id}
+                        className="rounded-2xl border bg-card/60 p-5 shadow-sm backdrop-blur-xl"
+                      >
                         <div className="flex items-start justify-between">
                           <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Grocery Delivery</span>
-                            <h3 className="mt-1 font-bold text-lg">🛒 {o.grocery_stores?.name || "Store"}</h3>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                              Grocery Delivery
+                            </span>
+                            <h3 className="mt-1 font-bold text-lg">
+                              🛒 {o.grocery_stores?.name || "Store"}
+                            </h3>
                           </div>
-                          <Badge variant="secondary" className="capitalize">{o.status}</Badge>
+                          <Badge variant="secondary" className="capitalize">
+                            {o.status}
+                          </Badge>
                         </div>
-                        <p className="mt-3 text-sm text-muted-foreground line-clamp-2">📍 {o.delivery_address}</p>
+                        <p className="mt-3 text-sm text-muted-foreground line-clamp-2">
+                          📍 {o.delivery_address}
+                        </p>
                         {o.pickup_lat !== undefined && (
                           <p className="mt-1 text-xs text-muted-foreground font-medium">
                             📏 Distance: {distLabel({ lat: o.pickup_lat, lng: o.pickup_lng })}
@@ -555,8 +588,16 @@ function AllInOneDashboard() {
                         <div className="mt-4 flex items-center justify-between border-t pt-4">
                           <span className="text-lg font-black">₹{Number(o.total).toFixed(0)}</span>
                           <div className="flex gap-2">
-                            <Button size="sm" onClick={() => acceptGrocery(o.id)}>Accept</Button>
-                            <Button size="sm" variant="outline" onClick={() => decline("Grocery Job")}>Decline</Button>
+                            <Button size="sm" onClick={() => acceptGrocery(o.id)}>
+                              Accept
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => decline("Grocery Job")}
+                            >
+                              Decline
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -576,27 +617,47 @@ function AllInOneDashboard() {
                     {availableRides.map((o) => {
                       const Icon = VEHICLE_ICON[o.vehicle_type ?? "bike"] || Bike;
                       return (
-                        <div key={o.id} className="rounded-2xl border bg-card/60 p-5 shadow-sm backdrop-blur-xl">
+                        <div
+                          key={o.id}
+                          className="rounded-2xl border bg-card/60 p-5 shadow-sm backdrop-blur-xl"
+                        >
                           <div className="flex items-start justify-between">
                             <div>
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Ride Request</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                                Ride Request
+                              </span>
                               <div className="flex items-center gap-2 mt-1">
                                 <Icon className="h-5 w-5 text-foreground" />
-                                <h3 className="font-bold text-lg uppercase">{o.vehicle_type || "Bike"}</h3>
+                                <h3 className="font-bold text-lg uppercase">
+                                  {o.vehicle_type || "Bike"}
+                                </h3>
                               </div>
                             </div>
-                            <Badge variant="secondary" className="capitalize">{o.status}</Badge>
+                            <Badge variant="secondary" className="capitalize">
+                              {o.status}
+                            </Badge>
                           </div>
                           <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                            <p className="line-clamp-1"><span className="text-green-500 font-bold">●</span> {o.pickup_address}</p>
-                            <p className="line-clamp-1"><span className="text-red-500 font-bold">●</span> {o.drop_address}</p>
+                            <p className="line-clamp-1">
+                              <span className="text-green-500 font-bold">●</span> {o.pickup_address}
+                            </p>
+                            <p className="line-clamp-1">
+                              <span className="text-red-500 font-bold">●</span> {o.drop_address}
+                            </p>
                           </div>
                           <p className="mt-2 text-xs text-muted-foreground font-medium">
                             📏 Distance: {distLabel({ lat: o.pickup_lat, lng: o.pickup_lng })}
                           </p>
                           <div className="mt-4 flex items-center justify-between border-t pt-4">
-                            <span className="text-lg font-black">₹{Number(o.fare_estimate || 0).toFixed(0)}</span>
-                            <Button size="sm" onClick={() => acceptRide(o.id, { lat: o.pickup_lat, lng: o.pickup_lng })}>
+                            <span className="text-lg font-black">
+                              ₹{Number(o.fare_estimate || 0).toFixed(0)}
+                            </span>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                acceptRide(o.id, { lat: o.pickup_lat, lng: o.pickup_lng })
+                              }
+                            >
                               Accept Ride
                             </Button>
                           </div>
@@ -616,27 +677,47 @@ function AllInOneDashboard() {
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     {availablePkgs.map((o) => (
-                      <div key={o.id} className="rounded-2xl border bg-card/60 p-5 shadow-sm backdrop-blur-xl">
+                      <div
+                        key={o.id}
+                        className="rounded-2xl border bg-card/60 p-5 shadow-sm backdrop-blur-xl"
+                      >
                         <div className="flex items-start justify-between">
                           <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Package Dispatch</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                              Package Dispatch
+                            </span>
                             <div className="flex items-center gap-2 mt-1">
                               <PackageIcon className="h-5 w-5 text-foreground" />
-                              <h3 className="font-bold text-lg uppercase">{o.package_size || "Small"} size</h3>
+                              <h3 className="font-bold text-lg uppercase">
+                                {o.package_size || "Small"} size
+                              </h3>
                             </div>
                           </div>
-                          <Badge variant="secondary" className="capitalize">{o.status}</Badge>
+                          <Badge variant="secondary" className="capitalize">
+                            {o.status}
+                          </Badge>
                         </div>
                         <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                          <p className="line-clamp-1"><span className="text-green-500 font-bold">●</span> {o.pickup_address}</p>
-                          <p className="line-clamp-1"><span className="text-red-500 font-bold">●</span> {o.drop_address}</p>
+                          <p className="line-clamp-1">
+                            <span className="text-green-500 font-bold">●</span> {o.pickup_address}
+                          </p>
+                          <p className="line-clamp-1">
+                            <span className="text-red-500 font-bold">●</span> {o.drop_address}
+                          </p>
                         </div>
                         <p className="mt-2 text-xs text-muted-foreground font-medium">
                           📏 Distance: {distLabel({ lat: o.pickup_lat, lng: o.pickup_lng })}
                         </p>
                         <div className="mt-4 flex items-center justify-between border-t pt-4">
-                          <span className="text-lg font-black">₹{Number(o.fare_estimate || 0).toFixed(0)}</span>
-                          <Button size="sm" onClick={() => acceptPkg(o.id, { lat: o.pickup_lat, lng: o.pickup_lng })}>
+                          <span className="text-lg font-black">
+                            ₹{Number(o.fare_estimate || 0).toFixed(0)}
+                          </span>
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              acceptPkg(o.id, { lat: o.pickup_lat, lng: o.pickup_lng })
+                            }
+                          >
                             Accept Delivery
                           </Button>
                         </div>
@@ -650,9 +731,13 @@ function AllInOneDashboard() {
 
           {/* TAB 2: ACTIVE JOBS */}
           <TabsContent value="active" className="space-y-6">
-            {activeFood.length === 0 && activeGrocery.length === 0 && myRides.length === 0 && myPkgs.length === 0 ? (
+            {activeFood.length === 0 &&
+            activeGrocery.length === 0 &&
+            myRides.length === 0 &&
+            myPkgs.length === 0 ? (
               <p className="rounded-2xl border border-dashed bg-card/40 p-12 text-center text-muted-foreground">
-                No active/assigned jobs right now. Go online and accept a job from the "Available" tab!
+                No active/assigned jobs right now. Go online and accept a job from the "Available"
+                tab!
               </p>
             ) : (
               <div className="space-y-4">
@@ -660,7 +745,10 @@ function AllInOneDashboard() {
                 {[...activeFood, ...activeGrocery].map((o) => {
                   const isFood = "restaurants" in o;
                   return (
-                    <div key={o.id} className="rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-lg">
+                    <div
+                      key={o.id}
+                      className="rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-lg"
+                    >
                       <div className="flex items-start justify-between">
                         <div>
                           <Badge variant="default" className="mb-2">
@@ -669,12 +757,12 @@ function AllInOneDashboard() {
                           <h3 className="font-bold text-lg">
                             {isFood ? o.restaurants?.name : o.grocery_stores?.name}
                           </h3>
-                          <p className="mt-1 text-sm text-muted-foreground">📍 {o.delivery_address}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            📍 {o.delivery_address}
+                          </p>
                         </div>
                         <Button asChild size="sm">
-                          <Link to="/delivery/active">
-                            Open Control
-                          </Link>
+                          <Link to="/delivery/active">Open Control</Link>
                         </Button>
                       </div>
                     </div>
@@ -683,14 +771,25 @@ function AllInOneDashboard() {
 
                 {/* Active Rides */}
                 {myRides.map((o) => (
-                  <div key={o.id} className="rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-lg">
+                  <div
+                    key={o.id}
+                    className="rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-lg"
+                  >
                     <div className="flex items-start justify-between">
                       <div>
-                        <Badge variant="default" className="mb-2">🏍️ Active Ride Job</Badge>
-                        <h3 className="font-bold text-lg">Passenger: {o.profiles?.full_name || "User"}</h3>
+                        <Badge variant="default" className="mb-2">
+                          🏍️ Active Ride Job
+                        </Badge>
+                        <h3 className="font-bold text-lg">
+                          Passenger: {o.profiles?.full_name || "User"}
+                        </h3>
                         <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                          <p><span className="text-green-500 font-bold">●</span> {o.pickup_address}</p>
-                          <p><span className="text-red-500 font-bold">●</span> {o.drop_address}</p>
+                          <p>
+                            <span className="text-green-500 font-bold">●</span> {o.pickup_address}
+                          </p>
+                          <p>
+                            <span className="text-red-500 font-bold">●</span> {o.drop_address}
+                          </p>
                         </div>
                       </div>
                       <Button asChild size="sm">
@@ -704,14 +803,23 @@ function AllInOneDashboard() {
 
                 {/* Active Packages */}
                 {myPkgs.map((o) => (
-                  <div key={o.id} className="rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-lg">
+                  <div
+                    key={o.id}
+                    className="rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-lg"
+                  >
                     <div className="flex items-start justify-between">
                       <div>
-                        <Badge variant="default" className="mb-2">📦 Active Package Job</Badge>
+                        <Badge variant="default" className="mb-2">
+                          📦 Active Package Job
+                        </Badge>
                         <h3 className="font-bold text-lg">Receiver: {o.receiver_name || "User"}</h3>
                         <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                          <p><span className="text-green-500 font-bold">●</span> {o.pickup_address}</p>
-                          <p><span className="text-red-500 font-bold">●</span> {o.drop_address}</p>
+                          <p>
+                            <span className="text-green-500 font-bold">●</span> {o.pickup_address}
+                          </p>
+                          <p>
+                            <span className="text-red-500 font-bold">●</span> {o.drop_address}
+                          </p>
                         </div>
                       </div>
                       <Button asChild size="sm">
@@ -739,13 +847,19 @@ function AllInOneDashboard() {
                     <div key={o.id} className="rounded-2xl border bg-card/60 p-4 backdrop-blur-xl">
                       <div className="flex items-center justify-between">
                         <h4 className="font-bold">
-                          {isFood ? `🍽️ ${o.restaurants?.name || "Food"}` : `🛒 ${o.grocery_stores?.name || "Grocery"}`}
+                          {isFood
+                            ? `🍽️ ${o.restaurants?.name || "Food"}`
+                            : `🛒 ${o.grocery_stores?.name || "Grocery"}`}
                         </h4>
-                        <Badge className={statusColor(o.status)} variant="secondary">{o.status}</Badge>
+                        <Badge className={statusColor(o.status)} variant="secondary">
+                          {o.status}
+                        </Badge>
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">📍 {o.delivery_address}</p>
                       <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                        <span className="font-bold text-sm text-foreground">₹{Number(o.total).toFixed(0)}</span>
+                        <span className="font-bold text-sm text-foreground">
+                          ₹{Number(o.total).toFixed(0)}
+                        </span>
                         <span>{new Date(o.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
@@ -757,14 +871,22 @@ function AllInOneDashboard() {
                   <div key={o.id} className="rounded-2xl border bg-card/60 p-4 backdrop-blur-xl">
                     <div className="flex items-center justify-between">
                       <h4 className="font-bold">🏍️ Ride Trip</h4>
-                      <Badge className={statusColor(o.status)} variant="secondary">{o.status}</Badge>
+                      <Badge className={statusColor(o.status)} variant="secondary">
+                        {o.status}
+                      </Badge>
                     </div>
                     <div className="mt-2 text-xs text-muted-foreground space-y-1">
-                      <p><span className="text-green-500">●</span> {o.pickup_address}</p>
-                      <p><span className="text-red-500">●</span> {o.drop_address}</p>
+                      <p>
+                        <span className="text-green-500">●</span> {o.pickup_address}
+                      </p>
+                      <p>
+                        <span className="text-red-500">●</span> {o.drop_address}
+                      </p>
                     </div>
                     <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="font-bold text-sm text-foreground">₹{Number(o.fare_estimate || 0).toFixed(0)}</span>
+                      <span className="font-bold text-sm text-foreground">
+                        ₹{Number(o.fare_estimate || 0).toFixed(0)}
+                      </span>
                       <span>{new Date(o.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
@@ -775,24 +897,35 @@ function AllInOneDashboard() {
                   <div key={o.id} className="rounded-2xl border bg-card/60 p-4 backdrop-blur-xl">
                     <div className="flex items-center justify-between">
                       <h4 className="font-bold">📦 Package Delivery</h4>
-                      <Badge className={statusColor(o.status)} variant="secondary">{o.status}</Badge>
+                      <Badge className={statusColor(o.status)} variant="secondary">
+                        {o.status}
+                      </Badge>
                     </div>
                     <div className="mt-2 text-xs text-muted-foreground space-y-1">
-                      <p><span className="text-green-500">●</span> {o.pickup_address}</p>
-                      <p><span className="text-red-500">●</span> {o.drop_address}</p>
+                      <p>
+                        <span className="text-green-500">●</span> {o.pickup_address}
+                      </p>
+                      <p>
+                        <span className="text-red-500">●</span> {o.drop_address}
+                      </p>
                     </div>
                     <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="font-bold text-sm text-foreground">₹{Number(o.fare_estimate || 0).toFixed(0)}</span>
+                      <span className="font-bold text-sm text-foreground">
+                        ₹{Number(o.fare_estimate || 0).toFixed(0)}
+                      </span>
                       <span>{new Date(o.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 ))}
 
-                {historyFood.length === 0 && historyGrocery.length === 0 && historyRides.length === 0 && historyPkgs.length === 0 && (
-                  <p className="rounded-2xl border border-dashed bg-card/40 p-12 text-center text-muted-foreground">
-                    No completed jobs found in your history.
-                  </p>
-                )}
+                {historyFood.length === 0 &&
+                  historyGrocery.length === 0 &&
+                  historyRides.length === 0 &&
+                  historyPkgs.length === 0 && (
+                    <p className="rounded-2xl border border-dashed bg-card/40 p-12 text-center text-muted-foreground">
+                      No completed jobs found in your history.
+                    </p>
+                  )}
               </div>
             )}
           </TabsContent>

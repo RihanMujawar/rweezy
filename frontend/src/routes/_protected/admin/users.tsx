@@ -153,9 +153,7 @@ function AdminUsers() {
                               {request.requested_role.replace(/_/g, " ")}
                             </Badge>
                             {request.business_name && (
-                              <div className="text-sm font-medium">
-                                {request.business_name}
-                              </div>
+                              <div className="text-sm font-medium">{request.business_name}</div>
                             )}
                             {request.business_address && (
                               <div className="text-xs text-muted-foreground">

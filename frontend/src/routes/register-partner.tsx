@@ -279,7 +279,11 @@ function PartnerRegisterPage() {
                       <LocateFixed className="mr-2 h-4 w-4" />
                       {locationLoading ? "Detecting..." : "Use current location"}
                     </Button>
-                    <Button type="button" variant="outline" onClick={() => setLocationDialogOpen(true)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setLocationDialogOpen(true)}
+                    >
                       <MapPin className="mr-2 h-4 w-4" />
                       Search location
                     </Button>

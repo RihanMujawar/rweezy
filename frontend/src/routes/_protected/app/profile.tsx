@@ -9,7 +9,15 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useFoodCart } from "@/lib/food-cart";
 import { useGroceryCart } from "@/lib/grocery-cart";
-import { Phone, ShoppingCart, LogOut, ChevronRight, BriefcaseBusiness, CheckCircle, Clock } from "lucide-react";
+import {
+  Phone,
+  ShoppingCart,
+  LogOut,
+  ChevronRight,
+  BriefcaseBusiness,
+  CheckCircle,
+  Clock,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_protected/app/profile")({
   component: ProfilePage,
@@ -171,7 +179,15 @@ function ProfilePage() {
         </Link>
 
         {/* Become a Partner Section */}
-        {roles.some((r) => ["rider", "delivery_boy", "all_in_one_partner", "hotel_manager", "grocery_manager"].includes(r)) ? (
+        {roles.some((r) =>
+          [
+            "rider",
+            "delivery_boy",
+            "all_in_one_partner",
+            "hotel_manager",
+            "grocery_manager",
+          ].includes(r),
+        ) ? (
           <div className="flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10">
@@ -180,7 +196,19 @@ function ProfilePage() {
               <div>
                 <div className="font-semibold text-emerald-400">Approved Partner</div>
                 <div className="text-sm text-muted-foreground">
-                  Roles: {roles.filter((r) => ["rider", "delivery_boy", "all_in_one_partner", "hotel_manager", "grocery_manager"].includes(r)).map((r) => r.replace(/_/g, " ")).join(", ")}
+                  Roles:{" "}
+                  {roles
+                    .filter((r) =>
+                      [
+                        "rider",
+                        "delivery_boy",
+                        "all_in_one_partner",
+                        "hotel_manager",
+                        "grocery_manager",
+                      ].includes(r),
+                    )
+                    .map((r) => r.replace(/_/g, " "))
+                    .join(", ")}
                 </div>
               </div>
             </div>
@@ -194,7 +222,11 @@ function ProfilePage() {
               <div>
                 <div className="font-semibold text-yellow-500">Partner Application Pending</div>
                 <div className="text-sm text-muted-foreground">
-                  Applying for: {roleRequests.filter((r) => r.status === "pending").map((r) => r.requested_role.replace(/_/g, " ")).join(", ")}
+                  Applying for:{" "}
+                  {roleRequests
+                    .filter((r) => r.status === "pending")
+                    .map((r) => r.requested_role.replace(/_/g, " "))
+                    .join(", ")}
                 </div>
               </div>
             </div>
@@ -242,7 +274,9 @@ function ProfilePage() {
                     onChange={(e) => setReqRole(e.target.value)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
-                    <option value="all_in_one_partner">All-in-One Partner (Food, Grocery, Rides, Packages)</option>
+                    <option value="all_in_one_partner">
+                      All-in-One Partner (Food, Grocery, Rides, Packages)
+                    </option>
                     <option value="rider">Rider (Rides & Packages)</option>
                     <option value="delivery_boy">Delivery Partner (Food & Grocery)</option>
                     <option value="hotel_manager">Restaurant Manager</option>
@@ -290,7 +324,9 @@ function ProfilePage() {
                       setReqMessage("");
                       loadRequests();
                     } catch (error) {
-                      toast.error(error instanceof Error ? error.message : "Failed to submit request");
+                      toast.error(
+                        error instanceof Error ? error.message : "Failed to submit request",
+                      );
                     } finally {
                       setRequesting(false);
                     }
