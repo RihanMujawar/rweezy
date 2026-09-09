@@ -19,7 +19,10 @@ async fn get_chat_participants(
     match kind {
         "food" => {
             let row_res = sqlx::query(
-                "SELECT customer_id, delivery_boy_id FROM rweezy.food_orders WHERE id = $1",
+                "SELECT o.customer_id, COALESCE(o.delivery_boy_id, r.manager_id) as partner_id
+                 FROM rweezy.food_orders o
+                 JOIN rweezy.restaurants r ON o.restaurant_id = r.id
+                 WHERE o.id = $1",
             )
             .bind(service_id)
             .fetch_optional(pool)
@@ -27,14 +30,17 @@ async fn get_chat_participants(
 
             if let Ok(Some(r)) = row_res {
                 use sqlx::Row;
-                Ok((r.get("customer_id"), r.get("delivery_boy_id")))
+                Ok((r.get("customer_id"), r.get("partner_id")))
             } else {
                 Err("Order not found".to_string())
             }
         }
         "grocery" => {
             let row_res = sqlx::query(
-                "SELECT customer_id, delivery_boy_id FROM rweezy.grocery_orders WHERE id = $1",
+                "SELECT o.customer_id, COALESCE(o.delivery_boy_id, s.manager_id) as partner_id
+                 FROM rweezy.grocery_orders o
+                 JOIN rweezy.grocery_stores s ON o.store_id = s.id
+                 WHERE o.id = $1",
             )
             .bind(service_id)
             .fetch_optional(pool)
@@ -42,7 +48,7 @@ async fn get_chat_participants(
 
             if let Ok(Some(r)) = row_res {
                 use sqlx::Row;
-                Ok((r.get("customer_id"), r.get("delivery_boy_id")))
+                Ok((r.get("customer_id"), r.get("partner_id")))
             } else {
                 Err("Order not found".to_string())
             }

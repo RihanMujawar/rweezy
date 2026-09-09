@@ -96,20 +96,15 @@ fn customer_status_message(kind: &str, status: &str) -> String {
             "Rweezy: Your order is on the way! Expected delivery in ~20 minutes.".to_string()
         }
         "started" => "Rweezy: Your ride has started. You'll arrive soon.".to_string(),
-        "delivered" | "completed" => format!("Rweezy: Your {} has been delivered. Thank you!", label),
+        "delivered" | "completed" => {
+            format!("Rweezy: Your {} has been delivered. Thank you!", label)
+        }
         "cancelled" => format!("Rweezy: Your {} has been cancelled.", label),
-        other => format!(
-            "Rweezy: Your {} is now {}.",
-            label,
-            other.replace('_', " ")
-        ),
+        other => format!("Rweezy: Your {} is now {}.", label, other.replace('_', " ")),
     }
 }
 
-async fn food_order_context(
-    pool: &PgPool,
-    order_id: Uuid,
-) -> Option<(Uuid, String, Option<Uuid>)> {
+async fn food_order_context(pool: &PgPool, order_id: Uuid) -> Option<(Uuid, String, Option<Uuid>)> {
     let row = sqlx::query(
         "SELECT o.customer_id, r.name as venue_name, r.manager_id
          FROM rweezy.food_orders o
@@ -122,7 +117,11 @@ async fn food_order_context(
     .ok()??;
 
     use sqlx::Row;
-    Some((row.get("customer_id"), row.get("venue_name"), row.get("manager_id")))
+    Some((
+        row.get("customer_id"),
+        row.get("venue_name"),
+        row.get("manager_id"),
+    ))
 }
 
 async fn grocery_order_context(
@@ -141,7 +140,11 @@ async fn grocery_order_context(
     .ok()??;
 
     use sqlx::Row;
-    Some((row.get("customer_id"), row.get("venue_name"), row.get("manager_id")))
+    Some((
+        row.get("customer_id"),
+        row.get("venue_name"),
+        row.get("manager_id"),
+    ))
 }
 
 async fn notify_food_grocery_status(
@@ -205,24 +208,22 @@ pub fn spawn_food_order_placed(
     estimated_delivery_at: DateTime<Utc>,
 ) {
     tokio::spawn(async move {
-        let venue_name: String = sqlx::query_scalar(
-            "SELECT name FROM rweezy.restaurants WHERE id = $1",
-        )
-        .bind(restaurant_id)
-        .fetch_optional(&pool)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "restaurant".to_string());
+        let venue_name: String =
+            sqlx::query_scalar("SELECT name FROM rweezy.restaurants WHERE id = $1")
+                .bind(restaurant_id)
+                .fetch_optional(&pool)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "restaurant".to_string());
 
-        let manager_id: Option<Uuid> = sqlx::query_scalar(
-            "SELECT manager_id FROM rweezy.restaurants WHERE id = $1",
-        )
-        .bind(restaurant_id)
-        .fetch_optional(&pool)
-        .await
-        .ok()
-        .flatten();
+        let manager_id: Option<Uuid> =
+            sqlx::query_scalar("SELECT manager_id FROM rweezy.restaurants WHERE id = $1")
+                .bind(restaurant_id)
+                .fetch_optional(&pool)
+                .await
+                .ok()
+                .flatten();
 
         let eta = format_eta_minutes(estimated_delivery_at);
         let customer_msg = format!(
@@ -255,24 +256,22 @@ pub fn spawn_grocery_order_placed(
     estimated_delivery_at: DateTime<Utc>,
 ) {
     tokio::spawn(async move {
-        let venue_name: String = sqlx::query_scalar(
-            "SELECT name FROM rweezy.grocery_stores WHERE id = $1",
-        )
-        .bind(store_id)
-        .fetch_optional(&pool)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "store".to_string());
+        let venue_name: String =
+            sqlx::query_scalar("SELECT name FROM rweezy.grocery_stores WHERE id = $1")
+                .bind(store_id)
+                .fetch_optional(&pool)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "store".to_string());
 
-        let manager_id: Option<Uuid> = sqlx::query_scalar(
-            "SELECT manager_id FROM rweezy.grocery_stores WHERE id = $1",
-        )
-        .bind(store_id)
-        .fetch_optional(&pool)
-        .await
-        .ok()
-        .flatten();
+        let manager_id: Option<Uuid> =
+            sqlx::query_scalar("SELECT manager_id FROM rweezy.grocery_stores WHERE id = $1")
+                .bind(store_id)
+                .fetch_optional(&pool)
+                .await
+                .ok()
+                .flatten();
 
         let eta = format_eta_minutes(estimated_delivery_at);
         let customer_msg = format!(
@@ -312,7 +311,12 @@ pub fn spawn_order_status(
     });
 }
 
-pub fn spawn_order_cancelled(pool: PgPool, whatsapp: WhatsAppService, kind: String, order_id: Uuid) {
+pub fn spawn_order_cancelled(
+    pool: PgPool,
+    whatsapp: WhatsAppService,
+    kind: String,
+    order_id: Uuid,
+) {
     spawn_order_status(pool, whatsapp, kind, order_id, "cancelled".to_string());
 }
 
@@ -344,11 +348,7 @@ pub fn spawn_delivery_accepted(
         };
 
         if let Some(customer_id) = customer_id {
-            let label = if kind == "food" {
-                "food"
-            } else {
-                "grocery"
-            };
+            let label = if kind == "food" { "food" } else { "grocery" };
             let msg = format!(
                 "Rweezy: A delivery partner has been assigned to your {} order #{}.",
                 label,
@@ -359,17 +359,21 @@ pub fn spawn_delivery_accepted(
     });
 }
 
-pub fn spawn_ride_booked(pool: PgPool, whatsapp: WhatsAppService, ride_id: Uuid, customer_id: Uuid) {
+pub fn spawn_ride_booked(
+    pool: PgPool,
+    whatsapp: WhatsAppService,
+    ride_id: Uuid,
+    customer_id: Uuid,
+) {
     tokio::spawn(async move {
-        let pickup: String = sqlx::query_scalar(
-            "SELECT pickup_address FROM rweezy.rides WHERE id = $1",
-        )
-        .bind(ride_id)
-        .fetch_optional(&pool)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "your location".to_string());
+        let pickup: String =
+            sqlx::query_scalar("SELECT pickup_address FROM rweezy.rides WHERE id = $1")
+                .bind(ride_id)
+                .fetch_optional(&pool)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "your location".to_string());
 
         let customer_msg = format!(
             "Rweezy: Your ride has been requested! We're finding a rider for you. Ride #{}.",
@@ -434,14 +438,14 @@ pub fn spawn_ride_status(
         };
 
         let customer_id = match table.as_str() {
-            "rides" => sqlx::query_scalar::<_, Uuid>(
-                "SELECT customer_id FROM rweezy.rides WHERE id = $1",
-            )
-            .bind(job_id)
-            .fetch_optional(&pool)
-            .await
-            .ok()
-            .flatten(),
+            "rides" => {
+                sqlx::query_scalar::<_, Uuid>("SELECT customer_id FROM rweezy.rides WHERE id = $1")
+                    .bind(job_id)
+                    .fetch_optional(&pool)
+                    .await
+                    .ok()
+                    .flatten()
+            }
             "package_deliveries" => sqlx::query_scalar::<_, Uuid>(
                 "SELECT customer_id FROM rweezy.package_deliveries WHERE id = $1",
             )
