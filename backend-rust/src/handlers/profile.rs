@@ -249,9 +249,24 @@ pub async fn create_role_request(
 }
 
 pub async fn update_live_location(
+    req: HttpRequest,
     payload: web::Json<LiveLocationPayload>,
     pool: web::Data<PgPool>,
+    config: web::Data<crate::config::Config>,
 ) -> impl Responder {
+    let user_id = match get_auth_user(&req, &config.jwt_secret) {
+        Ok(uid) => uid,
+        Err(e) => return HttpResponse::from_error(e),
+    };
+
+    let is_admin = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM rweezy.user_roles WHERE user_id = $1 AND role = 'admin'::rweezy.AppRole)"
+    )
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .unwrap_or(false);
+
     let table = payload.table.trim();
     let row_id = match Uuid::parse_str(payload.row_id.trim()) {
         Ok(id) => id,
@@ -260,6 +275,59 @@ pub async fn update_live_location(
                 .json(serde_json::json!({ "error": "Invalid row_id" }))
         }
     };
+
+    let mut is_authorized = is_admin;
+
+    if !is_authorized {
+        let exists = match table {
+            "rides" => {
+                sqlx::query_scalar::<_, bool>(
+                    "SELECT EXISTS(SELECT 1 FROM rweezy.rides WHERE id = $1 AND rider_id = $2)"
+                )
+                .bind(row_id)
+                .bind(user_id)
+                .fetch_one(pool.get_ref())
+                .await
+                .unwrap_or(false)
+            }
+            "package_deliveries" => {
+                sqlx::query_scalar::<_, bool>(
+                    "SELECT EXISTS(SELECT 1 FROM rweezy.package_deliveries WHERE id = $1 AND rider_id = $2)"
+                )
+                .bind(row_id)
+                .bind(user_id)
+                .fetch_one(pool.get_ref())
+                .await
+                .unwrap_or(false)
+            }
+            "food_orders" => {
+                sqlx::query_scalar::<_, bool>(
+                    "SELECT EXISTS(SELECT 1 FROM rweezy.food_orders WHERE id = $1 AND delivery_boy_id = $2)"
+                )
+                .bind(row_id)
+                .bind(user_id)
+                .fetch_one(pool.get_ref())
+                .await
+                .unwrap_or(false)
+            }
+            "grocery_orders" => {
+                sqlx::query_scalar::<_, bool>(
+                    "SELECT EXISTS(SELECT 1 FROM rweezy.grocery_orders WHERE id = $1 AND delivery_boy_id = $2)"
+                )
+                .bind(row_id)
+                .bind(user_id)
+                .fetch_one(pool.get_ref())
+                .await
+                .unwrap_or(false)
+            }
+            _ => false,
+        };
+        is_authorized = exists;
+    }
+
+    if !is_authorized {
+        return HttpResponse::Forbidden().json(serde_json::json!({ "error": "You do not have access to update location for this order/job" }));
+    }
 
     let (query_str, _rider_field_id) = match table {
         "rides" => ("UPDATE rweezy.rides SET rider_lat = $1, rider_lng = $2, rider_location_updated_at = now() WHERE id = $3 RETURNING id", "id"),

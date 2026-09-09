@@ -989,15 +989,30 @@ pub async fn cancel_order(
 }
 
 pub async fn track_order(
+    req: HttpRequest,
     path: web::Path<(String, Uuid)>,
     pool: web::Data<PgPool>,
+    config: web::Data<crate::config::Config>,
 ) -> impl Responder {
+    let user_id = match get_auth_user(&req, &config.jwt_secret) {
+        Ok(uid) => uid,
+        Err(e) => return HttpResponse::from_error(e),
+    };
+
+    let is_admin = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM rweezy.user_roles WHERE user_id = $1 AND role = 'admin'::rweezy.AppRole)"
+    )
+    .bind(user_id)
+    .fetch_one(pool.get_ref())
+    .await
+    .unwrap_or(false);
+
     let (kind, id) = path.into_inner();
 
     match kind.as_str() {
         "food" => {
             let row_res = sqlx::query(
-                "SELECT o.*, r.name as restaurant_name,
+                "SELECT o.*, r.name as restaurant_name, r.manager_id as manager_id,
                         pc.full_name as customer_name, pc.phone as customer_phone,
                         pr.full_name as rider_name, pr.phone as rider_phone
                  FROM rweezy.food_orders o
@@ -1012,6 +1027,18 @@ pub async fn track_order(
 
             if let Ok(Some(o)) = row_res {
                 use sqlx::Row;
+                let customer_id: Uuid = o.get("customer_id");
+                let delivery_boy_id: Option<Uuid> = o.get("delivery_boy_id");
+                let manager_id: Option<Uuid> = o.get("manager_id");
+
+                if user_id != customer_id
+                    && delivery_boy_id != Some(user_id)
+                    && manager_id != Some(user_id)
+                    && !is_admin
+                {
+                    return HttpResponse::Forbidden().json(serde_json::json!({ "error": "You do not have access to track this order" }));
+                }
+
                 let status: OrderStatus = o.get("status");
                 let total: rust_decimal::Decimal = o.get("total");
                 let delivery_address: String = o.get("delivery_address");
@@ -1036,7 +1063,6 @@ pub async fn track_order(
                 let customer_phone: Option<String> = o.get("customer_phone");
                 let rider_name: Option<String> = o.get("rider_name");
                 let rider_phone: Option<String> = o.get("rider_phone");
-                let delivery_boy_id: Option<Uuid> = o.get("delivery_boy_id");
 
                 let customer =
                     serde_json::json!({ "full_name": customer_name, "phone": customer_phone });
@@ -1107,7 +1133,7 @@ pub async fn track_order(
         }
         "grocery" => {
             let row_res = sqlx::query(
-                "SELECT o.*, s.name as store_name,
+                "SELECT o.*, s.name as store_name, s.manager_id as manager_id,
                         pc.full_name as customer_name, pc.phone as customer_phone,
                         pr.full_name as rider_name, pr.phone as rider_phone
                  FROM rweezy.grocery_orders o
@@ -1122,6 +1148,18 @@ pub async fn track_order(
 
             if let Ok(Some(o)) = row_res {
                 use sqlx::Row;
+                let customer_id: Uuid = o.get("customer_id");
+                let delivery_boy_id: Option<Uuid> = o.get("delivery_boy_id");
+                let manager_id: Option<Uuid> = o.get("manager_id");
+
+                if user_id != customer_id
+                    && delivery_boy_id != Some(user_id)
+                    && manager_id != Some(user_id)
+                    && !is_admin
+                {
+                    return HttpResponse::Forbidden().json(serde_json::json!({ "error": "You do not have access to track this order" }));
+                }
+
                 let status: OrderStatus = o.get("status");
                 let total: rust_decimal::Decimal = o.get("total");
                 let delivery_address: String = o.get("delivery_address");
@@ -1230,6 +1268,15 @@ pub async fn track_order(
 
             if let Ok(Some(r)) = row_res {
                 use sqlx::Row;
+                let customer_id: Uuid = r.get("customer_id");
+                let rider_id: Option<Uuid> = r.get("rider_id");
+
+                if user_id != customer_id && rider_id != Some(user_id) && !is_admin {
+                    return HttpResponse::Forbidden().json(
+                        serde_json::json!({ "error": "You do not have access to track this ride" }),
+                    );
+                }
+
                 let status: RideStatus = r.get("status");
                 let fare_estimate: Option<rust_decimal::Decimal> = r.get("fare_estimate");
                 let pickup_address: String = r.get("pickup_address");
@@ -1308,6 +1355,13 @@ pub async fn track_order(
 
             if let Ok(Some(p)) = row_res {
                 use sqlx::Row;
+                let customer_id: Uuid = p.get("customer_id");
+                let rider_id: Option<Uuid> = p.get("rider_id");
+
+                if user_id != customer_id && rider_id != Some(user_id) && !is_admin {
+                    return HttpResponse::Forbidden().json(serde_json::json!({ "error": "You do not have access to track this package delivery" }));
+                }
+
                 let status: RideStatus = p.get("status");
                 let fare_estimate: Option<rust_decimal::Decimal> = p.get("fare_estimate");
                 let pickup_address: String = p.get("pickup_address");
