@@ -52,9 +52,7 @@ function ReceiptBody({ receipt, eta }: { receipt: ReceiptData; eta: Date | null 
             Delivery PIN: {receipt.deliveryPin}
           </p>
         )}
-        <p className="text-muted-foreground">
-          {receipt.paymentNote ?? "Payment: cash/manual demo"}
-        </p>
+        <p className="text-muted-foreground">{receipt.paymentNote ?? "Payment: cash/online"}</p>
       </div>
       <Button asChild className="mt-6 w-full">
         <Link to="/app/orders">View orders</Link>

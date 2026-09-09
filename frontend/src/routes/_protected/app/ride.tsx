@@ -94,9 +94,9 @@ function BookRide() {
         trackKind: "ride",
         lines: [
           { label: `Base fare (${vehicle})`, amount: fare - deliveryFee },
-          { label: "Platform fee (demo)", amount: deliveryFee },
+          { label: "Platform fee", amount: deliveryFee },
         ],
-        paymentNote: "Pay driver in cash after the ride (demo)",
+        paymentNote: "Pay driver in cash after the ride",
       });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to request ride");
@@ -202,7 +202,7 @@ function BookRide() {
         <PriceBreakdown
           lines={[
             { label: `Fare (${vehicle})`, amount: fare - deliveryFee },
-            { label: "Platform fee (demo)", amount: deliveryFee },
+            { label: "Platform fee", amount: deliveryFee },
           ]}
           total={fare}
           paymentMethod="cash"

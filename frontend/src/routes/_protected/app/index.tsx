@@ -116,14 +116,17 @@ function ItemCarousel({
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp className="h-4 w-4 text-primary" />
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Trending Now</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Trending Now
+            </span>
           </div>
           <h2 className="text-2xl font-bold tracking-tight md:text-3xl">{title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
         <Button asChild variant="ghost" className="group shrink-0 hover:bg-primary/5">
           <Link to={to}>
-            Explore all <ChevronRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+            Explore all{" "}
+            <ChevronRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
           </Link>
         </Button>
       </div>
@@ -139,8 +142,8 @@ function ItemCarousel({
                     <div className="h-5 bg-muted animate-pulse rounded-md w-3/4" />
                     <div className="h-4 bg-muted animate-pulse rounded-md w-1/2" />
                     <div className="flex justify-between items-center mt-4">
-                        <div className="h-6 bg-muted animate-pulse rounded-md w-1/4" />
-                        <div className="h-8 bg-muted animate-pulse rounded-full w-1/4" />
+                      <div className="h-6 bg-muted animate-pulse rounded-md w-1/4" />
+                      <div className="h-8 bg-muted animate-pulse rounded-full w-1/4" />
                     </div>
                   </div>
                 </div>
@@ -170,34 +173,41 @@ function ItemCarousel({
                   >
                     <Link
                       to={to === "/app/food" ? "/app/food/$restaurantId" : "/app/grocery/$storeId"}
-                      params={to === "/app/food" ? { restaurantId: item.restaurant_id || "" } : { storeId: item.store_id || "" }}
+                      params={
+                        to === "/app/food"
+                          ? { restaurantId: item.restaurant_id || "" }
+                          : { storeId: item.store_id || "" }
+                      }
                       className="group block overflow-hidden rounded-2xl border bg-card/40 backdrop-blur-xl shadow-sm transition-all duration-500 hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1"
                     >
                       <div className="relative aspect-[4/3] overflow-hidden">
                         <img
-                            src={imageUrl}
-                            alt={item.name}
-                            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                          src={imageUrl}
+                          alt={item.name}
+                          className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
                         {item.category && (
-                            <Badge className="absolute top-3 left-3 bg-white/10 backdrop-blur-md border-white/20 text-white font-medium">
-                                {item.category}
-                            </Badge>
+                          <Badge className="absolute top-3 left-3 bg-white/10 backdrop-blur-md border-white/20 text-white font-medium">
+                            {item.category}
+                          </Badge>
                         )}
                       </div>
                       <div className="p-4">
                         <h3 className="line-clamp-1 text-base font-bold leading-tight group-hover:text-primary transition-colors">
-                            {item.name}
+                          {item.name}
                         </h3>
                         <p className="mt-1 truncate text-xs text-muted-foreground flex items-center gap-1">
-                            <MapPin className="h-3 w-3" /> {placeName}
+                          <MapPin className="h-3 w-3" /> {placeName}
                         </p>
                         <div className="mt-4 flex items-center justify-between">
-                            <span className="text-lg font-black tracking-tight">₹{item.price}</span>
-                            <Button size="sm" className="rounded-full h-8 px-4 bg-primary text-primary-foreground opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
-                                Add
-                            </Button>
+                          <span className="text-lg font-black tracking-tight">₹{item.price}</span>
+                          <Button
+                            size="sm"
+                            className="rounded-full h-8 px-4 bg-primary text-primary-foreground opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300"
+                          >
+                            Add
+                          </Button>
                         </div>
                       </div>
                     </Link>
@@ -240,7 +250,7 @@ function AppHome() {
     setLoadingGrocery(true);
 
     api.catalog
-      .getPopularFoodItems(loc)
+      .getPopularFoodItems(loc ? { ...loc, townName: address } : undefined)
       .then(({ items }) => setFoodItems(items || []))
       .catch((err) => console.error("Error fetching food:", err))
       .finally(() => setLoadingFood(false));
@@ -262,7 +272,7 @@ function AppHome() {
 
   useEffect(() => {
     fetchData(location || undefined);
-  }, [location]);
+  }, [location, address]);
 
   const handleDetectLocation = async () => {
     try {
@@ -297,19 +307,21 @@ function AppHome() {
               {greeting}, {user?.email?.split("@")[0] || "User"}
             </h1>
             <div className="flex items-center gap-2 text-muted-foreground">
-                <Navigation className="h-4 w-4 text-primary" />
-                <button
-                    onClick={() => setNeedsManualEntry(true)}
-                    disabled={detecting}
-                    className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1 group"
-                >
-                    {detecting ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                        <span className="max-w-[200px] truncate">{address || "Set location for better results"}</span>
-                    )}
-                    <ChevronRight className="h-3 w-3 opacity-50 group-hover:translate-x-0.5 transition-transform" />
-                </button>
+              <Navigation className="h-4 w-4 text-primary" />
+              <button
+                onClick={() => setNeedsManualEntry(true)}
+                disabled={detecting}
+                className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1 group"
+              >
+                {detecting ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <span className="max-w-[200px] truncate">
+                    {address || "Set location for better results"}
+                  </span>
+                )}
+                <ChevronRight className="h-3 w-3 opacity-50 group-hover:translate-x-0.5 transition-transform" />
+              </button>
             </div>
           </motion.div>
 
@@ -319,7 +331,11 @@ function AppHome() {
             className="flex gap-2"
           >
             {roles.map((r) => (
-              <Badge key={r} variant="secondary" className="px-3 py-1 rounded-full bg-primary/5 border-primary/10 text-primary font-bold lowercase tracking-tight">
+              <Badge
+                key={r}
+                variant="secondary"
+                className="px-3 py-1 rounded-full bg-primary/5 border-primary/10 text-primary font-bold lowercase tracking-tight"
+              >
                 {r.replace("_", " ")}
               </Badge>
             ))}
@@ -328,56 +344,58 @@ function AppHome() {
 
         {/* Search Bar Overlay */}
         <div className="relative mb-12 group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary/5 rounded-2xl blur opacity-25 group-focus-within:opacity-100 transition duration-500" />
-            <div className="relative flex items-center glass-panel rounded-2xl px-4 py-1 border-primary/10">
-                <SearchIcon className="h-5 w-5 text-muted-foreground" />
-                <Input
-                    placeholder="Search for restaurants, dishes, or groceries..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="border-0 bg-transparent focus-visible:ring-0 text-lg h-14 placeholder:text-muted-foreground/50"
-                />
-                <Button size="icon" variant="ghost" className="rounded-xl hover:bg-primary/10">
-                    <ArrowRight className="h-5 w-5" />
-                </Button>
-            </div>
+          <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary/5 rounded-2xl blur opacity-25 group-focus-within:opacity-100 transition duration-500" />
+          <div className="relative flex items-center glass-panel rounded-2xl px-4 py-1 border-primary/10">
+            <SearchIcon className="h-5 w-5 text-muted-foreground" />
+            <Input
+              placeholder="Search for restaurants, dishes, or groceries..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="border-0 bg-transparent focus-visible:ring-0 text-lg h-14 placeholder:text-muted-foreground/50"
+            />
+            <Button size="icon" variant="ghost" className="rounded-xl hover:bg-primary/10">
+              <ArrowRight className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
 
         <AnimatePresence>
-            {latestActiveOrder && (
-                <motion.section
-                    initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    animate={{ opacity: 1, height: "auto", marginBottom: 32 }}
-                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    className="overflow-hidden"
-                >
-                    <Link
-                        to="/app/track"
-                        search={{ id: latestActiveOrder.id, kind: latestActiveOrder.kind }}
-                        className="group block relative rounded-3xl border border-primary/20 bg-primary/5 backdrop-blur-2xl p-6 transition-all hover:bg-primary/10"
-                    >
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                            <MapPin className="h-24 w-24 -rotate-12" />
-                        </div>
-                        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                            <div className="flex items-center gap-5">
-                                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20 animate-pulse">
-                                    <MapPin className="h-8 w-8 text-primary-foreground" />
-                                </div>
-                                <div>
-                                    <h2 className="text-xl font-bold tracking-tight">Active {latestActiveOrder.kind}</h2>
-                                    <p className="text-primary/70 font-medium">
-                                        {latestActiveOrder.label} is {latestActiveOrder.status}
-                                    </p>
-                                </div>
-                            </div>
-                            <Button className="rounded-2xl h-12 px-8 font-bold shadow-xl shadow-primary/10 group-hover:scale-105 transition-transform">
-                                Track Now <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
-                        </div>
-                    </Link>
-                </motion.section>
-            )}
+          {latestActiveOrder && (
+            <motion.section
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: "auto", marginBottom: 32 }}
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              className="overflow-hidden"
+            >
+              <Link
+                to="/app/track"
+                search={{ id: latestActiveOrder.id, kind: latestActiveOrder.kind }}
+                className="group block relative rounded-3xl border border-primary/20 bg-primary/5 backdrop-blur-2xl p-6 transition-all hover:bg-primary/10"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                  <MapPin className="h-24 w-24 -rotate-12" />
+                </div>
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                  <div className="flex items-center gap-5">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20 animate-pulse">
+                      <MapPin className="h-8 w-8 text-primary-foreground" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold tracking-tight">
+                        Active {latestActiveOrder.kind}
+                      </h2>
+                      <p className="text-primary/70 font-medium">
+                        {latestActiveOrder.label} is {latestActiveOrder.status}
+                      </p>
+                    </div>
+                  </div>
+                  <Button className="rounded-2xl h-12 px-8 font-bold shadow-xl shadow-primary/10 group-hover:scale-105 transition-transform">
+                    Track Now <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </Link>
+            </motion.section>
+          )}
         </AnimatePresence>
 
         {/* Services Grid */}
@@ -399,7 +417,9 @@ function AppHome() {
                   to={s.to}
                   className={`group relative h-full min-h-[160px] overflow-hidden rounded-3xl border border-white/10 glass-panel p-6 flex flex-col justify-between transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/5`}
                 >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${s.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                  <div
+                    className={`absolute inset-0 bg-gradient-to-br ${s.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
+                  />
                   <img
                     src={s.image}
                     alt={s.title}
@@ -409,14 +429,19 @@ function AppHome() {
                     <div className="h-12 w-12 rounded-2xl bg-foreground/5 backdrop-blur-xl border border-white/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
                       <s.icon className="h-6 w-6" />
                     </div>
-                    <Badge variant="outline" className="bg-white/5 border-white/10 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
-                        {s.meta}
+                    <Badge
+                      variant="outline"
+                      className="bg-white/5 border-white/10 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      {s.meta}
                     </Badge>
                   </div>
                   <div className="relative z-10 mt-auto">
-                    <h3 className="text-xl font-black leading-tight tracking-tight mb-1">{s.title}</h3>
+                    <h3 className="text-xl font-black leading-tight tracking-tight mb-1">
+                      {s.title}
+                    </h3>
                     <p className="text-sm text-muted-foreground line-clamp-2 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-500">
-                        {s.desc}
+                      {s.desc}
                     </p>
                   </div>
                 </Link>

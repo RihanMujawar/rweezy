@@ -14,6 +14,13 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         outline: "text-foreground",
+        admin: "border-transparent bg-red-600 text-white shadow hover:bg-red-700",
+        hotel_manager: "border-transparent bg-blue-600 text-white shadow hover:bg-blue-700",
+        grocery_manager: "border-transparent bg-emerald-600 text-white shadow hover:bg-emerald-700",
+        delivery_boy: "border-transparent bg-amber-500 text-white shadow hover:bg-amber-600",
+        rider: "border-transparent bg-violet-600 text-white shadow hover:bg-violet-700",
+        all_in_one_partner: "border-transparent bg-cyan-600 text-white shadow hover:bg-cyan-700",
+        customer: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
       },
     },
     defaultVariants: {

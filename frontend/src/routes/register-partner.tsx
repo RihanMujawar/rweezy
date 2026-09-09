@@ -18,6 +18,7 @@ export const Route = createFileRoute("/register-partner")({
 });
 
 const roleOptions = [
+  { value: "all_in_one_partner", label: "All-in-One Partner (Food, Grocery, Rides & Packages)" },
   { value: "rider", label: "Rider for rides/packages" },
   { value: "delivery_boy", label: "Food/grocery delivery partner" },
   { value: "hotel_manager", label: "Restaurant manager" },
@@ -34,7 +35,6 @@ function PartnerRegisterPage() {
     loading: locationLoading,
   } = useLocation();
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
   const [countryCode, setCountryCode] = useState("+91");
   const [phoneSuffix, setPhoneSuffix] = useState("");
   const [password, setPassword] = useState("");
@@ -66,7 +66,6 @@ function PartnerRegisterPage() {
     e.preventDefault();
     const parsed = registerSchema.safeParse({
       fullName,
-      email,
       phone: fullPhone,
       password,
       confirmPassword,
@@ -96,7 +95,6 @@ function PartnerRegisterPage() {
     try {
       const {
         fullName: parsedFullName,
-        email: parsedEmail,
         phone: parsedPhone,
         requestedRole: parsedRequestedRole,
         businessName: parsedBusinessName,
@@ -107,14 +105,8 @@ function PartnerRegisterPage() {
         roleMessage: parsedRoleMessage,
       } = parsed.data;
 
-      if (!parsedEmail) {
-        toast.error("Email is required");
-        return;
-      }
-
       const result = await api.auth.register({
         full_name: parsedFullName,
-        email: parsedEmail.toLowerCase(),
         phone: parsedPhone,
         password,
         phone_verification_token: phoneVerificationToken,
@@ -127,12 +119,6 @@ function PartnerRegisterPage() {
         pincode: parsedPincode,
         role_message: parsedRoleMessage,
       });
-
-      if (result.emailVerificationRequired) {
-        toast.success("Account created! Verify your email, then sign in.");
-        navigate({ to: "/login" });
-        return;
-      }
 
       if (result.authenticated) {
         setAuthenticatedUser(result);
@@ -163,7 +149,7 @@ function PartnerRegisterPage() {
         </Link>
         <h1 className="mt-6 text-2xl font-bold tracking-tight">Create a partner account</h1>
         <p className="text-sm text-muted-foreground">
-          Verify your phone with SMS OTP. An email verification link is sent after signup.
+          Verify your phone with WhatsApp OTP, then create your partner account.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -176,17 +162,6 @@ function PartnerRegisterPage() {
               autoFocus
             />
             {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
 
           <div className="space-y-2">
@@ -304,7 +279,11 @@ function PartnerRegisterPage() {
                       <LocateFixed className="mr-2 h-4 w-4" />
                       {locationLoading ? "Detecting..." : "Use current location"}
                     </Button>
-                    <Button type="button" variant="outline" onClick={() => setLocationDialogOpen(true)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setLocationDialogOpen(true)}
+                    >
                       <MapPin className="mr-2 h-4 w-4" />
                       Search location
                     </Button>

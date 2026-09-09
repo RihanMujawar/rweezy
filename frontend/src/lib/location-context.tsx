@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { LatLng } from "./geo";
+import { reverseGeocode } from "./geocoding";
 
 interface LocationContextType {
   location: LatLng | null;
@@ -14,13 +15,49 @@ interface LocationContextType {
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
+const LOCATION_STORAGE_KEY = "rweezy_selected_location";
+
+type StoredLocation = {
+  location: LatLng | null;
+  address: string | null;
+};
+
+function getStoredLocation(): StoredLocation {
+  if (typeof window === "undefined") return { location: null, address: null };
+  try {
+    const value = JSON.parse(localStorage.getItem(LOCATION_STORAGE_KEY) ?? "null");
+    if (
+      value &&
+      value.location &&
+      typeof value.location.lat === "number" &&
+      typeof value.location.lng === "number"
+    ) {
+      return {
+        location: value.location,
+        address: typeof value.address === "string" ? value.address : null,
+      };
+    }
+  } catch {
+    // Ignore an invalid legacy value and let the user select a new location.
+  }
+  return { location: null, address: null };
+}
 
 export function LocationProvider({ children }: { children: React.ReactNode }) {
-  const [location, setLocation] = useState<LatLng | null>(null);
-  const [address, setAddress] = useState<string | null>(null);
+  const [location, setLocation] = useState<LatLng | null>(() => getStoredLocation().location);
+  const [address, setAddress] = useState<string | null>(() => getStoredLocation().address);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsManualEntry, setNeedsManualEntry] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!location) {
+      localStorage.removeItem(LOCATION_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify({ location, address }));
+  }, [location, address]);
 
   const detectLocation = async () => {
     if (!navigator.geolocation) {
@@ -42,22 +79,9 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
           // Try to reverse geocode
           try {
-            const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
-            if (MAPBOX_TOKEN) {
-              const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${newLoc.lng},${newLoc.lat}.json?access_token=${MAPBOX_TOKEN}&limit=1`;
-              const res = await fetch(url);
-              const data = await res.json();
-              if (data.features?.[0]) {
-                setAddress(data.features[0].place_name);
-              }
-            } else {
-               // Fallback to Nominatim
-               const url = `https://nominatim.openstreetmap.org/reverse?lat=${newLoc.lat}&lon=${newLoc.lng}&format=json`;
-               const res = await fetch(url);
-               const data = await res.json();
-               if (data.display_name) {
-                 setAddress(data.display_name);
-               }
+            const address = await reverseGeocode(newLoc);
+            if (address) {
+              setAddress(address);
             }
           } catch (e) {
             console.error("Reverse geocoding failed", e);
@@ -72,7 +96,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
           setNeedsManualEntry(true);
           reject(err);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
       );
     });
   };

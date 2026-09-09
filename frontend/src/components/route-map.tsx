@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
-import { api } from "@/lib/api";
 import type { LatLng } from "@/lib/geo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { searchPlaces, reverseGeocode } from "@/lib/geocoding";
 import { AlertCircle, LocateFixed, Search } from "lucide-react";
 
 export type { LatLng };
 
 const DEFAULT_CENTER: LatLng = { lat: 12.9716, lng: 77.5946 };
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
 type MarkerKind = "pickup" | "drop" | "rider" | "current";
 
@@ -99,7 +98,8 @@ function LeafletShell({
     L.control.zoom({ position: "topright" }).addTo(map);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     map.on("click", (e) => {
@@ -148,7 +148,7 @@ function LeafletShell({
             weight: l.id === "rider" ? 5 : 4,
             opacity: l.id === "rider" ? 0.9 : 0.65,
             dashArray: l.dashed ? "5, 10" : undefined,
-          }
+          },
         );
         polyline.addTo(linesGroupRef.current!);
       });
@@ -178,83 +178,21 @@ function LeafletShell({
 }
 
 async function fetchRoute(from: LatLng, to: LatLng): Promise<LatLng[] | null> {
-  try {
-    const data = await api.map.getRoute(from.lat, from.lng, to.lat, to.lng);
-    return data.route ?? null;
-  } catch {
-    return null;
-  }
+  return [from, to];
 }
 
-async function searchPlaces(query: string, near: LatLng): Promise<PlaceSearchResult[]> {
-  // We'll stick to Mapbox for geocoding if token is available, or fallback to Nominatim
-  if (MAPBOX_TOKEN) {
-    const url = new URL(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`,
-    );
-    url.searchParams.set("access_token", MAPBOX_TOKEN);
-    url.searchParams.set("autocomplete", "true");
-    url.searchParams.set("limit", "5");
-    url.searchParams.set("language", "en");
-    url.searchParams.set("proximity", `${near.lng},${near.lat}`);
-
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Location search failed");
-
-    const data = await response.json();
-    return (data.features ?? [])
-      .filter((feature: any) => Array.isArray(feature.center))
-      .map((feature: any) => ({
-        id: feature.id,
-        label: feature.place_name ?? feature.text ?? "Selected location",
-        point: { lat: feature.center[1], lng: feature.center[0] },
-      }));
-  }
-
-  // Fallback to OSM Nominatim
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("limit", "5");
-  url.searchParams.set("addressdetails", "1");
-
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Location search failed");
-  const data = await response.json();
-  return data.map((item: any) => ({
-    id: item.place_id.toString(),
-    label: item.display_name,
-    point: { lat: parseFloat(item.lat), lng: parseFloat(item.lon) },
+async function searchPlacesForMap(query: string, near: LatLng): Promise<PlaceSearchResult[]> {
+  const results = await searchPlaces(query, near);
+  return results.map((item) => ({
+    id: item.id,
+    label: item.label,
+    point: item.point,
   }));
 }
 
-async function reverseGeocode(point: LatLng): Promise<string | null> {
-  if (MAPBOX_TOKEN) {
-    try {
-      const url = new URL(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${point.lng},${point.lat}.json`,
-      );
-      url.searchParams.set("access_token", MAPBOX_TOKEN);
-      url.searchParams.set("limit", "1");
-      url.searchParams.set("language", "en");
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const data = await response.json();
-      return data.features?.[0]?.place_name ?? null;
-    } catch {
-      return null;
-    }
-  }
-
+async function reverseGeocodeMap(point: LatLng): Promise<string | null> {
   try {
-    const url = new URL("https://nominatim.openstreetmap.org/reverse");
-    url.searchParams.set("lat", point.lat.toString());
-    url.searchParams.set("lon", point.lng.toString());
-    url.searchParams.set("format", "json");
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.display_name ?? null;
+    return await reverseGeocode(point);
   } catch {
     return null;
   }
@@ -286,7 +224,7 @@ function LocationSearch({
     setMessage(null);
 
     try {
-      const nextResults = await searchPlaces(trimmed, center);
+      const nextResults = await searchPlacesForMap(trimmed, center);
       setResults(nextResults);
       setMessage(nextResults.length === 0 ? "No matching locations found." : null);
     } catch {
@@ -501,12 +439,7 @@ export function StaticPointMap({
   );
 
   return (
-    <LeafletShell
-      center={point}
-      markers={markers}
-      height={height}
-      onMarkerClick={onMarkerClick}
-    />
+    <LeafletShell center={point} markers={markers} height={height} onMarkerClick={onMarkerClick} />
   );
 }
 

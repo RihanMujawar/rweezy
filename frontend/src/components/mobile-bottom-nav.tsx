@@ -132,7 +132,9 @@ export function MobileBottomNav() {
                 whileTap={{ scale: 0.9 }}
                 className={cn(
                   "relative flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 transition-all duration-300",
-                  active ? "text-primary-foreground" : "text-foreground/50 hover:text-foreground/80"
+                  active
+                    ? "text-primary-foreground"
+                    : "text-foreground/50 hover:text-foreground/80",
                 )}
               >
                 {active && (
@@ -164,11 +166,7 @@ export function MobileBottomNav() {
             }
 
             return (
-              <Link
-                key={key}
-                to={item.to}
-                className="focus:outline-none"
-              >
+              <Link key={key} to={item.to} className="focus:outline-none">
                 {content}
               </Link>
             );

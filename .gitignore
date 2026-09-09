@@ -22,7 +22,6 @@ frontend/.output
 frontend/.nitro
 .config/
 backend/.env
-backend/supabase/.temp/
 
 # Playwright
 test-results/
@@ -124,3 +123,14 @@ docs/plans/
 CLAUDE.md
 _docs/
 .superpowers/
+
+# Rust target ignored globally
+target/
+**/target/
+Cargo.lock
+**/Cargo.lock
+
+# WhatsApp/Baileys Session Auth Ignored Globally
+baileys_auth_info/
+**/baileys_auth_info/
+**/baileys_auth_info/**

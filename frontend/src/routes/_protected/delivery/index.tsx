@@ -245,8 +245,12 @@ function DeliveryAvailable() {
 
   return (
     <RoleGate
-      allowed={["delivery_boy", "admin"]}
-      hasAny={roles.includes("delivery_boy") || roles.includes("admin")}
+      allowed={["delivery_boy", "admin", "all_in_one_partner"]}
+      hasAny={
+        roles.includes("delivery_boy") ||
+        roles.includes("admin") ||
+        roles.includes("all_in_one_partner")
+      }
     >
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -314,106 +318,122 @@ function DeliveryAvailable() {
                   <TabsTrigger value="grocery">Grocery Jobs ({visibleGrocery.length})</TabsTrigger>
                 </TabsList>
                 <TabsContent value="food">
-            {loading ? (
-              <p className="mt-4 text-muted-foreground">Loading...</p>
-            ) : visibleFood.length === 0 ? (
-              <p className="mt-8 rounded-2xl border bg-card p-12 text-center text-muted-foreground">
-                No food jobs right now.
-              </p>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {selectedFood.size > 0 && (
-                  <Button className="min-h-11" onClick={() => acceptSelected("food")}>
-                    Accept selected food jobs ({selectedFood.size})
-                  </Button>
-                )}
-                {visibleFood.map((o) => (
-                  <div key={o.id} className="rounded-xl border bg-card p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={selectedFood.has(o.id)}
-                          onCheckedChange={() => toggleFood(o.id)}
-                          aria-label={`Select food job ${o.id.slice(0, 8)}`}
-                        />
-                        <h3 className="font-semibold">🍽️ {o.restaurants?.name ?? "Restaurant"}</h3>
-                      </div>
-                      <span className="text-xs rounded-full bg-secondary px-2 py-1">
-                        {o.status}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">📍 {o.delivery_address}</p>
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">${Number(o.total).toFixed(2)}</span>
-                      <div className="flex gap-2">
-                        <Button size="sm" className="min-h-11" onClick={() => acceptFood(o.id)}>
-                          Accept
+                  {loading ? (
+                    <p className="mt-4 text-muted-foreground">Loading...</p>
+                  ) : visibleFood.length === 0 ? (
+                    <p className="mt-8 rounded-2xl border bg-card p-12 text-center text-muted-foreground">
+                      No food jobs right now.
+                    </p>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      {selectedFood.size > 0 && (
+                        <Button className="min-h-11" onClick={() => acceptSelected("food")}>
+                          Accept selected food jobs ({selectedFood.size})
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="min-h-11"
-                          onClick={() => decline("Food job")}
-                        >
-                          Decline
-                        </Button>
-                      </div>
+                      )}
+                      {visibleFood.map((o) => (
+                        <div key={o.id} className="rounded-xl border bg-card p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={selectedFood.has(o.id)}
+                                onCheckedChange={() => toggleFood(o.id)}
+                                aria-label={`Select food job ${o.id.slice(0, 8)}`}
+                              />
+                              <h3 className="font-semibold">
+                                🍽️ {o.restaurants?.name ?? "Restaurant"}
+                              </h3>
+                            </div>
+                            <span className="text-xs rounded-full bg-secondary px-2 py-1">
+                              {o.status}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            📍 {o.delivery_address}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-medium">${Number(o.total).toFixed(2)}</span>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                className="min-h-11"
+                                onClick={() => acceptFood(o.id)}
+                              >
+                                Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="min-h-11"
+                                onClick={() => decline("Food job")}
+                              >
+                                Decline
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  )}
                 </TabsContent>
                 <TabsContent value="grocery">
-            {loading ? (
-              <p className="mt-4 text-muted-foreground">Loading...</p>
-            ) : visibleGrocery.length === 0 ? (
-              <p className="mt-8 rounded-2xl border bg-card p-12 text-center text-muted-foreground">
-                No grocery jobs right now.
-              </p>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {selectedGrocery.size > 0 && (
-                  <Button className="min-h-11" onClick={() => acceptSelected("grocery")}>
-                    Accept selected grocery jobs ({selectedGrocery.size})
-                  </Button>
-                )}
-                {visibleGrocery.map((o) => (
-                  <div key={o.id} className="rounded-xl border bg-card p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={selectedGrocery.has(o.id)}
-                          onCheckedChange={() => toggleGrocery(o.id)}
-                          aria-label={`Select grocery job ${o.id.slice(0, 8)}`}
-                        />
-                        <h3 className="font-semibold">🛒 {o.grocery_stores?.name ?? "Store"}</h3>
-                      </div>
-                      <span className="text-xs rounded-full bg-secondary px-2 py-1">
-                        {o.status}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">📍 {o.delivery_address}</p>
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">₹{Number(o.total).toFixed(2)}</span>
-                      <div className="flex gap-2">
-                        <Button size="sm" className="min-h-11" onClick={() => acceptGrocery(o.id)}>
-                          Accept
+                  {loading ? (
+                    <p className="mt-4 text-muted-foreground">Loading...</p>
+                  ) : visibleGrocery.length === 0 ? (
+                    <p className="mt-8 rounded-2xl border bg-card p-12 text-center text-muted-foreground">
+                      No grocery jobs right now.
+                    </p>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      {selectedGrocery.size > 0 && (
+                        <Button className="min-h-11" onClick={() => acceptSelected("grocery")}>
+                          Accept selected grocery jobs ({selectedGrocery.size})
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="min-h-11"
-                          onClick={() => decline("Grocery job")}
-                        >
-                          Decline
-                        </Button>
-                      </div>
+                      )}
+                      {visibleGrocery.map((o) => (
+                        <div key={o.id} className="rounded-xl border bg-card p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={selectedGrocery.has(o.id)}
+                                onCheckedChange={() => toggleGrocery(o.id)}
+                                aria-label={`Select grocery job ${o.id.slice(0, 8)}`}
+                              />
+                              <h3 className="font-semibold">
+                                🛒 {o.grocery_stores?.name ?? "Store"}
+                              </h3>
+                            </div>
+                            <span className="text-xs rounded-full bg-secondary px-2 py-1">
+                              {o.status}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            📍 {o.delivery_address}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-medium">₹{Number(o.total).toFixed(2)}</span>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                className="min-h-11"
+                                onClick={() => acceptGrocery(o.id)}
+                              >
+                                Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="min-h-11"
+                                onClick={() => decline("Grocery job")}
+                              >
+                                Decline
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  )}
                 </TabsContent>
               </Tabs>
             </div>

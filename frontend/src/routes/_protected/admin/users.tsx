@@ -34,7 +34,18 @@ const ASSIGNABLE: AppRole[] = [
   "grocery_manager",
   "delivery_boy",
   "rider",
+  "all_in_one_partner",
 ];
+
+const ACTIVE_ROLE_BUTTON_CLASS: Record<AppRole, string> = {
+  admin: "bg-red-600 text-white hover:bg-red-700",
+  hotel_manager: "bg-blue-600 text-white hover:bg-blue-700",
+  grocery_manager: "bg-emerald-600 text-white hover:bg-emerald-700",
+  delivery_boy: "bg-amber-500 text-white hover:bg-amber-600",
+  rider: "bg-violet-600 text-white hover:bg-violet-700",
+  all_in_one_partner: "bg-cyan-600 text-white hover:bg-cyan-700",
+  customer: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+};
 
 function AdminUsers() {
   const { roles } = useAuth();
@@ -138,13 +149,11 @@ function AdminUsers() {
                             <div className="font-medium">
                               {profile?.full_name || request.user_id}
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              {request.requested_role.replace("_", " ")}
-                            </div>
+                            <Badge variant={request.requested_role}>
+                              {request.requested_role.replace(/_/g, " ")}
+                            </Badge>
                             {request.business_name && (
-                              <div className="text-sm font-medium">
-                                {request.business_name}
-                              </div>
+                              <div className="text-sm font-medium">{request.business_name}</div>
                             )}
                             {request.business_address && (
                               <div className="text-xs text-muted-foreground">
@@ -199,8 +208,8 @@ function AdminUsers() {
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {userRoles(p.id).map((r) => (
-                      <Badge key={r} variant="secondary">
-                        {r}
+                      <Badge key={r} variant={r}>
+                        {r.replace(/_/g, " ")}
                       </Badge>
                     ))}
                   </div>
@@ -213,6 +222,7 @@ function AdminUsers() {
                         key={role}
                         size="sm"
                         variant={active ? "default" : "outline"}
+                        className={active ? ACTIVE_ROLE_BUTTON_CLASS[role] : undefined}
                         onClick={() => toggleRole(p.id, role)}
                       >
                         {active ? "✓ " : "+ "}

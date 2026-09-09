@@ -23,6 +23,7 @@ type Restaurant = {
   pincode: string | null;
   image_url: string | null;
   is_open: boolean;
+  delivery_radius_km: number;
 };
 
 function HotelDashboard() {
@@ -58,6 +59,7 @@ function HotelDashboard() {
       pincode: form.pincode ?? null,
       image_url: form.image_url ?? null,
       is_open: form.is_open ?? true,
+      delivery_radius_km: Number(form.delivery_radius_km ?? 25),
       manager_id: user.id,
     };
     try {
@@ -158,6 +160,18 @@ function HotelDashboard() {
                   <Input
                     value={form.image_url ?? ""}
                     onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Delivery Radius Limit (km)</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={form.delivery_radius_km ?? 25}
+                    onChange={(e) =>
+                      setForm({ ...form, delivery_radius_km: Number(e.target.value) })
+                    }
                   />
                 </div>
                 <div className="flex items-center gap-2">

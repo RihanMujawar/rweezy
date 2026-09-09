@@ -101,7 +101,7 @@ function GroceryCheckout() {
         deliveryPin: placed.delivery_pin,
         estimatedAt: placed.estimated_delivery_at,
         trackKind: "grocery",
-        lines: [...lines, { label: "Delivery fee (demo)", amount: deliveryFee }],
+        lines: [...lines, { label: "Delivery fee", amount: deliveryFee }],
         total: total + deliveryFee,
       });
     } catch (error) {
@@ -152,9 +152,7 @@ function GroceryCheckout() {
                   }}
                 >
                   <span className="font-semibold">{item.label}</span>
-                  <span className="mt-1 line-clamp-1 text-[10px] opacity-70">
-                    {item.address}
-                  </span>
+                  <span className="mt-1 line-clamp-1 text-[10px] opacity-70">{item.address}</span>
                 </Button>
               ))}
             </div>
@@ -195,7 +193,7 @@ function GroceryCheckout() {
               label: `${i.quantity} × ${i.name}`,
               amount: i.price * i.quantity,
             })),
-            { label: "Delivery fee (demo)", amount: Math.max(20, Math.round(cart.total() * 0.08)) },
+            { label: "Delivery fee", amount: Math.max(20, Math.round(cart.total() * 0.08)) },
           ]}
           total={cart.total() + Math.max(20, Math.round(cart.total() * 0.08))}
           paymentMethod={paymentMethod}

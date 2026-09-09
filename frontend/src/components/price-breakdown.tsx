@@ -25,12 +25,12 @@ export function PriceBreakdown({
       <p className="mt-2 text-xs text-muted-foreground">
         Payment:{" "}
         {paymentMethod === "cash"
-          ? "Cash on delivery (demo)"
+          ? "Cash on delivery"
           : paymentMethod === "online"
-            ? "Online — demo, not charged"
+            ? "Online payment"
             : paymentMethod === "wallet"
-              ? "Wallet — demo balance"
-              : "Demo mode — no charge"}
+              ? "Wallet balance"
+              : "Prepaid"}
       </p>
     </div>
   );

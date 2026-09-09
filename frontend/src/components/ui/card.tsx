@@ -3,22 +3,23 @@ import { motion, HTMLMotionProps } from "framer-motion";
 
 import { cn } from "@/lib/utils";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & HTMLMotionProps<"div">>(
-  ({ className, ...props }, ref) => (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ y: -4, transition: { duration: 0.2 } }}
-      className={cn(
-        "rounded-2xl border bg-card text-card-foreground shadow-lg backdrop-blur-xl transition-all duration-300 relative overflow-hidden",
-        "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/10 before:to-transparent before:pointer-events-none",
-        className
-      )}
-      {...props}
-    />
-  ),
-);
+const Card = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & HTMLMotionProps<"div">
+>(({ className, ...props }, ref) => (
+  <motion.div
+    ref={ref}
+    initial={{ opacity: 0, scale: 0.98 }}
+    animate={{ opacity: 1, scale: 1 }}
+    whileHover={{ y: -4, transition: { duration: 0.2 } }}
+    className={cn(
+      "rounded-2xl border bg-card text-card-foreground shadow-lg backdrop-blur-xl transition-all duration-300 relative overflow-hidden",
+      "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/10 before:to-transparent before:pointer-events-none",
+      className,
+    )}
+    {...props}
+  />
+));
 Card.displayName = "Card";
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(

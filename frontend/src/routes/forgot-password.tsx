@@ -45,6 +45,7 @@ function ForgotPasswordPage() {
         to: "/reset-password",
         search: {
           phone: parsed.data.phone,
+          otpSent: true,
         },
       });
     } catch (error) {

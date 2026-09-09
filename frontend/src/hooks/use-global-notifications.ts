@@ -74,6 +74,19 @@ export function useGlobalNotifications() {
   const poll = useCallback(async () => {
     if (!user || !enabled) return;
 
+    // Check if current backend session matches frontend user ID to prevent leaking on delay/stale hooks
+    try {
+      const me = await api.auth.getMe();
+      if (!me.user || me.user.id !== user.id) {
+        // Auth session changed or expired! Clear carts and trigger reload.
+        window.location.reload();
+        return;
+      }
+    } catch {
+      window.location.reload();
+      return;
+    }
+
     const tasks: Promise<void>[] = [];
     const chatTargets: ChatTarget[] = [];
 

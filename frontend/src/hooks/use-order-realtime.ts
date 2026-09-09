@@ -1,53 +1,39 @@
 import { useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { socket } from "@/lib/socket";
 
 type Options = {
-  table: string;
+  table?: string;
   id: string;
   onChange: () => void;
   enabled?: boolean;
   fallbackMs?: number;
 };
 
-export function useOrderRealtime({
-  table,
-  id,
-  onChange,
-  enabled = true,
-  fallbackMs = 4000,
-}: Options) {
+export function useOrderRealtime({ id, onChange, enabled = true, fallbackMs = 4000 }: Options) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
   useEffect(() => {
     if (!enabled || !id) return;
 
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let pollId: ReturnType<typeof setInterval> | null = null;
-    let realtimeActive = false;
+    socket.emit("join_order", id);
 
-    try {
-      channel = supabase
-        .channel(`order-${table}-${id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table, filter: `id=eq.${id}` },
-          () => onChangeRef.current(),
-        )
-        .subscribe((status) => {
-          if (status === "SUBSCRIBED") realtimeActive = true;
-        });
-    } catch {
-      realtimeActive = false;
-    }
+    const handleUpdate = () => {
+      onChangeRef.current();
+    };
 
-    pollId = setInterval(() => {
-      if (!realtimeActive) onChangeRef.current();
+    socket.on("order_updated", handleUpdate);
+
+    // Fallback polling if socket not connected
+    const pollId = setInterval(() => {
+      if (!socket.connected) {
+        onChangeRef.current();
+      }
     }, fallbackMs);
 
     return () => {
-      if (pollId) clearInterval(pollId);
-      if (channel) void supabase.removeChannel(channel);
+      socket.off("order_updated", handleUpdate);
+      clearInterval(pollId);
     };
-  }, [enabled, fallbackMs, id, table]);
+  }, [enabled, fallbackMs, id]);
 }

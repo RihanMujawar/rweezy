@@ -69,6 +69,10 @@ const riderNav: NavItem[] = [
   { title: "Active", url: "/rider/active", icon: ClipboardList },
 ];
 
+const allInOneNav: NavItem[] = [
+  { title: "All-in-One Dashboard", url: "/all-in-one-partner", icon: Truck },
+];
+
 const adminNav: NavItem[] = [
   { title: "Admin", url: "/admin", icon: Shield },
   { title: "Users", url: "/admin/users", icon: Users },
@@ -88,6 +92,8 @@ export function AppSidebar() {
       next.push({ label: "Grocery manager", items: groceryNav });
     if (roles.includes("delivery_boy")) next.push({ label: "Delivery", items: deliveryNav });
     if (roles.includes("rider")) next.push({ label: "Rider", items: riderNav });
+    if (roles.includes("all_in_one_partner"))
+      next.push({ label: "All-in-One Partner", items: allInOneNav });
     if (roles.includes("admin")) next.push({ label: "Admin", items: adminNav });
     return next;
   }, [roles]);
@@ -99,7 +105,10 @@ export function AppSidebar() {
       : [{ label: "Customer", items: customerNav }];
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border/50 bg-sidebar/50 backdrop-blur-2xl">
+    <Sidebar
+      collapsible="icon"
+      className="border-r border-border/50 bg-sidebar/50 backdrop-blur-2xl"
+    >
       <SidebarHeader className="border-b border-border/10 pb-4">
         <Link
           to="/"
@@ -148,14 +157,20 @@ export function AppSidebar() {
                       className="group relative h-10 px-4 rounded-xl transition-all duration-300 hover:bg-foreground/5 active:scale-95"
                     >
                       <Link to={item.url} className="flex items-center gap-3">
-                        <item.icon className={cn(
-                          "h-4 w-4 transition-transform duration-300 group-hover:scale-110",
-                          isActive(item.url) ? "text-primary-foreground" : "text-foreground/60"
-                        )} />
-                        <span className={cn(
-                          "font-medium tracking-tight",
-                          isActive(item.url) ? "text-primary-foreground" : "text-foreground/80"
-                        )}>{item.title}</span>
+                        <item.icon
+                          className={cn(
+                            "h-4 w-4 transition-transform duration-300 group-hover:scale-110",
+                            isActive(item.url) ? "text-primary-foreground" : "text-foreground/60",
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "font-medium tracking-tight",
+                            isActive(item.url) ? "text-primary-foreground" : "text-foreground/80",
+                          )}
+                        >
+                          {item.title}
+                        </span>
                         {isActive(item.url) && (
                           <motion.div
                             layoutId="active-nav"
@@ -174,8 +189,12 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="border-t border-border/10 p-4">
         <div className="mb-4 px-2">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 mb-1">Signed in as</div>
-          <div className="text-sm font-semibold text-foreground/80 truncate">{user?.phone || user?.email}</div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 mb-1">
+            Signed in as
+          </div>
+          <div className="text-sm font-semibold text-foreground/80 truncate">
+            {user?.phone || user?.email}
+          </div>
         </div>
         <Button
           variant="ghost"

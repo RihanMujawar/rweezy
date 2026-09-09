@@ -12,8 +12,7 @@ const buttonVariants = cva(
       variant: {
         default:
           "bg-primary text-primary-foreground shadow-lg hover:brightness-110 active:brightness-90",
-        destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
         outline:
           "border border-input bg-background/50 backdrop-blur-md shadow-sm hover:bg-accent hover:text-accent-foreground",
         secondary:
@@ -38,7 +37,8 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, keyof HTMLMotionProps<"button">>,
+  extends
+    Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, keyof HTMLMotionProps<"button">>,
     VariantProps<typeof buttonVariants>,
     Omit<HTMLMotionProps<"button">, "ref"> {
   asChild?: boolean;
@@ -48,11 +48,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     if (asChild) {
       return (
-        <Slot
-          className={cn(buttonVariants({ variant, size, className }))}
-          ref={ref}
-          {...props}
-        />
+        <Slot className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
       );
     }
 

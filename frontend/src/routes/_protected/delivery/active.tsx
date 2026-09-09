@@ -195,7 +195,9 @@ function DeliveryActive() {
                 {icon} {nameOf(o)}
               </h3>
               <div className="flex flex-col items-end">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground">{o.status}</span>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">
+                  {o.status}
+                </span>
                 {o.customer?.full_name && (
                   <span className="text-xs font-medium">{o.customer.full_name}</span>
                 )}
@@ -203,7 +205,10 @@ function DeliveryActive() {
             </div>
             <p className="mt-1 text-sm text-muted-foreground">📍 {o.delivery_address}</p>
             {o.customer?.phone && (
-              <a href={`tel:${o.customer.phone}`} className="mt-1 block text-xs text-primary hover:underline">
+              <a
+                href={`tel:${o.customer.phone}`}
+                className="mt-1 block text-xs text-primary hover:underline"
+              >
                 📞 {o.customer.phone}
               </a>
             )}
@@ -286,8 +291,12 @@ function DeliveryActive() {
 
   return (
     <RoleGate
-      allowed={["delivery_boy", "admin"]}
-      hasAny={roles.includes("delivery_boy") || roles.includes("admin")}
+      allowed={["delivery_boy", "admin", "all_in_one_partner"]}
+      hasAny={
+        roles.includes("delivery_boy") ||
+        roles.includes("admin") ||
+        roles.includes("all_in_one_partner")
+      }
     >
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold">Deliveries</h1>

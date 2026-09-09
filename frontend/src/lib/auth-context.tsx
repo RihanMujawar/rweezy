@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { registerWebPushForUser } from "@/lib/fcm";
+import { useFoodCart } from "@/lib/food-cart";
+import { useGroceryCart } from "@/lib/grocery-cart";
 
 export type AppRole =
   | "customer"
@@ -8,7 +10,8 @@ export type AppRole =
   | "hotel_manager"
   | "grocery_manager"
   | "delivery_boy"
-  | "rider";
+  | "rider"
+  | "all_in_one_partner";
 
 type AuthUser = {
   id: string;
@@ -57,14 +60,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // When the logged-in user shifts or becomes null, clear the carts immediately
+    useFoodCart.getState().clear();
+    useGroceryCart.getState().clear();
+
     if (!user?.id) return;
     registerWebPushForUser().catch(() => {
       // Permission denied / unsupported browsers / transient issues should not block auth flow.
     });
   }, [user?.id]);
 
+  useEffect(() => {
+    // Store the active user ID in localStorage to sync between tabs
+    localStorage.setItem("rweezy_active_user_id", user?.id || "");
+  }, [user?.id]);
+
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === "rweezy_active_user_id") {
+        const newValue = event.newValue || "";
+        const currentValue = user?.id || "";
+        if (newValue !== currentValue) {
+          // Session changed/expired in another tab. Clear carts and force a clean reload.
+          useFoodCart.getState().clear();
+          useGroceryCart.getState().clear();
+          window.location.reload();
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [user?.id]);
+
   const signOut = async () => {
     await api.auth.logout();
+    useFoodCart.getState().clear();
+    useGroceryCart.getState().clear();
     setUser(null);
     setRoles([]);
   };

@@ -10,9 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, MapPin, Loader2, X } from "lucide-react";
 import { useLocation } from "@/lib/location-context";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
-
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
 interface Suggestion {
   id: string;
@@ -33,8 +32,8 @@ export function ManualLocationDialog({
   const [loading, setLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const searchPlaces = async (val: string) => {
-    if (val.length < 3) {
+  const runSearch = async (val: string) => {
+    if (val.length < 2) {
       setSuggestions([]);
       return;
     }
@@ -46,43 +45,18 @@ export function ManualLocationDialog({
 
     setLoading(true);
     try {
-      if (MAPBOX_TOKEN) {
-        const url = new URL(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(val)}.json`
-        );
-        url.searchParams.set("access_token", MAPBOX_TOKEN);
-        url.searchParams.set("autocomplete", "true");
-        url.searchParams.set("limit", "5");
-        url.searchParams.set("country", "IN"); // Prioritize India based on currency memory
-
-        const response = await fetch(url, { signal: abortControllerRef.current.signal });
-        const data = await response.json();
-        const results = (data.features ?? []).map((f: any) => ({
-          id: f.id,
-          label: f.place_name,
-          point: { lat: f.center[1], lng: f.center[0] },
-        }));
-        setSuggestions(results);
-      } else {
-        const url = new URL("https://nominatim.openstreetmap.org/search");
-        url.searchParams.set("q", val);
-        url.searchParams.set("format", "json");
-        url.searchParams.set("limit", "5");
-        url.searchParams.set("countrycodes", "in");
-
-        const response = await fetch(url, { signal: abortControllerRef.current.signal });
-        const data = await response.json();
-        const results = data.map((item: any) => ({
-          id: item.place_id.toString(),
-          label: item.display_name,
-          point: { lat: parseFloat(item.lat), lng: parseFloat(item.lon) },
-        }));
-        setSuggestions(results);
-      }
+      const results = await api.catalog.searchLocations(val, abortControllerRef.current.signal);
+      const mapped: Suggestion[] = (results ?? []).map((loc: any) => ({
+        id: loc.town,
+        label: loc.town,
+        point: { lat: loc.lat, lng: loc.lng },
+      }));
+      setSuggestions(mapped);
     } catch (err: any) {
       if (err.name !== "AbortError") {
         console.error("Search failed", err);
       }
+      setSuggestions([]);
     } finally {
       setLoading(false);
     }
@@ -90,7 +64,7 @@ export function ManualLocationDialog({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (query) searchPlaces(query);
+      if (query) runSearch(query);
       else setSuggestions([]);
     }, 300);
     return () => clearTimeout(timer);
@@ -120,7 +94,7 @@ export function ManualLocationDialog({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="e.g. Indiranagar, 560038"
+              placeholder="Search location..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="pl-10 h-12 bg-white/5 border-white/10 focus-visible:ring-primary/30"
@@ -142,10 +116,11 @@ export function ManualLocationDialog({
                 <span className="text-sm font-medium leading-tight">{s.label}</span>
               </button>
             ))}
-            {query.length >= 3 && !loading && suggestions.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                <p className="text-sm">No locations found for "{query}"</p>
-                <p className="text-xs mt-1">Try a different town name or pincode.</p>
+            {query.length >= 2 && !loading && suggestions.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground space-y-2">
+                <p className="text-sm font-semibold">😔 No service available here yet.</p>
+                <p className="text-xs">We're expanding rapidly.</p>
+                <p className="text-sm font-bold text-primary animate-pulse">Coming Soon!</p>
               </div>
             )}
           </div>

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 const resetSearchSchema = z.object({
   phone: z.string().optional(),
+  otpSent: z.boolean().optional(),
 });
 
 export const Route = createFileRoute("/reset-password")({
@@ -49,8 +50,7 @@ function ResetPasswordPage() {
   );
 
   useEffect(() => {
-    const hasStarted =
-      phoneSuffix || password || confirmPassword || phoneVerificationToken;
+    const hasStarted = phoneSuffix || password || confirmPassword || phoneVerificationToken;
     if (!hasStarted) return;
     const parsed = passwordResetCompleteSchema.safeParse(validationPayload);
     setErrors(parsed.success ? {} : fieldErrors(parsed.error));
@@ -128,45 +128,47 @@ function ResetPasswordPage() {
             purpose="reset_password"
             onVerified={setPhoneVerificationToken}
             disabled={phoneSuffix.length !== 10}
+            initialOtpSent={search.otpSent === true}
           />
 
-          <div className="space-y-2">
-            <Label htmlFor="new-password">New password</Label>
-            <Input
-              id="new-password"
-              type="password"
-              required
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              aria-invalid={Boolean(errors.password)}
-            />
-            {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
-          </div>
+          {phoneVerificationToken && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  aria-invalid={Boolean(errors.password)}
+                  autoFocus
+                />
+                {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm password</Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              required
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              aria-invalid={Boolean(errors.confirmPassword)}
-            />
-            {errors.confirmPassword && (
-              <p className="text-xs text-destructive">{errors.confirmPassword}</p>
-            )}
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  aria-invalid={Boolean(errors.confirmPassword)}
+                />
+                {errors.confirmPassword && (
+                  <p className="text-xs text-destructive">{errors.confirmPassword}</p>
+                )}
+              </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={loading || !phoneVerificationToken}
-          >
-            {loading ? "Updating..." : "Update password"}
-          </Button>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Updating..." : "Update password"}
+              </Button>
+            </>
+          )}
         </form>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

@@ -361,8 +361,10 @@ function RiderList() {
 
   return (
     <RoleGate
-      allowed={["rider", "admin"]}
-      hasAny={roles.includes("rider") || roles.includes("admin")}
+      allowed={["rider", "admin", "all_in_one_partner"]}
+      hasAny={
+        roles.includes("rider") || roles.includes("admin") || roles.includes("all_in_one_partner")
+      }
     >
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center gap-2">
@@ -440,212 +442,222 @@ function RiderList() {
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="rides" className="mt-4 space-y-6">
-            {myRides.length > 0 && (
-              <section>
-                <h2 className="mb-2 text-lg font-semibold">Your active ride</h2>
-                {myRides.map((r) => {
-                  const Icon = VEHICLE_ICON[r.vehicle_type ?? "bike"] ?? Bike;
-                  return (
-                    <div key={r.id} className="rounded-xl border bg-card p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Badge>{r.status}</Badge>
-                            {r.profiles?.full_name && (
-                              <span className="text-xs font-semibold">{r.profiles.full_name}</span>
-                            )}
-                            <Icon className="h-4 w-4" />
-                            <span className="text-xs uppercase">{r.vehicle_type}</span>
-                            {r.fare_estimate && (
-                              <span className="text-sm font-semibold">
-                                ₹{Number(r.fare_estimate).toFixed(0)}
-                              </span>
-                            )}
+                  {myRides.length > 0 && (
+                    <section>
+                      <h2 className="mb-2 text-lg font-semibold">Your active ride</h2>
+                      {myRides.map((r) => {
+                        const Icon = VEHICLE_ICON[r.vehicle_type ?? "bike"] ?? Bike;
+                        return (
+                          <div key={r.id} className="rounded-xl border bg-card p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <Badge>{r.status}</Badge>
+                                  {r.profiles?.full_name && (
+                                    <span className="text-xs font-semibold">
+                                      {r.profiles.full_name}
+                                    </span>
+                                  )}
+                                  <Icon className="h-4 w-4" />
+                                  <span className="text-xs uppercase">{r.vehicle_type}</span>
+                                  {r.fare_estimate && (
+                                    <span className="text-sm font-semibold">
+                                      ₹{Number(r.fare_estimate).toFixed(0)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-2 space-y-1 text-sm">
+                                  <p>
+                                    <span className="text-green-600">●</span> {r.pickup_address}
+                                  </p>
+                                  <p>
+                                    <span className="text-red-600">●</span> {r.drop_address}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button asChild size="sm">
+                                <Link to="/rider/active" search={{ id: r.id }}>
+                                  Open
+                                </Link>
+                              </Button>
+                            </div>
                           </div>
-                          <div className="mt-2 space-y-1 text-sm">
-                            <p>
-                              <span className="text-green-600">●</span> {r.pickup_address}
-                            </p>
-                            <p>
-                              <span className="text-red-600">●</span> {r.drop_address}
-                            </p>
-                          </div>
-                        </div>
-                        <Button asChild size="sm">
-                          <Link to="/rider/active" search={{ id: r.id }}>
-                            Open
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </section>
-            )}
+                        );
+                      })}
+                    </section>
+                  )}
 
-            <section>
-              <h2 className="mb-2 text-lg font-semibold">
-                Available rides ({availableRides.length})
-              </h2>
-              {loading ? (
-                <p className="text-muted-foreground">Loading...</p>
-              ) : availableRides.length === 0 ? (
-                <p className="rounded-2xl border bg-card p-12 text-center text-muted-foreground">
-                  <MapPin className="mx-auto mb-2 h-8 w-8" />
-                  No ride requests in your area.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {availableRides.map((r) => {
-                    const Icon = VEHICLE_ICON[r.vehicle_type ?? "bike"] ?? Bike;
-                    const pickup = { lat: r.pickup_lat, lng: r.pickup_lng };
-                    const tooFar = loc ? distanceKm(loc, pickup) > MAX_ACCEPT_KM : true;
-                    return (
-                      <div key={r.id} className="rounded-xl border bg-card p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="secondary">{r.status}</Badge>
-                            {r.profiles?.full_name && (
-                              <span className="text-xs font-semibold">{r.profiles.full_name}</span>
-                            )}
-                              <Icon className="h-4 w-4" />
-                              <span className="text-xs uppercase">{r.vehicle_type}</span>
-                              {r.fare_estimate && (
-                                <span className="text-sm font-semibold">
-                                  ₹{Number(r.fare_estimate).toFixed(0)}
-                                </span>
-                              )}
-                              <span className="text-xs text-muted-foreground">
-                                {distLabel(pickup)}
-                              </span>
+                  <section>
+                    <h2 className="mb-2 text-lg font-semibold">
+                      Available rides ({availableRides.length})
+                    </h2>
+                    {loading ? (
+                      <p className="text-muted-foreground">Loading...</p>
+                    ) : availableRides.length === 0 ? (
+                      <p className="rounded-2xl border bg-card p-12 text-center text-muted-foreground">
+                        <MapPin className="mx-auto mb-2 h-8 w-8" />
+                        No ride requests in your area.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {availableRides.map((r) => {
+                          const Icon = VEHICLE_ICON[r.vehicle_type ?? "bike"] ?? Bike;
+                          const pickup = { lat: r.pickup_lat, lng: r.pickup_lng };
+                          const tooFar = loc ? distanceKm(loc, pickup) > MAX_ACCEPT_KM : true;
+                          return (
+                            <div key={r.id} className="rounded-xl border bg-card p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="secondary">{r.status}</Badge>
+                                    {r.profiles?.full_name && (
+                                      <span className="text-xs font-semibold">
+                                        {r.profiles.full_name}
+                                      </span>
+                                    )}
+                                    <Icon className="h-4 w-4" />
+                                    <span className="text-xs uppercase">{r.vehicle_type}</span>
+                                    {r.fare_estimate && (
+                                      <span className="text-sm font-semibold">
+                                        ₹{Number(r.fare_estimate).toFixed(0)}
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">
+                                      {distLabel(pickup)}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 space-y-1 text-sm">
+                                    <p>
+                                      <span className="text-green-600">●</span> {r.pickup_address}
+                                    </p>
+                                    <p>
+                                      <span className="text-red-600">●</span> {r.drop_address}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  disabled={tooFar}
+                                  onClick={() => acceptRide(r.id, pickup)}
+                                >
+                                  {tooFar ? "Too far" : "Accept"}
+                                </Button>
+                              </div>
                             </div>
-                            <div className="mt-2 space-y-1 text-sm">
-                              <p>
-                                <span className="text-green-600">●</span> {r.pickup_address}
-                              </p>
-                              <p>
-                                <span className="text-red-600">●</span> {r.drop_address}
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            size="sm"
-                            disabled={tooFar}
-                            onClick={() => acceptRide(r.id, pickup)}
-                          >
-                            {tooFar ? "Too far" : "Accept"}
-                          </Button>
-                        </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-                </section>
+                    )}
+                  </section>
                 </TabsContent>
 
                 <TabsContent value="packages" className="mt-4 space-y-6">
-            {myPkgs.length > 0 && (
-              <section>
-                <h2 className="mb-2 text-lg font-semibold">Your active package</h2>
-                {myPkgs.map((r) => (
-                  <div key={r.id} className="rounded-xl border bg-card p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <Badge>{r.status}</Badge>
-                          {r.profiles?.full_name && (
-                            <span className="text-xs font-semibold">{r.profiles.full_name}</span>
-                          )}
-                          <PackageIcon className="h-4 w-4" />
-                          <span className="text-xs uppercase">{r.package_size}</span>
-                          {r.fare_estimate && (
-                            <span className="text-sm font-semibold">
-                              ₹{Number(r.fare_estimate).toFixed(0)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-2 space-y-1 text-sm">
-                          <p>
-                            <span className="text-green-600">●</span> {r.pickup_address}
-                          </p>
-                          <p>
-                            <span className="text-red-600">●</span> {r.drop_address}{" "}
-                            {r.receiver_name && (
-                              <span className="text-muted-foreground">({r.receiver_name})</span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      <Button asChild size="sm">
-                        <Link to="/rider/active" search={{ id: r.id, kind: "package" }}>
-                          Open
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </section>
-            )}
-
-            <section>
-              <h2 className="mb-2 text-lg font-semibold">
-                Available packages ({availablePkgs.length})
-              </h2>
-              {availablePkgs.length === 0 ? (
-                <p className="rounded-2xl border bg-card p-12 text-center text-muted-foreground">
-                  <PackageIcon className="mx-auto mb-2 h-8 w-8" />
-                  No package requests in your area.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {availablePkgs.map((r) => {
-                    const pickup = { lat: r.pickup_lat, lng: r.pickup_lng };
-                    const tooFar = loc ? distanceKm(loc, pickup) > MAX_ACCEPT_KM : true;
-                    return (
-                      <div key={r.id} className="rounded-xl border bg-card p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="secondary">{r.status}</Badge>
-                            {r.profiles?.full_name && (
-                              <span className="text-xs font-semibold">{r.profiles.full_name}</span>
-                            )}
-                              <PackageIcon className="h-4 w-4" />
-                              <span className="text-xs uppercase">{r.package_size}</span>
-                              {r.fare_estimate && (
-                                <span className="text-sm font-semibold">
-                                  ₹{Number(r.fare_estimate).toFixed(0)}
-                                </span>
-                              )}
-                              <span className="text-xs text-muted-foreground">
-                                {distLabel(pickup)}
-                              </span>
+                  {myPkgs.length > 0 && (
+                    <section>
+                      <h2 className="mb-2 text-lg font-semibold">Your active package</h2>
+                      {myPkgs.map((r) => (
+                        <div key={r.id} className="rounded-xl border bg-card p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <Badge>{r.status}</Badge>
+                                {r.profiles?.full_name && (
+                                  <span className="text-xs font-semibold">
+                                    {r.profiles.full_name}
+                                  </span>
+                                )}
+                                <PackageIcon className="h-4 w-4" />
+                                <span className="text-xs uppercase">{r.package_size}</span>
+                                {r.fare_estimate && (
+                                  <span className="text-sm font-semibold">
+                                    ₹{Number(r.fare_estimate).toFixed(0)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-2 space-y-1 text-sm">
+                                <p>
+                                  <span className="text-green-600">●</span> {r.pickup_address}
+                                </p>
+                                <p>
+                                  <span className="text-red-600">●</span> {r.drop_address}{" "}
+                                  {r.receiver_name && (
+                                    <span className="text-muted-foreground">
+                                      ({r.receiver_name})
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
                             </div>
-                            <div className="mt-2 space-y-1 text-sm">
-                              <p>
-                                <span className="text-green-600">●</span> {r.pickup_address}
-                              </p>
-                              <p>
-                                <span className="text-red-600">●</span> {r.drop_address}
-                              </p>
-                            </div>
+                            <Button asChild size="sm">
+                              <Link to="/rider/active" search={{ id: r.id, kind: "package" }}>
+                                Open
+                              </Link>
+                            </Button>
                           </div>
-                          <Button
-                            size="sm"
-                            disabled={tooFar}
-                            onClick={() => acceptPkg(r.id, pickup)}
-                          >
-                            {tooFar ? "Too far" : "Accept"}
-                          </Button>
                         </div>
+                      ))}
+                    </section>
+                  )}
+
+                  <section>
+                    <h2 className="mb-2 text-lg font-semibold">
+                      Available packages ({availablePkgs.length})
+                    </h2>
+                    {availablePkgs.length === 0 ? (
+                      <p className="rounded-2xl border bg-card p-12 text-center text-muted-foreground">
+                        <PackageIcon className="mx-auto mb-2 h-8 w-8" />
+                        No package requests in your area.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {availablePkgs.map((r) => {
+                          const pickup = { lat: r.pickup_lat, lng: r.pickup_lng };
+                          const tooFar = loc ? distanceKm(loc, pickup) > MAX_ACCEPT_KM : true;
+                          return (
+                            <div key={r.id} className="rounded-xl border bg-card p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="secondary">{r.status}</Badge>
+                                    {r.profiles?.full_name && (
+                                      <span className="text-xs font-semibold">
+                                        {r.profiles.full_name}
+                                      </span>
+                                    )}
+                                    <PackageIcon className="h-4 w-4" />
+                                    <span className="text-xs uppercase">{r.package_size}</span>
+                                    {r.fare_estimate && (
+                                      <span className="text-sm font-semibold">
+                                        ₹{Number(r.fare_estimate).toFixed(0)}
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">
+                                      {distLabel(pickup)}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 space-y-1 text-sm">
+                                    <p>
+                                      <span className="text-green-600">●</span> {r.pickup_address}
+                                    </p>
+                                    <p>
+                                      <span className="text-red-600">●</span> {r.drop_address}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  disabled={tooFar}
+                                  onClick={() => acceptPkg(r.id, pickup)}
+                                >
+                                  {tooFar ? "Too far" : "Accept"}
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-                </section>
+                    )}
+                  </section>
                 </TabsContent>
               </Tabs>
             </div>
