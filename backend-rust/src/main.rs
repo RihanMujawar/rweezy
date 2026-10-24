@@ -51,10 +51,7 @@ async fn main() -> std::io::Result<()> {
 
     let config = Config::from_env();
 
-    info!(
-        "Connecting to PostgreSQL database at {}...",
-        &config.database_url[..std::cmp::min(30, config.database_url.len())]
-    );
+    info!("Connecting to PostgreSQL database...");
     let pool = PgPoolOptions::new()
         .max_connections(config.database_max_connections)
         .connect(&config.database_url)

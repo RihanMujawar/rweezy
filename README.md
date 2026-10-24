@@ -54,6 +54,12 @@ The platform consists of three main components:
     npm run dev
     ```
 
+Setup complete
+Database Name     : rweezy
+Database User     : rweezy
+Database Password : rweezy485019
+Database URL      : postgresql://rweezy:rweezy485019@localhost:5432/rweezy
+
 ## Project Structure
 
 - `frontend/`: React application
